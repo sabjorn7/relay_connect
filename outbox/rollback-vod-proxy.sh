@@ -11,10 +11,19 @@ command -v nginx >/dev/null || fail "нет nginx"
 BAKDIR="/var/backups/mg-deploy"
 TS="$(date +%Y%m%d%H%M%S)"
 
-CONF="$(grep -rlE 'server_name[[:space:]]+app\.meetgu\.ru' /etc/nginx/sites-enabled/ /etc/nginx/conf.d/ /etc/nginx/sites-available/ 2>/dev/null | head -1)"
-[ -n "$CONF" ] && [ -f "$CONF" ] || fail "конфиг app.meetgu.ru не найден"
-REAL="$(readlink -f "$CONF")"
-[ -n "$REAL" ] && [ -f "$REAL" ] || fail "readlink -f не разрешил $CONF"
+# Только активные конфиги (sites-enabled/conf.d), без бэкап-файлов (см. deploy-скрипт).
+CONF=""; REAL=""; N=0
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  r="$(readlink -f "$f" 2>/dev/null)"; [ -n "$r" ] && [ -f "$r" ] || continue
+  grep -qE 'server_name[[:space:]]+app\.meetgu\.ru' "$r" || continue
+  [ -z "$CONF" ] && { CONF="$f"; REAL="$r"; }
+  N=$((N+1))
+done < <(find /etc/nginx/sites-enabled /etc/nginx/conf.d -maxdepth 1 \( -type f -o -type l \) \
+            ! -name '*.bak' ! -name '*.bak-*' ! -name '*.bak.*' ! -name '*.new' ! -name '*.prerollback*' \
+            ! -name '*.save' ! -name '*~' ! -name '*.dpkg-*' ! -name '*.orig' 2>/dev/null)
+[ "$N" -ge 1 ] || fail "активный конфиг app.meetgu.ru не найден"
+[ "$N" -eq 1 ] || fail "НЕОДНОЗНАЧНО: несколько активных конфигов с app.meetgu.ru"
 
 BK="$(ls -1t "$BAKDIR/$(basename "$REAL").bak-"* 2>/dev/null | head -1)"
 [ -n "$BK" ] && [ -f "$BK" ] || fail "бэкап $BAKDIR/$(basename "$REAL").bak-* не найден — откатывать нечего"

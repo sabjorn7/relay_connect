@@ -16,11 +16,22 @@ TS="$(date +%Y%m%d%H%M%S)"
 BAKDIR="/var/backups/mg-deploy"
 BAK=""
 
-echo "[1/7] поиск конфига app.meetgu.ru…"
-CONF="$(grep -rlE 'server_name[[:space:]]+app\.meetgu\.ru' /etc/nginx/sites-enabled/ /etc/nginx/conf.d/ /etc/nginx/sites-available/ 2>/dev/null | head -1)"
-[ -n "$CONF" ] && [ -f "$CONF" ] || fail "конфиг с server_name app.meetgu.ru не найден"
-REAL="$(readlink -f "$CONF")"
-[ -n "$REAL" ] && [ -f "$REAL" ] || fail "readlink -f не разрешил $CONF"
+echo "[1/7] поиск ЖИВОГО конфига app.meetgu.ru (только активные: sites-enabled/conf.d, без .bak)…"
+# ВАЖНО: ищем только среди ПОДКЛЮЧЁННЫХ конфигов и исключаем бэкап-файлы — иначе grep может выбрать
+# старый app.bak.* из sites-available (в нём тоже есть server_name app.meetgu.ru). sites-available НЕ
+# сканируем напрямую (это хранилище, не активные конфиги; активное подключается симлинком из sites-enabled).
+CONF=""; REAL=""; N=0; HITS=""
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  r="$(readlink -f "$f" 2>/dev/null)"; [ -n "$r" ] && [ -f "$r" ] || continue
+  grep -qE 'server_name[[:space:]]+app\.meetgu\.ru' "$r" || continue
+  [ -z "$CONF" ] && { CONF="$f"; REAL="$r"; }
+  N=$((N+1)); HITS="$HITS  $f -> $r"$'\n'
+done < <(find /etc/nginx/sites-enabled /etc/nginx/conf.d -maxdepth 1 \( -type f -o -type l \) \
+            ! -name '*.bak' ! -name '*.bak-*' ! -name '*.bak.*' ! -name '*.new' ! -name '*.prerollback*' \
+            ! -name '*.save' ! -name '*~' ! -name '*.dpkg-*' ! -name '*.orig' 2>/dev/null)
+[ "$N" -ge 1 ] || fail "активный конфиг с server_name app.meetgu.ru не найден в sites-enabled/conf.d"
+[ "$N" -eq 1 ] || { printf '%s' "$HITS" >&2; fail "НЕОДНОЗНАЧНО: несколько активных конфигов с app.meetgu.ru — уточни вручную"; }
 grep -q 'location \^~ /sb/' "$REAL" || fail "в $REAL нет якоря 'location ^~ /sb/' — не тот файл/структура"
 echo "       CONF=$CONF  REAL=$REAL"
 
