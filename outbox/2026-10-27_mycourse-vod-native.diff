@@ -1,22 +1,26 @@
-sha256(payload below — чистый git diff, применять: tail -n +3 файл | git apply): ede89989d8c3383019d1e185ed58b7a14404e352e06fb3dfbae704e5bc9e432a
+sha256(payload below — чистый git diff, применять: tail -n +3 файл | git apply): 1d3ff47b5534a06ecf52983f695a0150124f7937174f03baa737a6fe61095280
 
 diff --git a/src/_front/views/MyCoursePage.vue b/src/_front/views/MyCoursePage.vue
-index 8df7769..44a4a0c 100644
+index 8df7769..4c9447d 100644
 --- a/src/_front/views/MyCoursePage.vue
 +++ b/src/_front/views/MyCoursePage.vue
-@@ -47,7 +47,10 @@
+@@ -47,7 +47,14 @@
                      <div class="pd-video">
                          <template v-if="currentLesson && currentLesson.video_id">
                              <template v-if="videoStarted">
 -                                <iframe :key="`${currentLesson.id}-${videoReload}`" :src="videoUrl" title="Урок" frameborder="0" allowfullscreen allow="autoplay; fullscreen; picture-in-picture" @load="onVideoLoaded"></iframe>
 +                                <!-- Нативный <video> для VOD — ТОЛЬКО за флагом (?vod=1 / localStorage 'mg_vod'); при любом сбое автооткат на iframe ниже. -->
-+                                <video v-if="useNative" :key="`vod-${currentLesson.id}-${videoReload}`" :src="nativeSrc" class="pd-video__el" controls playsinline autoplay
-+                                       @loadeddata="onNativeLoaded" @canplay="onNativeLoaded" @error="onNativeError"></video>
-+                                <iframe v-else :key="`${currentLesson.id}-${videoReload}`" :src="videoUrl" title="Урок" frameborder="0" allowfullscreen allow="autoplay; fullscreen; picture-in-picture" @load="onVideoLoaded"></iframe>
++                                <!-- Готовность = loadedmetadata | loadeddata | canplay (на iOS Safari по мобильным данным loadeddata/canplay до play могут не прийти — loadedmetadata приходит). preload=metadata. -->
++                                <video v-if="useNative" :key="`vod-${currentLesson.id}-${videoReload}`" :src="nativeSrc" class="pd-video__el" controls playsinline preload="metadata" autoplay
++                                       @loadedmetadata="onNativeLoaded" @loadeddata="onNativeLoaded" @canplay="onNativeLoaded" @error="onNativeError"></video>
++                                <!-- iframe монтируем ТОЛЬКО если нативный путь НЕ используется: флаг выключен или произошёл откат (vodFailed).
++                                     Пока флаг включён и идёт resolve/ещё нет nativeSrc — iframe НЕ трогаем (иначе параллельно ходит на video.meetgu.ru
++                                     и его @load может погасить таймеры/исказить тест); в это время показывается спиннер ниже. -->
++                                <iframe v-else-if="!vodNativeOn || vodFailed" :key="`${currentLesson.id}-${videoReload}`" :src="videoUrl" title="Урок" frameborder="0" allowfullscreen allow="autoplay; fullscreen; picture-in-picture" @load="onVideoLoaded"></iframe>
                                  <!-- Until the embed fires @load (it can stall on some mobile networks — observed on MTS LTE,
                                       where the embed hangs but the direct PeerTube page still opens), show a spinner, a retry
                                       (re-mounts the iframe), and a direct-watch link so the player is never a silent blank box. -->
-@@ -247,6 +250,51 @@ const videoUrl = computed(() => (currentLesson.value?.video_id ? embedUrl(curren
+@@ -247,6 +254,51 @@ const videoUrl = computed(() => (currentLesson.value?.video_id ? embedUrl(curren
  // Direct PeerTube watch page — fallback link when the embedded player is slow/stalled (e.g. a
  // throttled mobile carrier or a cold PeerTube embed render), so the user isn't stuck on a blank box.
  const watchUrl = computed(() => (currentLesson.value?.video_id ? `${PEERTUBE}/w/${encodeURIComponent(currentLesson.value.video_id)}` : ''));
@@ -68,7 +72,7 @@ index 8df7769..44a4a0c 100644
  const ratingAvg = computed(() => {
      const r = course.value?.rating;
      if (!Array.isArray(r) || !r.length) return '';
-@@ -493,12 +541,20 @@ function armStall() {
+@@ -493,12 +545,20 @@ function armStall() {
          if (videoLoaded.value) return;
          const [v, a] = await Promise.all([probeVideoHost(), probeAppHost()]);
          if (videoLoaded.value) return; // loaded during the 5s probe → not a real stall, don't log
@@ -92,7 +96,7 @@ index 8df7769..44a4a0c 100644
      }, VIDEO_STALL_MS, { label: 'video_load_timeout', onRearm: (i) => logClientEvent('timer_rearmed', `${i.label} rearm`, i) });
  }
  // One silent auto-retry at AUTO_RETRY_MS: re-mount the iframe once if it hasn't loaded, leaving the
-@@ -509,9 +565,12 @@ function armAutoRetry() {
+@@ -509,9 +569,12 @@ function armAutoRetry() {
          if (videoLoaded.value || autoRetried) return;
          autoRetried = true;
          autoRetryAtMs = Math.round(nowMs() - videoStartTs);
@@ -107,7 +111,7 @@ index 8df7769..44a4a0c 100644
      }, AUTO_RETRY_MS, { label: 'video_auto_retry', onRearm: (i) => logClientEvent('timer_rearmed', `${i.label} rearm`, i) });
  }
  function startVideo() {
-@@ -520,6 +579,9 @@ function startVideo() {
+@@ -520,6 +583,9 @@ function startVideo() {
      autoRetried = false;
      autoRetryAtMs = null;
      videoStartTs = nowMs();
@@ -117,7 +121,7 @@ index 8df7769..44a4a0c 100644
      armStall();
      armAutoRetry();
  }
-@@ -527,12 +589,33 @@ function onVideoLoaded() {
+@@ -527,12 +593,33 @@ function onVideoLoaded() {
      videoLoaded.value = true;
      if (stallTimer) stallTimer.clear();
      if (autoRetryTimer) autoRetryTimer.clear();
@@ -153,7 +157,7 @@ index 8df7769..44a4a0c 100644
  
  function selectLesson(id) {
      if (stallTimer) stallTimer.clear();
-@@ -638,6 +721,7 @@ function ensureFonts() {
+@@ -638,6 +725,7 @@ function ensureFonts() {
  .pd-player { display: grid; grid-template-columns: 1fr 340px; gap: 22px; align-items: start; }
  .pd-video { position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: var(--r-lg); overflow: hidden; background: #0b1e52; box-shadow: var(--shadow); }
  .pd-video iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
