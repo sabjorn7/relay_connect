@@ -1,0 +1,111 @@
+sha256(payload below — чистый git diff поверх cv389/v2, применять: tail -n +3 файл | git apply): 965207ed525a8e96bb840c31f010cd5659fd08f57ad6e36cc7c0dd8a17aee4ae
+
+diff --git a/src/_front/views/MyCoursePage.vue b/src/_front/views/MyCoursePage.vue
+index 4c9447d..bc3c846 100644
+--- a/src/_front/views/MyCoursePage.vue
++++ b/src/_front/views/MyCoursePage.vue
+@@ -204,6 +204,9 @@ import CourseCertificate from '@/_front/course/CourseCertificate.vue';
+ import { certNumber, certDate, downloadCertificatePdf, certFilename } from '@/_front/course/certificate.js';
+ 
+ const PEERTUBE = 'https://video.meetgu.ru';
++// Постепенное включение нативного VOD-плеера: % залогиненных (ТОЛЬКО iOS/Safari), стабильный бакет по user_id.
++// 0 = выключить нативный плеер для всех (кроме явного ?vod=1); 100 = всем iOS/Safari. Общий рубильник фичи.
++const VOD_ROLLOUT_PCT = 20;
+ const route = useRoute();
+ let sb = null;
+ 
+@@ -255,18 +258,39 @@ const videoUrl = computed(() => (currentLesson.value?.video_id ? embedUrl(curren
+ // throttled mobile carrier or a cold PeerTube embed render), so the user isn't stuck on a blank box.
+ const watchUrl = computed(() => (currentLesson.value?.video_id ? `${PEERTUBE}/w/${encodeURIComponent(currentLesson.value.video_id)}` : ''));
+ 
+-// --- VOD: нативный <video> через same-origin /vod/ (ЗА ФЛАГОМ ?vod=1 / localStorage 'mg_vod') ---
+-// По умолчанию остаётся старый iframe-embed. При любом сбое нативного пути → автооткат на iframe.
++// --- VOD: нативный <video> через same-origin /vod/ ---
++// По умолчанию нативный плеер постепенно включается для VOD_ROLLOUT_PCT% залогиненных ТОЛЬКО на iOS/Safari
++// (стабильный бакет по хэшу user_id — одинаков между заходами). Остальные и все не-iOS → iframe-embed.
++// ?vod=1 / ?vod=0 и localStorage имеют приоритет над бакетом. При любом сбое нативного пути → откат на iframe.
+ const VOD = '/vod'; // nginx same-origin прокси на PeerTube (public media с диска, api на локальный backend)
+-function vodFlagOn() {
++// Стабильный бакет 0..99 по user_id (НЕ рандом на каждый визит).
++function rolloutBucket(uid) {
++    const s = String(uid || ''); let h = 0;
++    for (let i = 0; i < s.length; i++) h = (Math.imul(h, 31) + s.charCodeAt(i)) >>> 0;
++    return h % 100;
++}
++function isIosSafari() {
++    const ua = navigator.userAgent || '';
++    const iOS = /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && typeof document !== 'undefined' && 'ontouchend' in document); // iPadOS маскируется под Mac
++    const safari = /^((?!chrome|crios|fxios|android|edg|opr).)*safari/i.test(ua);
++    return iOS && safari;
++}
++// Явный приоритет (?vod / localStorage), затем бакет (включён рубильник, залогинен, iOS/Safari, в пределах %).
++function resolveVodNative(uid) {
+     try {
+-        const sp = new URLSearchParams(window.location.search);
+-        if (sp.get('vod') === '1') { try { localStorage.setItem('mg_vod', '1'); } catch (_) { /* noop */ } return true; }
+-        if (sp.get('vod') === '0') { try { localStorage.removeItem('mg_vod'); } catch (_) { /* noop */ } return false; }
+-        return localStorage.getItem('mg_vod') === '1';
+-    } catch (_) { return false; }
++        const q = new URLSearchParams(window.location.search).get('vod');
++        if (q === '1') { try { localStorage.setItem('mg_vod', '1'); } catch (_) { /* noop */ } return true; }
++        if (q === '0') { try { localStorage.setItem('mg_vod', '0'); } catch (_) { /* noop */ } return false; }
++        const ls = (() => { try { return localStorage.getItem('mg_vod'); } catch (_) { return null; } })();
++        if (ls === '1') return true;
++        if (ls === '0') return false;
++    } catch (_) { /* noop */ }
++    if (VOD_ROLLOUT_PCT <= 0) return false;      // общий рубильник выключен
++    if (!uid || !isIosSafari()) return false;    // гость / не-iOS-Safari → iframe
++    return rolloutBucket(uid) < VOD_ROLLOUT_PCT; // стабильный % бакет
+ }
+-const vodNativeOn = ref(vodFlagOn());
++const vodNativeOn = ref(resolveVodNative(null)); // override-путь сразу; бакет досчитается после получения user_id
++const rolloutBucketVal = ref(null);              // 0..99 для логов (null, если uid неизвестен)
+ const nativeSrc = ref('');
+ const nativeKind = ref('');      // 'hls' | 'mp4'
+ const vodFailed = ref(false);    // сбой нативного плеера/источника → откат на iframe
+@@ -423,6 +447,9 @@ async function loadCheatsheet(courseId) {
+ async function load() {
+     sb = getSupabase();
+     myId.value = readStoredSession()?.user?.id || authCookieUser()?.id || null;
++    // Постепенное включение нативного VOD-плеера: пересчитываем после получения user_id (стабильный бакет).
++    rolloutBucketVal.value = myId.value ? rolloutBucket(myId.value) : null;
++    vodNativeOn.value = resolveVodNative(myId.value);
+     const courseId = route.query.course || '';
+ 
+     // guest → login
+@@ -547,7 +574,7 @@ function armStall() {
+         if (videoLoaded.value) return; // loaded during the 5s probe → not a real stall, don't log
+         logClientEvent('video_load_timeout', useNative.value ? nativeSrc.value : videoUrl.value, {
+             lesson: currentLesson.value?.id || null,
+-            player: playerUsed(), kind: nativeKind.value || 'iframe', attempt: autoRetried ? 2 : 1,
++            player: playerUsed(), rollout_bucket: rolloutBucketVal.value, kind: nativeKind.value || 'iframe', attempt: autoRetried ? 2 : 1,
+             probe: v.r, probe_ms: v.ms, probe_host: v.r,
+             app_probe: a.r, app_probe_ms: a.ms, app_probe_conn: 'reused-same-origin', probe_app: a.r,
+             ...netInfo(),
+@@ -571,7 +598,7 @@ function armAutoRetry() {
+         autoRetryAtMs = Math.round(nowMs() - videoStartTs);
+         logClientEvent('video_auto_retry', useNative.value ? nativeSrc.value : videoUrl.value, {
+             lesson: currentLesson.value?.id || null, embed: currentLesson.value?.video_id || null,
+-            player: playerUsed(), kind: nativeKind.value || 'iframe', attempt: 1, fresh_conn: true, ms: autoRetryAtMs,
++            player: playerUsed(), rollout_bucket: rolloutBucketVal.value, kind: nativeKind.value || 'iframe', attempt: 1, fresh_conn: true, ms: autoRetryAtMs,
+         });
+         videoLoaded.value = false;
+         videoReload.value += 1; // bump :key → свежее соединение (iframe или <video>); armStall не трогаем → 15с-часы целы
+@@ -598,7 +625,7 @@ function onVideoLoaded() {
+         const msToOk = Math.max(0, Math.round(nowMs() - videoStartTs) - autoRetryAtMs);
+         logClientEvent('video_auto_retry_ok', useNative.value ? nativeSrc.value : videoUrl.value, {
+             lesson: currentLesson.value?.id || null, embed: currentLesson.value?.video_id || null,
+-            player: playerUsed(), kind: nativeKind.value || 'iframe', attempt: 2, fresh_conn: true,
++            player: playerUsed(), rollout_bucket: rolloutBucketVal.value, kind: nativeKind.value || 'iframe', attempt: 2, fresh_conn: true,
+             ms: autoRetryAtMs, ms_to_ok: msToOk,
+         });
+         autoRetryAtMs = null; // once
+@@ -611,7 +638,7 @@ function onNativeError() {
+     if (stallTimer) stallTimer.clear();
+     if (autoRetryTimer) autoRetryTimer.clear();
+     logClientEvent('video_load_timeout', nativeSrc.value || videoUrl.value, {
+-        lesson: currentLesson.value?.id || null, player: 'native', kind: nativeKind.value || null,
++        lesson: currentLesson.value?.id || null, player: 'native', rollout_bucket: rolloutBucketVal.value, kind: nativeKind.value || null,
+         reason: 'native_error', attempt: autoRetried ? 2 : 1, ...netInfo(),
+     });
+     vodFailed.value = true;        // → монтируется iframe (useNative станет false)
