@@ -1,0 +1,163 @@
+sha256(payload below — чистый git diff, применять: tail -n +3 файл | git apply): ede89989d8c3383019d1e185ed58b7a14404e352e06fb3dfbae704e5bc9e432a
+
+diff --git a/src/_front/views/MyCoursePage.vue b/src/_front/views/MyCoursePage.vue
+index 8df7769..44a4a0c 100644
+--- a/src/_front/views/MyCoursePage.vue
++++ b/src/_front/views/MyCoursePage.vue
+@@ -47,7 +47,10 @@
+                     <div class="pd-video">
+                         <template v-if="currentLesson && currentLesson.video_id">
+                             <template v-if="videoStarted">
+-                                <iframe :key="`${currentLesson.id}-${videoReload}`" :src="videoUrl" title="Урок" frameborder="0" allowfullscreen allow="autoplay; fullscreen; picture-in-picture" @load="onVideoLoaded"></iframe>
++                                <!-- Нативный <video> для VOD — ТОЛЬКО за флагом (?vod=1 / localStorage 'mg_vod'); при любом сбое автооткат на iframe ниже. -->
++                                <video v-if="useNative" :key="`vod-${currentLesson.id}-${videoReload}`" :src="nativeSrc" class="pd-video__el" controls playsinline autoplay
++                                       @loadeddata="onNativeLoaded" @canplay="onNativeLoaded" @error="onNativeError"></video>
++                                <iframe v-else :key="`${currentLesson.id}-${videoReload}`" :src="videoUrl" title="Урок" frameborder="0" allowfullscreen allow="autoplay; fullscreen; picture-in-picture" @load="onVideoLoaded"></iframe>
+                                 <!-- Until the embed fires @load (it can stall on some mobile networks — observed on MTS LTE,
+                                      where the embed hangs but the direct PeerTube page still opens), show a spinner, a retry
+                                      (re-mounts the iframe), and a direct-watch link so the player is never a silent blank box. -->
+@@ -247,6 +250,51 @@ const videoUrl = computed(() => (currentLesson.value?.video_id ? embedUrl(curren
+ // Direct PeerTube watch page — fallback link when the embedded player is slow/stalled (e.g. a
+ // throttled mobile carrier or a cold PeerTube embed render), so the user isn't stuck on a blank box.
+ const watchUrl = computed(() => (currentLesson.value?.video_id ? `${PEERTUBE}/w/${encodeURIComponent(currentLesson.value.video_id)}` : ''));
++
++// --- VOD: нативный <video> через same-origin /vod/ (ЗА ФЛАГОМ ?vod=1 / localStorage 'mg_vod') ---
++// По умолчанию остаётся старый iframe-embed. При любом сбое нативного пути → автооткат на iframe.
++const VOD = '/vod'; // nginx same-origin прокси на PeerTube (public media с диска, api на локальный backend)
++function vodFlagOn() {
++    try {
++        const sp = new URLSearchParams(window.location.search);
++        if (sp.get('vod') === '1') { try { localStorage.setItem('mg_vod', '1'); } catch (_) { /* noop */ } return true; }
++        if (sp.get('vod') === '0') { try { localStorage.removeItem('mg_vod'); } catch (_) { /* noop */ } return false; }
++        return localStorage.getItem('mg_vod') === '1';
++    } catch (_) { return false; }
++}
++const vodNativeOn = ref(vodFlagOn());
++const nativeSrc = ref('');
++const nativeKind = ref('');      // 'hls' | 'mp4'
++const vodFailed = ref(false);    // сбой нативного плеера/источника → откат на iframe
++const useNative = computed(() => vodNativeOn.value && !vodFailed.value && !!nativeSrc.value && !!currentLesson.value?.video_id);
++const playerUsed = () => (useNative.value ? 'native' : 'iframe');
++function toVod(url) { return typeof url === 'string' ? url.replace(/^https?:\/\/video\.meetgu\.ru/i, VOD) : ''; }
++function canHlsNative() { try { return !!document.createElement('video').canPlayType('application/vnd.apple.mpegurl'); } catch (_) { return false; } }
++// Берём media-URL через same-origin /vod/api/v1/videos/<id>. Safari → HLS master.m3u8; иначе → web-video mp4.
++// hls.js НЕ добавляем: если только HLS и браузер его не умеет — откат на iframe (без новой зависимости).
++async function resolveNativeSrc(videoId) {
++    nativeSrc.value = ''; nativeKind.value = '';
++    try {
++        const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), 8000);
++        const res = await fetch(`${VOD}/api/v1/videos/${encodeURIComponent(videoId)}`, { cache: 'no-store', signal: ctrl.signal });
++        clearTimeout(t);
++        if (!res.ok) throw new Error('meta_' + res.status);
++        const d = await res.json();
++        const hls = (d.streamingPlaylists || []).map((p) => p && p.playlistUrl).find(Boolean);
++        const mp4 = []
++            .concat((d.files || []).map((f) => f && f.fileUrl))
++            .concat((d.streamingPlaylists || []).flatMap((p) => ((p && p.files) || []).map((f) => f && f.fileUrl)))
++            .find((u) => typeof u === 'string' && u.endsWith('.mp4'));
++        if (videoId !== currentLesson.value?.video_id) return false; // урок переключили, пока грузили
++        if (canHlsNative() && hls) { nativeSrc.value = toVod(hls); nativeKind.value = 'hls'; }
++        else if (mp4) { nativeSrc.value = toVod(mp4); nativeKind.value = 'mp4'; }
++        else throw new Error('no_playable_source');
++        return true;
++    } catch (_) {
++        vodFailed.value = true; // метаданные/источник недоступны → iframe (просмотр не ломаем)
++        return false;
++    }
++}
+ const ratingAvg = computed(() => {
+     const r = course.value?.rating;
+     if (!Array.isArray(r) || !r.length) return '';
+@@ -493,12 +541,20 @@ function armStall() {
+         if (videoLoaded.value) return;
+         const [v, a] = await Promise.all([probeVideoHost(), probeAppHost()]);
+         if (videoLoaded.value) return; // loaded during the 5s probe → not a real stall, don't log
+-        logClientEvent('video_load_timeout', videoUrl.value, {
++        logClientEvent('video_load_timeout', useNative.value ? nativeSrc.value : videoUrl.value, {
+             lesson: currentLesson.value?.id || null,
+-            probe: v.r, probe_ms: v.ms,
+-            app_probe: a.r, app_probe_ms: a.ms, app_probe_conn: 'reused-same-origin',
++            player: playerUsed(), kind: nativeKind.value || 'iframe', attempt: autoRetried ? 2 : 1,
++            probe: v.r, probe_ms: v.ms, probe_host: v.r,
++            app_probe: a.r, app_probe_ms: a.ms, app_probe_conn: 'reused-same-origin', probe_app: a.r,
+             ...netInfo(),
+         });
++        // Нативный плеер не поднялся за 15с → АВТООТКАТ на iframe (у него свой watchdog со свежим окном).
++        if (useNative.value && !videoLoaded.value) {
++            vodFailed.value = true;
++            autoRetried = false; autoRetryAtMs = null; videoStartTs = nowMs();
++            videoReload.value += 1;
++            armStall(); armAutoRetry();
++        }
+     }, VIDEO_STALL_MS, { label: 'video_load_timeout', onRearm: (i) => logClientEvent('timer_rearmed', `${i.label} rearm`, i) });
+ }
+ // One silent auto-retry at AUTO_RETRY_MS: re-mount the iframe once if it hasn't loaded, leaving the
+@@ -509,9 +565,12 @@ function armAutoRetry() {
+         if (videoLoaded.value || autoRetried) return;
+         autoRetried = true;
+         autoRetryAtMs = Math.round(nowMs() - videoStartTs);
+-        logClientEvent('video_auto_retry', videoUrl.value, { lesson: currentLesson.value?.id || null, embed: currentLesson.value?.video_id || null, ms: autoRetryAtMs });
++        logClientEvent('video_auto_retry', useNative.value ? nativeSrc.value : videoUrl.value, {
++            lesson: currentLesson.value?.id || null, embed: currentLesson.value?.video_id || null,
++            player: playerUsed(), kind: nativeKind.value || 'iframe', attempt: 1, fresh_conn: true, ms: autoRetryAtMs,
++        });
+         videoLoaded.value = false;
+-        videoReload.value += 1; // bump :key → fresh iframe load attempt (no armStall → 15s clock intact)
++        videoReload.value += 1; // bump :key → свежее соединение (iframe или <video>); armStall не трогаем → 15с-часы целы
+     }, AUTO_RETRY_MS, { label: 'video_auto_retry', onRearm: (i) => logClientEvent('timer_rearmed', `${i.label} rearm`, i) });
+ }
+ function startVideo() {
+@@ -520,6 +579,9 @@ function startVideo() {
+     autoRetried = false;
+     autoRetryAtMs = null;
+     videoStartTs = nowMs();
++    vodFailed.value = false; nativeSrc.value = ''; nativeKind.value = '';
++    // Нативный путь ЗА ФЛАГОМ: тянем источник через same-origin /vod/api (async). Успех → <video>; сбой → vodFailed → iframe.
++    if (vodNativeOn.value && currentLesson.value?.video_id) resolveNativeSrc(currentLesson.value.video_id);
+     armStall();
+     armAutoRetry();
+ }
+@@ -527,12 +589,33 @@ function onVideoLoaded() {
+     videoLoaded.value = true;
+     if (stallTimer) stallTimer.clear();
+     if (autoRetryTimer) autoRetryTimer.clear();
+-    // if the embed loaded only AFTER the one silent auto-retry, record that the retry rescued it
++    // if the player loaded only AFTER the one silent auto-retry, record that the retry rescued it
+     if (autoRetried && autoRetryAtMs != null) {
+-        logClientEvent('video_auto_retry_ok', videoUrl.value, { lesson: currentLesson.value?.id || null, embed: currentLesson.value?.video_id || null, ms: autoRetryAtMs });
++        const msToOk = Math.max(0, Math.round(nowMs() - videoStartTs) - autoRetryAtMs);
++        logClientEvent('video_auto_retry_ok', useNative.value ? nativeSrc.value : videoUrl.value, {
++            lesson: currentLesson.value?.id || null, embed: currentLesson.value?.video_id || null,
++            player: playerUsed(), kind: nativeKind.value || 'iframe', attempt: 2, fresh_conn: true,
++            ms: autoRetryAtMs, ms_to_ok: msToOk,
++        });
+         autoRetryAtMs = null; // once
+     }
+ }
++// Нативные события <video> (loadeddata/canplay) = аналог @load у iframe.
++function onNativeLoaded() { onVideoLoaded(); }
++// Любой сбой нативного плеера (error) → лог video_load_timeout(player=native) + АВТООТКАТ на iframe (со своим watchdog).
++function onNativeError() {
++    if (stallTimer) stallTimer.clear();
++    if (autoRetryTimer) autoRetryTimer.clear();
++    logClientEvent('video_load_timeout', nativeSrc.value || videoUrl.value, {
++        lesson: currentLesson.value?.id || null, player: 'native', kind: nativeKind.value || null,
++        reason: 'native_error', attempt: autoRetried ? 2 : 1, ...netInfo(),
++    });
++    vodFailed.value = true;        // → монтируется iframe (useNative станет false)
++    videoLoaded.value = false;
++    autoRetried = false; autoRetryAtMs = null; videoStartTs = nowMs();
++    videoReload.value += 1;        // свежий :key для iframe
++    armStall(); armAutoRetry();    // watchdog теперь для iframe-пути (player=iframe)
++}
+ 
+ function selectLesson(id) {
+     if (stallTimer) stallTimer.clear();
+@@ -638,6 +721,7 @@ function ensureFonts() {
+ .pd-player { display: grid; grid-template-columns: 1fr 340px; gap: 22px; align-items: start; }
+ .pd-video { position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: var(--r-lg); overflow: hidden; background: #0b1e52; box-shadow: var(--shadow); }
+ .pd-video iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
++.pd-video__el { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; background: #0b1e52; object-fit: contain; }
+ .pd-video__poster { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; padding: 0; cursor: pointer; background: #0b1e52; display: grid; place-items: center; }
+ .pd-video__poster img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+ .pd-video__play { position: relative; width: 72px; height: 72px; border-radius: 50%; background: rgba(255, 255, 255, 0.92); display: grid; place-items: center; box-shadow: 0 10px 30px -8px rgba(0, 0, 0, 0.5); transition: transform 0.16s var(--ease-out); }
