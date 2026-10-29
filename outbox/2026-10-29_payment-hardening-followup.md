@@ -1,9 +1,16 @@
-sha256(payload below): a6cbce5331e9e3bfca66b25ceb52317f0e92e982c4c238041cf76b313d0268b0
+sha256(payload below): 282419e5b68de1359897b9a77a73328cb4f17bff31f84c006901dc567dc974ea
 
 # Усиление оплаты — доработка по ревью (WARN-режим, verify v2, перенос секретов, готовность к строгому)
 
 На ревью. n8n не менял, не выкатывал. Значения секретов нигде не печатаю. ⚠️ = webhook/цены/доступ/выплаты.
 Справка: `pending_payment_verify.sql` (v1) уже применён владельцем (payment_audit + verify_order_payment есть).
+
+## 0. Правки нод по ревью (v2 JSON — `2026-10-29_buycourse-added-nodes.json`)
+1. **RestoreBody добавлена перед `Supabase`.** Проверил текущий воркфлоу: `$json.body.*` относительно входа читает только нода **`Supabase`** (set paid): `where id={{$json.body.order_num}}`, `payment_id={{$json.body.order_id}}`. После `AuditWarn` `$json` = вставленная строка `payment_audit` (без `.body`) → фильтр `update` получил бы `undefined` и **paid бы не выставился**. `RestoreBody` (Code: `return [{json: $('Shop').item.json}]`) возвращает прежнюю форму. Остальные ноды берут данные по имени (`$('Shop')`, `$('GetPositions')`, `$('Code1')` …) — не ломаются; `Code` после `Supabase` читает `$json.course_positions` из вывода `Supabase` — не затронут. false-ветка `IF_AlreadyPaid` тоже идёт через `RestoreBody` (цепочка …→AuditWarn→RestoreBody→Supabase).
+2. **Все новые data-ноды** (CheckPaid, VerifySign, VerifyAmount, AuditWarn, AuditDuplicate, RestoreBody): `onError=continueRegularOutput` + `alwaysOutputData=true` — в WARN ни одна ошибка не остановит `set paid`. Если `CheckPaid` не нашёл заказ → `alwaysOutputData` отдаёт пустой item, `IF_AlreadyPaid` (`typeValidation: loose`) видит `paid=undefined`→false → поток идёт дальше как раньше.
+3. **Подпись — json_encode, не query-string.** `VerifySign` переписан под Prodamus Hmac SDK: рекурсивно `strval` всех значений (`true→'1'`, `false/null→''`), рекурсивный `ksort`, затем `json_encode(..., JSON_UNESCAPED_UNICODE)` (не `http_build_query`), с экранированием `'/'`→`'\/'` как в PHP по умолчанию; `hmac_sha256(json, $env.PRODAMUS_SECRET)`. Помечено «**сверить на реальном колбэке**»; если не сойдётся — смотреть (а) форму `products[]` (массив PHP vs объект `{"0":…}` у n8n-парсера multipart), (б) набор подписываемых полей, (в) экранирование `/`.
+4. **VerifyAmount без второго credential.** Переиспользует существующий `supabaseApi` **MeetGuru** через `predefinedCredentialType` (n8n сам добавит `apikey`+`Authorization` из credential) — отдельный header-credential не нужен. Исправлен `p_paid_amount`: сумма `0` больше **не** превращается в `null` (явная проверка на undefined/null/'' → `null`, иначе `Number(sum)`); фактический `null` ловит v2-SQL.
+5. **Мероприятия — различаем полную и депозит.** Признака типа оплаты **на `order` нет** (колонки: course_positions, created_at, event_id, id, logs, num, owner, pageUrl, paid, payment_id, promo_code_id, promo_discount, subscription, summ). Он лежит в **`public.event_registrations`**: `"order"` (FK→order.id), `payment_type` ('full'/'deposit'), `amount_paid/amount_total`. v2-SQL берёт `payment_type` оттуда: `deposit`→минимум = `round(events.price*deposit_percent/100)`; `full`→`events.price − промо`. При полной оплате депозитная сумма **не** пройдёт. Ожидаемую сумму считаем из `events.price/deposit_percent`, не из клиентских `amount_paid`/`order.summ`.
 
 ## 1. Режим включения — сначала ВСЁ в WARN (ноды — `2026-10-29_buycourse-added-nodes.json`)
 - Подпись (`VerifySign`) и `verify_order_payment` (`VerifyAmount`) **считаются и пишутся в `payment_audit`**, но `paid` ставится как раньше — ветка НЕ блокируется (`AuditWarn` → существующая нода `Supabase`).
@@ -47,7 +54,7 @@ where streak;  -- переходить в строгий режим при >= 20
 ## 2. verify_order_payment v2 — `2026-10-29_pending_payment_verify_v2.sql` (+ откат к v1)
 - (1) **null-guard:** `p_paid_amount is null` → `{ok:false, reason:'no_paid_amount'}` (в WARN только логируется).
 - (2) **renewal по истории:** вместо клиентского `shop.is_renewal` — `exists(user_course где user=order.owner, course=..., created_at < order.created_at)`. (Требует `user_course.created_at` — есть по умолчанию; если колонки нет, заменить на `end_period is not null`/id-порядок — отмечено.)
-- (3) **мероприятия:** цена из `public.events` (`price`, `deposit_percent`): ожидаемый минимум = депозит (если `deposit_percent>0`) или полная−промо; `ok = paid >= min − 1`. Вместо безусловного ok.
+- (3) **мероприятия:** цена из `public.events` (`price`, `deposit_percent`); **полная vs депозит — по `event_registrations.payment_type`** (признака на `order` нет, см. §0.5): `deposit`→`round(price*deposit_percent/100)`, `full`→`price−промо`; `ok = paid >= min − 1`. Вместо безусловного ok. Промо на депозит не применяется.
 - Откат — `..._v2_rollback.sql` возвращает v1.
 
 ## 3. Перенос секретов BuyCourse в n8n credentials (без остановки воркфлоу; значения не печатаю)

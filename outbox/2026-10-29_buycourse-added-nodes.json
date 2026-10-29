@@ -1,107 +1,309 @@
 {
-  "_comment": "Добавляемые ноды для вебхука оплаты BuyCourse. РЕЖИМ WARN: подпись и verify считаются и пишутся в payment_audit, но paid ставится как раньше (ветка не блокируется). Идемпотентность включена сразу (paid уже true -> duplicate, стоп). Секретов НЕТ: PRODAMUS_SECRET из $env; Supabase-RPC через credential header-auth (owner создаёт, значения не здесь); таблицы — та же supabaseApi-credential, что у остальных нод (ссылка по id/name, не ключ). Credential-id ниже — ссылка, не секрет.",
-  "_wiring_WARN": "Shop(webhook) -> CheckPaid -> IF_AlreadyPaid: true -> AuditDuplicate (стоп); false -> VerifySign -> VerifyAmount -> AuditWarn -> [существующая нода 'Supabase' (set paid) и далее как сейчас].",
-  "_wiring_STRICT_later": "В строгом режиме (отдельный ОК) между AuditWarn и 'Supabase' добавить IF PaymentValid (sig_ok && verify.ok): true -> 'Supabase'; false -> Notify владельцу, БЕЗ set paid.",
+  "_comment": "Добавляемые ноды вебхука оплаты BuyCourse, РЕЖИМ WARN (v2 по ревью). Секретов НЕТ: PRODAMUS_SECRET из $env; Supabase — существующий credential MeetGuru по id/name (ключ не здесь). Все новые data-ноды: onError=continueRegularOutput + alwaysOutputData, чтобы в WARN НИ ОДНА ошибка не остановила set paid.",
+  "_wiring_WARN": "Shop(webhook) -> CheckPaid -> IF_AlreadyPaid: [true]-> AuditDuplicate (стоп); [false]-> VerifySign -> VerifyAmount -> AuditWarn -> RestoreBody -> существующая нода 'Supabase' (set paid) и далее как сейчас.",
+  "_wiring_STRICT_later": "В строгом режиме (отдельный ОК) между RestoreBody и 'Supabase' вставить IF PaymentValid (sig_ok && verify.ok): true -> 'Supabase'; false -> Notify владельцу, БЕЗ set paid. RestoreBody всё равно стоит перед 'Supabase'.",
+  "_changes_v2": [
+    "1. Добавлена RestoreBody (Code) перед 'Supabase' — downstream читает $json.body.*; разбор в _note RestoreBody. false-ветка IF_AlreadyPaid тоже идёт через RestoreBody.",
+    "2. Все новые data-ноды: onError=continueRegularOutput + alwaysOutputData (CheckPaid не нашёл заказ -> поток идёт дальше как раньше).",
+    "3. VerifySign переписан под Prodamus Hmac SDK: strval-рекурсивно + ksort-рекурсивно + json_encode (не query-string) + экранирование '/'. Помечено 'сверить на реальном колбэке'.",
+    "4. VerifyAmount переиспользует credential MeetGuru (predefinedCredentialType supabaseApi) — без второго credential; p_paid_amount: 0 больше НЕ превращается в null."
+  ],
   "nodes": [
     {
       "name": "CheckPaid",
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
-      "position": [160, 160],
+      "position": [
+        160,
+        160
+      ],
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
       "parameters": {
         "operation": "get",
         "tableId": "order",
-        "filters": { "conditions": [ { "keyName": "id", "condition": "eq", "keyValue": "={{ $json.body.order_num }}" } ] }
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.body.order_num }}"
+            }
+          ]
+        }
       },
-      "credentials": { "supabaseApi": { "id": "A84wclCRDmr3uzKM", "name": "MeetGuru" } },
-      "_note": "Читает текущий order (поле paid) по order_num из тела Prodamus."
+      "credentials": {
+        "supabaseApi": {
+          "id": "A84wclCRDmr3uzKM",
+          "name": "MeetGuru"
+        }
+      },
+      "_note": "Читает текущий order (поле paid) по order_num. onError=continue + alwaysOutputData: если заказ не найден/ошибка — поток идёт дальше как раньше (paid остаётся undefined -> IF даст false-ветку)."
     },
     {
       "name": "IF_AlreadyPaid",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [360, 160],
+      "position": [
+        360,
+        160
+      ],
+      "alwaysOutputData": true,
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "typeValidation": "loose", "version": 2 },
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "loose",
+            "version": 2
+          },
           "combinator": "and",
-          "conditions": [ { "id": "c-paid", "leftValue": "={{ $json.paid }}", "rightValue": "", "operator": { "type": "boolean", "operation": "true", "singleValue": true } } ]
+          "conditions": [
+            {
+              "id": "c-paid",
+              "leftValue": "={{ $json.paid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
         },
         "options": {}
       },
-      "_note": "true -> AuditDuplicate (стоп, идемпотентность); false -> дальше к проверкам."
+      "_note": "paid=true -> AuditDuplicate (стоп, идемпотентность). Иначе/undefined -> VerifySign (false-ветка). typeValidation=loose: undefined paid -> false."
     },
     {
       "name": "AuditDuplicate",
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
-      "position": [560, 40],
+      "position": [
+        560,
+        40
+      ],
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
       "parameters": {
         "tableId": "payment_audit",
-        "fieldsUi": { "fieldValues": [
-          { "fieldId": "order_id", "fieldValue": "={{ $('Shop').item.json.body.order_num }}" },
-          { "fieldId": "event", "fieldValue": "duplicate" },
-          { "fieldId": "paid", "fieldValue": "={{ $('Shop').item.json.body.sum }}" },
-          { "fieldId": "detail", "fieldValue": "={{ { note: 'already paid, skipped' } }}" }
-        ] }
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "order_id",
+              "fieldValue": "={{ $('Shop').item.json.body.order_num }}"
+            },
+            {
+              "fieldId": "event",
+              "fieldValue": "duplicate"
+            },
+            {
+              "fieldId": "paid",
+              "fieldValue": "={{ $('Shop').item.json.body.sum }}"
+            },
+            {
+              "fieldId": "detail",
+              "fieldValue": "={{ { note: 'already paid, skipped' } }}"
+            }
+          ]
+        }
       },
-      "credentials": { "supabaseApi": { "id": "A84wclCRDmr3uzKM", "name": "MeetGuru" } },
-      "_note": "Тупик: не продолжаем (sales/баланс не создаём повторно)."
+      "credentials": {
+        "supabaseApi": {
+          "id": "A84wclCRDmr3uzKM",
+          "name": "MeetGuru"
+        }
+      },
+      "_note": "Тупик: повторный колбэк по уже оплаченному заказу — только лог, sales/баланс повторно НЕ создаём."
     },
     {
       "name": "VerifySign",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [560, 260],
+      "position": [
+        560,
+        260
+      ],
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
       "parameters": {
-        "jsCode": "// Проверка подписи Prodamus (HMAC-SHA256). Секрет ТОЛЬКО из $env.PRODAMUS_SECRET (не хардкод).\n// ВНИМАНИЕ: точная сериализация Prodamus (их Hmac SDK) НЕ раскрыта в доках — ОБЯЗАТЕЛЬНО сверить calc==Sign\n// на реальном тест-уведомлении и при необходимости поправить buildQuery/phpStr под их схему.\nconst crypto = require('crypto');\nconst SECRET = $env.PRODAMUS_SECRET || '';\nconst body = $('Shop').item.json.body || {};\nconst headers = $('Shop').item.json.headers || {};\nconst sign = String(headers['sign'] || headers['Sign'] || '').toLowerCase();\nfunction phpStr(v){ if (v === true) return '1'; if (v === false || v === null || v === undefined) return ''; return String(v); }\nfunction ksortDeep(o){ if (Array.isArray(o)) return o.map(ksortDeep); if (o && typeof o === 'object'){ const out={}; for (const k of Object.keys(o).sort()) out[k]=ksortDeep(o[k]); return out; } return o; }\nfunction buildQuery(data, prefix){ const parts=[]; const enc=s=>encodeURIComponent(String(s)).replace(/%20/g,'+'); for (const k of Object.keys(data)){ const key=prefix?prefix+'['+k+']':k; const val=data[k]; if (val!==null && typeof val==='object'){ const sub=buildQuery(val,key); if (sub) parts.push(sub); } else { parts.push(enc(key)+'='+enc(phpStr(val))); } } return parts.join('&'); }\nconst serialized = buildQuery(ksortDeep(body), '');\nconst calc = SECRET ? crypto.createHmac('sha256', SECRET).update(serialized).digest('hex') : '';\nreturn [{ json: { sig_ok: !!calc && calc === sign, sign_present: !!sign, order_num: body.order_num, sum: body.sum } }];"
+        "jsCode": "// Проверка подписи Prodamus (HMAC-SHA256) по схеме их Hmac SDK.\n// Секрет ТОЛЬКО из $env.PRODAMUS_SECRET (не хардкод). Значения подписи/секрета НЕ логировать.\n//\n// Схема Prodamus Hmac (PHP): array_walk_recursive -> strval ВСЕХ значений; рекурсивный ksort;\n// затем json_encode($data, JSON_UNESCAPED_UNICODE) (НЕ query-string!); hash_hmac('sha256', json, key).\n// json_encode по умолчанию ЭКРАНИРУЕТ '/' как '\\/' (JSON_UNESCAPED_SLASHES не выставлен) — повторяем.\n// !! ОБЯЗАТЕЛЬНО сверить calc==Sign на реальном тест-уведомлении. Если не сходится, искать расхождение в:\n//    (1) форма products[] — массив (PHP numeric list -> [...]) против объекта {\"0\":..} у n8n multipart-парсера;\n//    (2) какие поля подписываются (возможно без headers, только тело; возможно иное множество полей);\n//    (3) экранирование '/'. Правка — здесь, до перехода в строгий режим.\nconst crypto = require('crypto');\nconst SECRET  = $env.PRODAMUS_SECRET || '';\nconst shop    = $('Shop').item.json || {};\nconst body    = shop.body || {};\nconst headers = shop.headers || {};\nconst sign    = String(headers['sign'] || headers['Sign'] || '').toLowerCase();\n\nfunction toStrDeep(v){\n  if (Array.isArray(v)) return v.map(toStrDeep);\n  if (v && typeof v === 'object'){ const o = {}; for (const k of Object.keys(v)) o[k] = toStrDeep(v[k]); return o; }\n  if (v === true)  return '1';           // PHP strval(true)='1'\n  if (v === false) return '';            // PHP strval(false)=''\n  if (v === null || v === undefined) return '';\n  return String(v);\n}\nfunction ksortDeep(v){\n  if (Array.isArray(v)) return v.map(ksortDeep);   // список: порядок сохраняется (числовые ключи)\n  if (v && typeof v === 'object'){ const o = {}; for (const k of Object.keys(v).sort()) o[k] = ksortDeep(v[k]); return o; }\n  return v;\n}\nconst prepared = ksortDeep(toStrDeep(body));\nconst jsonStr  = JSON.stringify(prepared).replace(/\\//g, '\\\\/');   // '/' -> '\\/' как PHP json_encode\nconst calc     = SECRET ? crypto.createHmac('sha256', SECRET).update(jsonStr, 'utf8').digest('hex') : '';\nreturn [{ json: { sig_ok: !!calc && calc === sign, sign_present: !!sign } }];\n"
       },
-      "_note": "Выдаёт sig_ok (bool). Значения подписи/секрета НЕ логировать."
+      "_note": "Выдаёт sig_ok (bool). WARN: onError=continue -> ошибка в проверке подписи НЕ останавливает set paid."
     },
     {
       "name": "VerifyAmount",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [760, 260],
+      "position": [
+        760,
+        260
+      ],
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
       "parameters": {
         "method": "POST",
         "url": "https://sb.meetgu.ru/rest/v1/rpc/verify_order_payment",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={ \"p_order_id\": \"{{ $('Shop').item.json.body.order_num }}\", \"p_paid_amount\": {{ Number($('Shop').item.json.body.sum) || 'null' }} }",
+        "jsonBody": "={ \"p_order_id\": \"{{ $('Shop').item.json.body.order_num }}\", \"p_paid_amount\": {{ ($('Shop').item.json.body.sum === undefined || $('Shop').item.json.body.sum === null || $('Shop').item.json.body.sum === '') ? 'null' : Number($('Shop').item.json.body.sum) }} }",
         "options": {}
       },
-      "credentials": { "httpHeaderAuth": { "name": "Supabase service header (apikey+Authorization)" } },
-      "_note": "RPC verify_order_payment. Credential 'Supabase service header' создаёт owner: headers apikey + Authorization=Bearer <service_role>. Значение ключа НЕ здесь. Возвращает {ok, expected, paid, is_event, reason}."
+      "credentials": {
+        "supabaseApi": {
+          "id": "A84wclCRDmr3uzKM",
+          "name": "MeetGuru"
+        }
+      },
+      "_note": "RPC verify_order_payment. Переиспользует СУЩЕСТВУЮЩИЙ credential MeetGuru (supabaseApi: host sb.meetgu.ru + service key) через predefinedCredentialType -> n8n сам добавит apikey+Authorization. Второй credential НЕ заводим. p_paid_amount: сумма 0 остаётся 0 (не превращается в null), отсутствие -> null. Возвращает {ok, expected|expected_min, paid, is_event, reason}."
     },
     {
       "name": "AuditWarn",
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
-      "position": [960, 260],
+      "position": [
+        960,
+        260
+      ],
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
       "parameters": {
         "tableId": "payment_audit",
-        "fieldsUi": { "fieldValues": [
-          { "fieldId": "order_id", "fieldValue": "={{ $('Shop').item.json.body.order_num }}" },
-          { "fieldId": "event", "fieldValue": "={{ ($('VerifySign').item.json.sig_ok && $json.ok) ? 'ok' : (!$('VerifySign').item.json.sig_ok ? 'sig_fail' : 'amount_mismatch') }}" },
-          { "fieldId": "expected", "fieldValue": "={{ $json.expected ?? $json.expected_min ?? null }}" },
-          { "fieldId": "paid", "fieldValue": "={{ $('Shop').item.json.body.sum }}" },
-          { "fieldId": "detail", "fieldValue": "={{ { sig_ok: $('VerifySign').item.json.sig_ok, verify: $json, mode: 'warn' } }}" }
-        ] }
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "order_id",
+              "fieldValue": "={{ $('Shop').item.json.body.order_num }}"
+            },
+            {
+              "fieldId": "event",
+              "fieldValue": "={{ ($('VerifySign').item.json.sig_ok && $json.ok) ? 'ok' : (!$('VerifySign').item.json.sig_ok ? 'sig_fail' : 'amount_mismatch') }}"
+            },
+            {
+              "fieldId": "expected",
+              "fieldValue": "={{ $json.expected ?? $json.expected_min ?? null }}"
+            },
+            {
+              "fieldId": "paid",
+              "fieldValue": "={{ $('Shop').item.json.body.sum }}"
+            },
+            {
+              "fieldId": "detail",
+              "fieldValue": "={{ { sig_ok: $('VerifySign').item.json.sig_ok, verify: $json, mode: 'warn' } }}"
+            }
+          ]
+        }
       },
-      "credentials": { "supabaseApi": { "id": "A84wclCRDmr3uzKM", "name": "MeetGuru" } },
-      "_note": "WARN: только пишет результат (sig_ok/verify) в payment_audit; НЕ блокирует. Дальше — существующая нода 'Supabase' (set paid). Телефон/почту/подпись в detail НЕ кладём."
+      "credentials": {
+        "supabaseApi": {
+          "id": "A84wclCRDmr3uzKM",
+          "name": "MeetGuru"
+        }
+      },
+      "_note": "WARN: только пишет результат (sig_ok/verify) в payment_audit; НЕ блокирует. Телефон/почту/подпись НЕ кладём (в verify-ответе их нет). Дальше -> RestoreBody -> существующая нода 'Supabase'."
+    },
+    {
+      "name": "RestoreBody",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1160,
+        260
+      ],
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "parameters": {
+        "jsCode": "// Восстановить форму вебхука для downstream-нод, читающих $json.body.* (нода 'Supabase' set paid).\nreturn [{ json: $('Shop').item.json }];\n"
+      },
+      "_note": "КРИТИЧНО: downstream-нода 'Supabase' (set paid) читает $json.body.order_num / $json.body.order_id ОТНОСИТЕЛЬНО своего входа. После AuditWarn $json = строка payment_audit (без .body) -> update получил бы undefined и paid бы НЕ выставился. RestoreBody возвращает $json = item вебхука 'Shop', чтобы 'Supabase' снова видел .body. (Ноды, читающие $('Shop')/$('GetPositions')/... по имени, не затронуты; 'Code' после 'Supabase' читает $json.course_positions из вывода 'Supabase' — тоже не затронут.)"
     }
   ],
   "connections_to_add": {
-    "Shop": { "main": [[ { "node": "CheckPaid", "type": "main", "index": 0 } ]] },
-    "CheckPaid": { "main": [[ { "node": "IF_AlreadyPaid", "type": "main", "index": 0 } ]] },
-    "IF_AlreadyPaid": { "main": [ [ { "node": "AuditDuplicate", "type": "main", "index": 0 } ], [ { "node": "VerifySign", "type": "main", "index": 0 } ] ] },
-    "VerifySign": { "main": [[ { "node": "VerifyAmount", "type": "main", "index": 0 } ]] },
-    "VerifyAmount": { "main": [[ { "node": "AuditWarn", "type": "main", "index": 0 } ]] },
-    "AuditWarn": { "main": [[ { "node": "Supabase", "type": "main", "index": 0 } ]] }
+    "Shop": {
+      "main": [
+        [
+          {
+            "node": "CheckPaid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CheckPaid": {
+      "main": [
+        [
+          {
+            "node": "IF_AlreadyPaid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF_AlreadyPaid": {
+      "main": [
+        [
+          {
+            "node": "AuditDuplicate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "VerifySign",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VerifySign": {
+      "main": [
+        [
+          {
+            "node": "VerifyAmount",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VerifyAmount": {
+      "main": [
+        [
+          {
+            "node": "AuditWarn",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AuditWarn": {
+      "main": [
+        [
+          {
+            "node": "RestoreBody",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RestoreBody": {
+      "main": [
+        [
+          {
+            "node": "Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
-  "_connections_note": "Разорвать прежнюю прямую связь Shop->Supabase и вставить цепочку выше. 'Supabase' (set paid) и всё после неё — без изменений. IF_AlreadyPaid[0]=true->AuditDuplicate(стоп), [1]=false->VerifySign."
+  "_connections_note": "Разорвать прежнюю прямую связь Shop->Supabase и вставить цепочку. 'Supabase' (set paid) и всё после неё — без изменений."
 }
