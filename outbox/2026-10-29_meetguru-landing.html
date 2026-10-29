@@ -5,9 +5,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Neucha&family=Onest:wght@400;500;700&display=swap">
 <style>
 /* Лист в клетку: белая бумага, чернильные линии, синий и оранжевый маркеры. Герой Хоуп ведёт по секциям. */
-:root{--bg:#fbfcff;--paper:#ffffff;--ink:#141414;--mute:#4d5566;--blue:#3b82f6;--blue-soft:#e8eeff;--orange:#f58a3c;--grid:#dfe6f7;--line:#141414;--shadow:#14141418}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b1230;--paper:#111a40;--ink:#f3f5ff;--mute:#aab4d8;--blue:#6ea4ff;--blue-soft:#1a2760;--orange:#ff9d57;--grid:#1b2650;--line:#f3f5ff;--shadow:#00000040;color-scheme:dark}}
-:root[data-theme="dark"]{--bg:#0b1230;--paper:#111a40;--ink:#f3f5ff;--mute:#aab4d8;--blue:#6ea4ff;--blue-soft:#1a2760;--orange:#ff9d57;--grid:#1b2650;--line:#f3f5ff;--shadow:#00000040;color-scheme:dark}
+:root{color-scheme:light;--bg:#fbfcff;--paper:#ffffff;--ink:#141414;--mute:#4d5566;--blue:#3b82f6;--blue-soft:#e8eeff;--orange:#f58a3c;--grid:#dfe6f7;--line:#141414;--shadow:#14141418}
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font-family:Onest,system-ui,sans-serif;font-size:17px;line-height:1.55;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));overflow-x:hidden;
 background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:32px 32px;background-attachment:fixed}

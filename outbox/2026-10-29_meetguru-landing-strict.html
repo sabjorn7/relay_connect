@@ -5,26 +5,13 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap">
 <style>
 :root{
+  color-scheme:light;
   --bg:#ffffff;--bg-tint:#f1f6fd;--surface:#ffffff;--ink:#091747;--ink-2:#5b6472;--ink-3:#98a0ad;--line:#e4e9f1;
   --blue:#2e70dd;--blue-soft:#5495f3;--blue-strong:#2360c6;--blue-ink:#1f5fc9;--blue-tint:#eaf1fe;
   --orange:#f09157;--orange-bright:#ff7a1a;--orange-ink:#c2410c;
   --btn-ink:#ffffff;--r-lg:26px;--r-md:16px;--r-pill:999px;
   --ease:cubic-bezier(.23,1,.32,1);--shadow:0 14px 40px -20px rgba(9,23,71,.24);--shadow-sm:0 4px 16px -8px rgba(9,23,71,.18);
   --wrap:1180px;--blob1:rgba(84,149,243,.42);--blob2:rgba(46,112,221,.30);--blob3:rgba(240,145,87,.26);
-}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#0a1230;--bg-tint:#0d1740;--surface:#111b42;--ink:#eaf0ff;--ink-2:#aab6dc;--ink-3:#7784ac;--line:#243365;
-  --blue:#5495f3;--blue-soft:#6ea6ff;--blue-strong:#3f84ef;--blue-ink:#9cc0ff;--blue-tint:#15224f;
-  --orange:#ff9d57;--orange-bright:#ff9d57;--orange-ink:#ffb27e;
-  --shadow:0 18px 50px -24px rgba(0,0,0,.6);--shadow-sm:0 6px 20px -10px rgba(0,0,0,.5);
-  --blob1:rgba(84,149,243,.26);--blob2:rgba(46,112,221,.22);--blob3:rgba(255,157,87,.18);color-scheme:dark;
-}}
-:root[data-theme="dark"]{
-  --bg:#0a1230;--bg-tint:#0d1740;--surface:#111b42;--ink:#eaf0ff;--ink-2:#aab6dc;--ink-3:#7784ac;--line:#243365;
-  --blue:#5495f3;--blue-soft:#6ea6ff;--blue-strong:#3f84ef;--blue-ink:#9cc0ff;--blue-tint:#15224f;
-  --orange:#ff9d57;--orange-bright:#ff9d57;--orange-ink:#ffb27e;
-  --shadow:0 18px 50px -24px rgba(0,0,0,.6);--shadow-sm:0 6px 20px -10px rgba(0,0,0,.5);
-  --blob1:rgba(84,149,243,.26);--blob2:rgba(46,112,221,.22);--blob3:rgba(255,157,87,.18);color-scheme:dark;
 }
 *,*::before,*::after{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:'Onest',system-ui,-apple-system,'Segoe UI',sans-serif;font-size:17px;line-height:1.55;-webkit-font-smoothing:antialiased;overflow-x:hidden}
@@ -171,9 +158,6 @@ footer b{color:var(--ink-2);font-weight:600}
 </style>
 
 <div class="prog" id="prog"></div>
-<button class="theme" id="theme" type="button" aria-label="Переключить тему">
-  <svg class="ic" id="themeIc" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.2"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"/></svg>
-</button>
 
 <header class="hero">
   <div class="blobs" aria-hidden="true"><span class="blob b1"></span><span class="blob b2"></span><span class="blob b3"></span></div>
@@ -311,13 +295,6 @@ footer b{color:var(--ink-2);font-weight:600}
 <script>
 var rm=matchMedia('(prefers-reduced-motion:reduce)').matches;
 var root=document.documentElement;
-/* theme toggle */
-var tbtn=document.getElementById('theme');
-tbtn.addEventListener('click',function(){
-  var cur=root.getAttribute('data-theme');
-  if(!cur){cur=matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'}
-  root.setAttribute('data-theme',cur==='dark'?'light':'dark');
-});
 /* progress */
 var prog=document.getElementById('prog');
 addEventListener('scroll',function(){var h=root;prog.style.width=(h.scrollTop/((h.scrollHeight-h.clientHeight)||1)*100)+'%'},{passive:true});
