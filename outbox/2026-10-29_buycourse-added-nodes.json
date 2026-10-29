@@ -14,7 +14,7 @@
           ]
         }
       },
-      "id": "3db0a5fd-9e5c-4f14-aef2-42b0b8855524",
+      "id": "6826c4ea-3540-4b4f-805f-70a92f5a561f",
       "name": "CheckPaid",
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
@@ -55,7 +55,7 @@
         },
         "options": {}
       },
-      "id": "8ccd6492-b53a-4ad7-a584-1e4e6c701e26",
+      "id": "a9ff8a10-997a-4b1c-8937-30e20ea3910a",
       "name": "IF_AlreadyPaid",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
@@ -88,7 +88,7 @@
           ]
         }
       },
-      "id": "931bb7ad-8bdb-4120-8dde-ebb0ee98f2a3",
+      "id": "97628894-7f30-4b76-9a38-60825ae94236",
       "name": "AuditDuplicate",
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
@@ -107,9 +107,9 @@
     },
     {
       "parameters": {
-        "jsCode": "// Проверка подписи Prodamus (HMAC-SHA256) по схеме официального Hmac SDK.\n// Секрет ТОЛЬКО из $env.PRODAMUS_SECRET (не хардкод). Значения подписи/секрета/телефона/почты НЕ логировать.\n// secret_present в выводе показывает, доступен ли секрет (false = не задан ИЛИ $env заблокирован в Code-ноде).\n//\n// Hmac SDK (PHP): array_walk_recursive -> strval листьев (true->'1', false->'', null->''); рекурсивный ksort;\n// json_encode($data, JSON_UNESCAPED_UNICODE) (НЕ query-string); hash_hmac('sha256', json, key); сравнение\n// регистронезависимо. json_encode по умолчанию экранирует '/' как '\\/' — повторяем. Подписывается только тело.\n// !! Сверить calc==Sign на реальном тест-уведомлении (риск: форма products[] массив vs объект у n8n-парсера).\nconst crypto = require('crypto');\nconst SECRET  = (typeof $env !== 'undefined' && $env && $env.PRODAMUS_SECRET) ? $env.PRODAMUS_SECRET : '';\nconst shop    = $('Shop').first().json || {};\nconst body    = shop.body || {};\nconst headers = shop.headers || {};\nconst sign    = String(headers['sign'] || headers['Sign'] || '').toLowerCase();\n\nfunction toStrDeep(v){\n  if (Array.isArray(v)) return v.map(toStrDeep);\n  if (v && typeof v === 'object'){ const o = {}; for (const k of Object.keys(v)) o[k] = toStrDeep(v[k]); return o; }\n  if (v === true)  return '1';\n  if (v === false) return '';\n  if (v === null || v === undefined) return '';\n  return String(v);\n}\nfunction ksortDeep(v){\n  if (Array.isArray(v)) return v.map(ksortDeep);\n  if (v && typeof v === 'object'){ const o = {}; for (const k of Object.keys(v).sort()) o[k] = ksortDeep(v[k]); return o; }\n  return v;\n}\nconst prepared = ksortDeep(toStrDeep(body));\nconst jsonStr  = JSON.stringify(prepared).replace(/\\//g, '\\\\/');\nconst calc     = SECRET ? crypto.createHmac('sha256', SECRET).update(jsonStr, 'utf8').digest('hex') : '';\nreturn [{ json: { sig_ok: !!calc && calc === sign, sign_present: !!sign, secret_present: !!SECRET } }];\n"
+        "jsCode": "// Сериализация тела Prodamus под их Hmac SDK (без секрета и без обращения к окружению — только строит строку).\n// Prodamus Hmac (PHP): array_walk_recursive -> strval листьев; рекурсивный ksort; json_encode($data, JSON_UNESCAPED_UNICODE).\n// => кириллица/Unicode НЕ экранируются (literal UTF-8, как JS JSON.stringify), а '/' экранируется в '\\/'\n//    (JSON_UNESCAPED_SLASHES у Prodamus НЕ выставлен). Тело приходит form-urlencoded с ПЛОСКИМИ ключами\n//    products[0][name] -> разворачиваем во вложенную структуру (как PHP $_POST), числовые последовательные\n//    ключи -> массив (как PHP numeric-list -> json [..]). Подписывается только тело; Sign берём из заголовка.\n// !! ГЛАВНЫЙ РИСК: точная форма сериализации Prodamus. Проверяется на реальном платеже в WARN (valid=true).\nconst shop    = $('Shop').first().json || {};\nconst body    = shop.body || {};\nconst headers = shop.headers || {};\nconst sign    = String(headers['sign'] || headers['Sign'] || '').toLowerCase();\nfunction unflatten(flat){\n  const root = {};\n  for (const fk of Object.keys(flat)){\n    const parts = (String(fk).match(/[^\\[\\]]+/g)) || [fk];\n    let node = root;\n    for (let i = 0; i < parts.length; i++){\n      const k = parts[i];\n      if (i === parts.length - 1){ node[k] = flat[fk]; }\n      else { if (node[k] === undefined || node[k] === null || typeof node[k] !== 'object') node[k] = {}; node = node[k]; }\n    }\n  }\n  return root;\n}\nfunction arrayify(v){\n  if (Array.isArray(v)) return v.map(arrayify);\n  if (v && typeof v === 'object'){\n    const keys = Object.keys(v);\n    const seq = keys.length > 0 && keys.every((k, i) => k === String(i));\n    const out = seq ? [] : {};\n    for (const k of keys){ if (seq) out.push(arrayify(v[k])); else out[k] = arrayify(v[k]); }\n    return out;\n  }\n  return v;\n}\nfunction toStrDeep(v){\n  if (Array.isArray(v)) return v.map(toStrDeep);\n  if (v && typeof v === 'object'){ const o = {}; for (const k of Object.keys(v)) o[k] = toStrDeep(v[k]); return o; }\n  if (v === true)  return '1';\n  if (v === false) return '';\n  if (v === null || v === undefined) return '';\n  return String(v);\n}\nfunction ksortDeep(v){\n  if (Array.isArray(v)) return v.map(ksortDeep);\n  if (v && typeof v === 'object'){ const o = {}; for (const k of Object.keys(v).sort()) o[k] = ksortDeep(v[k]); return o; }\n  return v;\n}\nconst prepared   = ksortDeep(toStrDeep(arrayify(unflatten(body))));\nconst serialized = JSON.stringify(prepared).replace(/\\//g, '\\\\/');\nreturn [{ json: { serialized, sign } }];\n"
       },
-      "id": "33023fc3-3756-4989-9c43-4f49d35041cd",
+      "id": "b951b5d3-d60c-45b6-9372-2b72b8b5f356",
       "name": "VerifySign",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -123,6 +123,34 @@
     {
       "parameters": {
         "method": "POST",
+        "url": "https://sb.meetgu.ru/rest/v1/rpc/verify_prodamus_sign",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"serialized\": {{ JSON.stringify($json.serialized) }}, \"sign\": {{ JSON.stringify($json.sign) }} }",
+        "options": {}
+      },
+      "id": "8c48f7e1-f233-40c9-8d5e-fcc4c4289961",
+      "name": "VerifySignRPC",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        820,
+        420
+      ],
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "A84wclCRDmr3uzKM",
+          "name": "MeetGuru"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
         "url": "https://sb.meetgu.ru/rest/v1/rpc/verify_order_payment",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "supabaseApi",
@@ -131,12 +159,12 @@
         "jsonBody": "={ \"p_order_id\": \"{{ $('Shop').first().json.body.order_num }}\", \"p_paid_amount\": {{ ($('Shop').first().json.body.sum === undefined || $('Shop').first().json.body.sum === null || $('Shop').first().json.body.sum === '') ? 'null' : Number($('Shop').first().json.body.sum) }} }",
         "options": {}
       },
-      "id": "04eecff1-8f5a-4855-9c86-8a66b7bdafd7",
+      "id": "01381fd0-8f4a-424f-9523-b5a85d232710",
       "name": "VerifyAmount",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        820,
+        1040,
         420
       ],
       "onError": "continueRegularOutput",
@@ -159,7 +187,7 @@
             },
             {
               "fieldId": "event",
-              "fieldValue": "={{ ($('VerifySign').first().json.sig_ok && $json.ok) ? 'ok' : (!$('VerifySign').first().json.sig_ok ? 'sig_fail' : 'amount_mismatch') }}"
+              "fieldValue": "={{ ($('VerifySignRPC').first().json.valid && $json.ok) ? 'ok' : (!$('VerifySignRPC').first().json.valid ? 'sig_fail' : 'amount_mismatch') }}"
             },
             {
               "fieldId": "expected",
@@ -171,17 +199,17 @@
             },
             {
               "fieldId": "detail",
-              "fieldValue": "={{ { sig_ok: $('VerifySign').first().json.sig_ok, secret_present: $('VerifySign').first().json.secret_present, verify: $json, payment_status: $('Shop').first().json.body.payment_status, mode: 'warn' } }}"
+              "fieldValue": "={{ { sig_valid: $('VerifySignRPC').first().json.valid, secret_present: $('VerifySignRPC').first().json.secret_present, verify: $json, payment_status: $('Shop').first().json.body.payment_status, mode: 'warn' } }}"
             }
           ]
         }
       },
-      "id": "940030b5-a857-498d-a884-a27e0d176488",
+      "id": "de0d7066-765b-4d76-95d0-92348c552eb3",
       "name": "AuditWarn",
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [
-        1040,
+        1260,
         420
       ],
       "onError": "continueRegularOutput",
@@ -195,14 +223,14 @@
     },
     {
       "parameters": {
-        "jsCode": "// Тривиально, без метаданных pairedItem: вернуть только json исходного вебхука, чтобы 'Supabase' видел $json.body.*\nreturn [{ json: $('Shop').first().json }];\n"
+        "jsCode": "// Тривиально, без pairedItem: вернуть json исходного вебхука, чтобы 'Supabase' видел $json.body.*\nreturn [{ json: $('Shop').first().json }];\n"
       },
-      "id": "93c4d620-844f-4fbf-8889-d0c249027972",
+      "id": "762b5bcb-061f-4715-bf35-e5acbe57cad9",
       "name": "RestoreBody",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1260,
+        1480,
         420
       ],
       "onError": "continueRegularOutput",
@@ -240,6 +268,17 @@
       ]
     },
     "VerifySign": {
+      "main": [
+        [
+          {
+            "node": "VerifySignRPC",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VerifySignRPC": {
       "main": [
         [
           {
