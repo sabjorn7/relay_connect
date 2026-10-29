@@ -1,0 +1,10 @@
+96be6b8c04503046ab559d2894b44efeb7cb116fcb9bd07806185f7074208d27  ./faq/faq-01-current-dump.md
+8affffbaa7808149b1d41b7e55607a9e0a7cc342f691732d14bc6262b2aff3bc  ./faq/faq-02-edit-and-structure.md
+94472d1ef40e283d950ac08cf7b4ba93193a8e0ed8c81cea33b8d2a9a890e263  ./faq/faq-03-draft.md
+36e17fbd9e7636a8ada24a3dc0ff49fe47928f349c4da1b8f641c184bc716218  ./instructions/00-screens-to-capture.md
+3acbd1f97a86e1419bc891a620bb1765759a68be88f3eb6fb846799acf859949  ./instructions/01-sozdat-kurs.md
+c132d9435d6b48293957d6a70a2fc723ec39f4c5cc5d2bd40dab3710ac68435b  ./instructions/02-cena-besplatno-promo.md
+90ca7526189ca8784bc6a7050682f2d081d5404e01b0659eac150c05b833aa6e  ./instructions/03-besplatny-efir.md
+2cecf40d74d23b8dd24d2d4d8f237c2e8fa212ca98734e536a3f55252258818c  ./instructions/04-meropriyatie.md
+efd2f38e77dcae5df389baadaa6ade4fa1a30fe7c7ac6901f29a34e525847604  ./instructions/05-klub-podpiska.md
+db9bb1d63899d12fdb6fb148ff05c3b2ccfc9fcdd331d58a92c14a0fbcf50cad  ./instructions/06-finansy.md
