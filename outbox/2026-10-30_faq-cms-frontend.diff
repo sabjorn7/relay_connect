@@ -1,0 +1,618 @@
+diff --git a/src/_front/router.js b/src/_front/router.js
+index 0d55019..c2f299e 100644
+--- a/src/_front/router.js
++++ b/src/_front/router.js
+@@ -20,6 +20,7 @@ import ProfileEditPage from './views/ProfileEditPage.vue';
+ import MyCoursePage from './views/MyCoursePage.vue';
+ const CoursesManagePage = () => import('./views/CoursesManagePage.vue');
+ const ArticlesManagePage = () => import('./views/ArticlesManagePage.vue');
++const FaqGuidesPage = () => import('./views/FaqGuidesPage.vue');
+ import NotFoundPage from './views/NotFoundPage.vue';
+ import RegistrationPage from './views/RegistrationPage.vue';
+ import WelcomePage from './views/WelcomePage.vue';
+@@ -290,6 +291,9 @@ const PAGE_OVERRIDES = [
+     { path: '/rekvizity', name: 'legal-rekvizity', component: RekvizityPage },
+     { path: '/documents', name: 'legal-documents', component: DocumentsPage },
+     { path: '/faq', name: 'faq', component: FaqPage, wwPath: 'faq' },
++    // Guides (2026-10-30, PENDING): brand-new path, no WeWeb page at /faq/guides, no wwPath to
++    // skip. Static guide content (RU only for now), anchors #course/#stream/#event/#club/#money.
++    { path: '/faq/guides', name: 'faq-guides', component: FaqGuidesPage },
+     // Public profile: promo-styled ProfilePage replaces the WeWeb /profile_page (reads ?user=<uuid>).
+     { path: '/profile_page', name: 'profile-page', component: ProfilePage, wwPath: 'profile_page' },
+     // Course landing: promo-styled CoursePage replaces the WeWeb `course_info` (paths course/{{slug|}}).
+diff --git a/src/_front/views/CoursesManagePage.vue b/src/_front/views/CoursesManagePage.vue
+index d0b220b..d87de4f 100644
+--- a/src/_front/views/CoursesManagePage.vue
++++ b/src/_front/views/CoursesManagePage.vue
+@@ -25,6 +25,7 @@
+                         <div>
+                             <h1 class="pd-head__title">Управление курсами</h1>
+                             <p class="pd-head__descr">Ваши курсы, статусы модерации и материалы. Нажмите на курс, чтобы отредактировать.</p>
++                            <a href="/faq/guides#course" class="pd-head__howto">Как это сделать?</a>
+                         </div>
+                         <div class="pd-head__btns">
+                             <button type="button" class="pd-btn pd-btn--ghost" :class="{ 'is-on': discountMode }" @click="discountMode ? exitDiscountMode() : enterDiscountMode()">
+@@ -1481,6 +1482,8 @@ function ensureFonts() {
+ .pd-head__row { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+ .pd-head__title { margin: 0; font-weight: 800; font-size: clamp(1.6rem, 3.2vw, 2.2rem); line-height: 1.1; letter-spacing: -0.025em; }
+ .pd-head__descr { margin: 8px 0 0; color: var(--ink-2); font-size: 1rem; max-width: 60ch; }
++.pd-head__howto { display: inline-block; margin: 8px 0 0; color: var(--blue); font-weight: 600; font-size: 0.9rem; text-decoration: none; }
++.pd-head__howto:hover { text-decoration: underline; }
+ 
+ .pd-btn { display: inline-flex; align-items: center; gap: 8px; border: none; border-radius: var(--r-pill); background: var(--blue); color: #fff; font-family: inherit; font-weight: 700; font-size: 0.95rem; padding: 11px 22px; cursor: pointer; text-decoration: none; transition: background 0.15s var(--ease-out), transform 0.15s var(--ease-out); white-space: nowrap; }
+ .pd-btn .pd-ic { width: 18px; height: 18px; }
+diff --git a/src/_front/views/FaqGuidesPage.vue b/src/_front/views/FaqGuidesPage.vue
+new file mode 100644
+index 0000000..9322175
+--- /dev/null
++++ b/src/_front/views/FaqGuidesPage.vue
+@@ -0,0 +1,293 @@
++<!--
++  FaqGuidesPage.vue — "/faq/guides" (2026-10-30, PENDING — see relay outbox faq-04-cms-plan.md).
++  Hand-written, content-only page (shared AppHeader/AppFooter from App.vue, not in CHROME_EXCLUDE).
++  Content is hardcoded per the owner's decision (2026-10-30): no guides table, no markdown-at-
++  runtime — plain data below, same spirit as FaqPage.vue's CONTENT object. Sourced from the
++  already code-verified instruction drafts in relay outbox (expert-guides/instructions/01..06)
++  plus the co-host ("Со-ведущие") write-up for #stream. Russian only for now (owner decision —
++  no lang switch here, unlike FaqPage).
++
++  Visual schema/diagrams for each step are intentionally NOT included yet — the owner is sending
++  a mockup file for this; until then this is text-only (headings + numbered steps + note lists),
++  no screenshots (explicitly ruled out as a source for this page).
++
++  Anchors: #course #stream #event #club #money — one <section :id>, smooth-scrolled to on
++  mount if the route arrives with a matching #hash (links from CoursesManagePage.vue /
++  StreamsPage.vue / MyFinancePage.vue "Как это сделать?").
++-->
++<template>
++    <div class="fq">
++        <main class="fq-main">
++            <h1 class="fq-title">Инструкции для экспертов</h1>
++            <p class="fq-lead">Пошагово — как создать курс, провести эфир, назначить цену, организовать мероприятие, клуб и вывести деньги. Проверено по коду платформы.</p>
++
++            <nav class="fg-nav" aria-label="Разделы">
++                <a v-for="g in GUIDES" :key="g.id" :href="`#${g.id}`" @click.prevent="goTo(g.id)">{{ g.nav }}</a>
++            </nav>
++
++            <section v-for="g in GUIDES" :key="g.id" :id="g.id" class="fq-section fg-section">
++                <h2 class="fq-section-title">{{ g.title }}</h2>
++
++                <div v-if="g.warning" class="fg-callout">{{ g.warning }}</div>
++
++                <ol class="fg-steps">
++                    <li v-for="(step, si) in g.steps" :key="si" v-html="step"></li>
++                </ol>
++
++                <div v-if="g.result?.length" class="fg-block">
++                    <h3 class="fg-block-title">Что получится</h3>
++                    <ul class="fg-list">
++                        <li v-for="(r, ri) in g.result" :key="ri" v-html="r"></li>
++                    </ul>
++                </div>
++
++                <div v-if="g.mistakes?.length" class="fg-block">
++                    <h3 class="fg-block-title">Частые ошибки</h3>
++                    <ul class="fg-list">
++                        <li v-for="(m, mi) in g.mistakes" :key="mi" v-html="m"></li>
++                    </ul>
++                </div>
++            </section>
++
++            <a href="/faq" class="fq-guides-link">← Назад в справочный центр</a>
++        </main>
++    </div>
++</template>
++
++<script setup>
++import { onMounted } from 'vue';
++import { useRoute } from 'vue-router';
++
++const route = useRoute();
++
++function goTo(id) {
++    history.replaceState(null, '', `#${id}`);
++    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
++}
++
++onMounted(() => {
++    const id = (route.hash || '').replace('#', '');
++    if (id) requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ block: 'start' }));
++});
++
++const GUIDES = [
++    {
++        id: 'course',
++        nav: 'Курсы',
++        title: 'Как создать курс, добавить уроки и назначить цену',
++        steps: [
++            'Откройте <strong>«Управление курсами»</strong> (<code>/courses_manage</code>) и нажмите <strong>«Добавить курс»</strong> — откроется окно <strong>«Новый курс»</strong>.',
++            'Заполните <strong>«Название»</strong> (обязательно) и выберите <strong>«Тип»</strong> («Запись семинара» или «Онлайн-курс»).',
++            'В блоке <strong>«Доступ и цена»</strong>: поставьте галочку <strong>«Бесплатный курс»</strong> ИЛИ заполните <strong>«Цена, ₽»</strong>; выберите <strong>«Срок доступа»</strong> («Бессрочный» / «6 мес.» / «12 мес.») — при ограниченном сроке появится поле <strong>«Цена продления, ₽»</strong>.',
++            'Нажмите <strong>«Сохранить»</strong> — курс создан, окно переключится в режим редактирования.',
++            'В разделе <strong>«Уроки курса»</strong> нажмите <strong>«Добавить урок»</strong>, заполните <strong>«Название урока»</strong>, прикрепите материал кнопкой <strong>«Загрузить файл»</strong> и видео в блоке <strong>«Видео урока»</strong> (загрузка идёт с докачкой, прогресс «Загрузка… N%»).',
++            'Загрузите <strong>«Обложка курса»</strong> и, при желании, <strong>«Тизер курса»</strong>.',
++            'Когда всё готово — нажмите <strong>«Отправить на модерацию»</strong>. Курс станет видимым ученикам только после одобрения администратором («Опубликовано»).',
++            'Своя скидка на несколько курсов сразу — кнопка <strong>«Скидки»</strong> на странице списка курсов → выбрать курсы → задать <strong>«Скидка, %»</strong> → <strong>«Применить»</strong>.',
++        ],
++        result: [
++            'Ученик видит курс в каталоге и, после покупки, в «Мои курсы» — плеер, список уроков, «Скачать материал», форма отзыва.',
++            'Промокоды на курсы создаёт только администратор платформы (<code>/superadmin</code> → «Промокоды») — эксперт сам промокод не заводит, для собственной скидки используйте «Скидки».',
++        ],
++        mistakes: [
++            'Опубликованный курс редактировать нельзя — сначала «Снять с публикации», потом снова «Отправить на модерацию».',
++            'Уроки добавляются только к уже сохранённому курсу.',
++            'Одно видео загружается за раз — вторая загрузка блокируется, пока идёт первая.',
++        ],
++    },
++    {
++        id: 'stream',
++        nav: 'Эфиры',
++        title: 'Как провести эфир — «Один ведущий» и «Со-ведущие»',
++        steps: [
++            'Откройте <strong>«Трансляции»</strong> (<code>/streams</code>) → в блоке <strong>«Начать трансляцию»</strong> нажмите <strong>«Начать трансляцию»</strong>.',
++            'Заполните «Название», при желании «Описание»/«Обложка»/«Дата и время эфира».',
++            'В <strong>«Формат эфира»</strong> выберите <strong>«Один ведущий»</strong> (вещание с телефона/OBS) или <strong>«Со-ведущие»</strong> (несколько человек, из браузера).',
++            'В <strong>«Доступ»</strong> — «Бесплатно» или «Платно».',
++            '<u>Один ведущий:</u> после создания откроется карточка <strong>«Данные для OBS»</strong> (Сервер, Ключ потока — никому не передавать) → настройте трансляцию в приложении/OBS → на странице эфира нажмите <strong>«Я в эфире»</strong>, по окончании — <strong>«Завершить»</strong>.',
++            '<u>Со-ведущие:</u> экрана с OBS нет — сразу открывается страница эфира. Там кнопка <strong>«Начать эфир»</strong> (запускает трансляцию на сервере), затем <strong>«Войти в эфир»</strong> — откроется комната в браузере, где потребуется разрешить камеру и микрофон.',
++            'Чтобы позвать со-ведущего (уже зарегистрированного на платформе): поле <strong>«e-mail со-ведущего»</strong> + кнопка <strong>«Пригласить»</strong> — доступно и на странице эфира, и внутри самой комнаты (кнопка <strong>«Со-ведущие»</strong> в панели управления).',
++            'Полностью завершить эфир «Со-ведущие» может только владелец кнопкой <strong>«Завершить эфир»</strong> на странице эфира — кнопка <strong>«Выйти»</strong> внутри комнаты лишь отключает конкретного участника, трансляцию для всех не останавливает.',
++        ],
++        result: [
++            'Запись (replay) сохраняется автоматически в обоих форматах — после завершения на странице эфира появляется «Запись обрабатывается…», затем запись проигрывается там же.',
++            '«Общий чат трансляции» и «Запись как отдельный курс» — опции только у платного эфира (в любом формате); обычный «Чат эфира» работает у бесплатных эфиров тоже.',
++            'Зрителям для просмотра бесплатного эфира вход в аккаунт не нужен; чтобы писать в чат — нужен.',
++        ],
++        mistakes: [
++            'Со-ведущего нельзя пригласить по ссылке — только по e-mail уже зарегистрированного пользователя.',
++            '«Выйти» из комнаты (Со-ведущие) — это не «Завершить эфир», трансляция продолжается для остальных.',
++            'После создания эфира нельзя переключить формат/бесплатно↔платно — можно только отредактировать название/описание/время.',
++        ],
++    },
++    {
++        id: 'event',
++        nav: 'Мероприятия',
++        title: 'Как создать мероприятие с оплатой и предоплатой',
++        warning: 'Сейчас создавать мероприятия может только служебный аккаунт платформы — обычного эксперта раздел «Мероприятия» (/events_manage) на эту страницу не пустит и перенаправит на главную. Если нужно открыть это другим экспертам — отдельный запрос на доработку.',
++        steps: [
++            'В разделе <strong>«Мероприятия»</strong> (<code>/events_manage</code>) нажмите <strong>«+ Создать мероприятие»</strong>.',
++            'Заполните <strong>«Название»</strong> и <strong>«Дата и время начала»</strong>, по желанию — описание, место, спикера.',
++            'Укажите <strong>«Цена, ₽»</strong> (от 1 ₽) и, если нужна предоплата — <strong>«Предоплата, %»</strong> (1–99).',
++            'При необходимости задайте <strong>«Мест (лимит)»</strong> и загрузите <strong>«Обложка»</strong>, затем <strong>«Сохранить»</strong>.',
++            'В списке мероприятий нажмите <strong>«Опубликовать»</strong> — появится в публичном календаре и на странице мероприятия.',
++        ],
++        result: [
++            'Покупатель выбирает <strong>«Полная — … ₽»</strong> или <strong>«Предоплата — … ₽»</strong>, соглашается с условиями и жмёт <strong>«Записаться»</strong>.',
++            'При предоплате остаток оплачивается на месте — система его не собирает и не отслеживает.',
++            'Кнопка <strong>«👥 N/лимит»</strong> в списке показывает записавшихся со статусами «Оплачено»/«Ожидает».',
++        ],
++        mistakes: [
++            'Бесплатное мероприятие так не создать (минимум 1 ₽) — для бесплатного формата используйте эфир.',
++            'Промокод работает только при полной оплате, не при предоплате.',
++            'Мероприятие с хотя бы одним оплатившим нельзя удалить, пока не оформлены возвраты.',
++        ],
++    },
++    {
++        id: 'club',
++        nav: 'Клуб',
++        title: 'Клуб по подписке',
++        warning: 'В приложении пока нет экрана «создать клуб» — раздел «Клубы и подписки» (/clubs) это только каталог и «Мои подписки» (чтение). Заведение нового клуба делается через администрирование платформы, не самим экспертом.',
++        steps: [
++            'Клубы видны в разделе <strong>«Клубы и подписки»</strong> (<code>/clubs</code>): вкладки <strong>«Все клубы»</strong> и <strong>«Мои подписки»</strong>.',
++            'Карточка клуба показывает владельца, описание, число подписчиков и цену вида <strong>«… ₽/мес»</strong>; кнопка <strong>«Перейти»</strong> ведёт на страницу клуба.',
++            'Оплата, продление и отмена подписки — на странице самого клуба (рекуррентный платёж, автопродление).',
++        ],
++        result: [
++            'У подписчика во вкладке «Мои подписки» клуб отмечается «Активна до <дата>».',
++        ],
++        mistakes: [
++            'Не ищите «создать клуб» на /clubs — там только каталог и ваши подписки.',
++            'Цена клуба — ежемесячная, подписка продлевается автоматически, пока её не отменят.',
++        ],
++    },
++    {
++        id: 'money',
++        nav: 'Финансы',
++        title: 'Продажи, выплаты и комиссия',
++        steps: [
++            'Откройте <strong>«Финансы»</strong> (<code>/my_finanse</code>) — вверху карточка <strong>«Доступно для вывода»</strong>.',
++            'Три вкладки: <strong>«История заказов»</strong> (ваши покупки), <strong>«История продаж»</strong> (ваши продажи), <strong>«Вывод средств»</strong>.',
++            'Перед первым выводом заполните <strong>«Платёжные реквизиты»</strong> (тип получателя, ФИО/наименование, ИНН, банк, БИК, расчётный счёт — можно автозаполнить кнопками «Найти по ИНН»/«Найти по БИК») и нажмите <strong>«Сохранить реквизиты»</strong>.',
++            'В карточке вывода укажите <strong>«Сумма»</strong> и нажмите <strong>«Запросить вывод»</strong>.',
++        ],
++        result: [
++            'Комиссия платформы — плавающая 6–18% (эксперту остаётся 82–94% с продажи), индивидуальна для каждого эксперта и назначается администратором; меняется только на будущие продажи.',
++            'Заявку на вывод рассматривает администратор вручную и переводит деньги банковским переводом; статус заявки виден в «История заявок».',
++        ],
++        mistakes: [
++            'Без сохранённых реквизитов кнопка «Запросить вывод» не сработает.',
++            'Нельзя запросить вывод больше текущего баланса.',
++        ],
++    },
++];
++</script>
++
++<style scoped>
++.fq {
++    min-height: calc(100vh - 62px);
++    background: #f6f7f9;
++    color: #1f2733;
++    font-family: 'Raleway', system-ui, -apple-system, sans-serif;
++}
++.fq-main {
++    max-width: 900px;
++    margin: 0 auto;
++    padding: 8px 20px 64px;
++}
++.fq-title {
++    font-size: 28px;
++    line-height: 1.2;
++    margin: 8px 0 8px;
++}
++.fq-lead {
++    color: #5b6472;
++    margin: 0 0 20px;
++    font-size: 15px;
++}
++.fg-nav {
++    display: flex;
++    flex-wrap: wrap;
++    gap: 10px;
++    margin: 0 0 28px;
++}
++.fg-nav a {
++    display: inline-block;
++    padding: 7px 16px;
++    border: 1px solid #d6dbe3;
++    border-radius: 999px;
++    color: #2e6fd6;
++    font-weight: 700;
++    font-size: 14px;
++    text-decoration: none;
++    background: #fff;
++}
++.fg-nav a:hover { background: #eaf1fc; }
++.fq-section { margin-bottom: 28px; }
++.fg-section { scroll-margin-top: 80px; } /* fixed AppHeader offset for anchor scroll */
++.fq-section-title {
++    font-size: 18px;
++    font-weight: 700;
++    margin: 0 0 12px;
++}
++.fg-callout {
++    background: #fff6e8;
++    border: 1px solid #f3d9a6;
++    border-radius: 10px;
++    padding: 12px 16px;
++    margin: 0 0 14px;
++    font-size: 14px;
++    line-height: 1.5;
++    color: #7a5a17;
++}
++.fg-steps {
++    background: #fff;
++    border: 1px solid #e9edf2;
++    border-radius: 12px;
++    padding: 18px 20px 18px 40px;
++    margin: 0 0 16px;
++    line-height: 1.6;
++    font-size: 15px;
++    color: #3a4453;
++}
++.fg-steps li { margin-bottom: 10px; }
++.fg-steps li:last-child { margin-bottom: 0; }
++.fg-steps :deep(strong) { font-weight: 700; color: #1f2733; }
++.fg-steps :deep(code) {
++    background: #f1f3f6;
++    border-radius: 4px;
++    padding: 1px 6px;
++    font-size: 0.92em;
++}
++.fg-block { margin: 0 0 12px; }
++.fg-block-title {
++    font-size: 14px;
++    font-weight: 700;
++    color: #5b6472;
++    margin: 0 0 8px;
++    text-transform: uppercase;
++    letter-spacing: 0.02em;
++}
++.fg-list {
++    margin: 0;
++    padding-left: 20px;
++    font-size: 14px;
++    line-height: 1.6;
++    color: #3a4453;
++}
++.fg-list li { margin-bottom: 6px; }
++.fq-guides-link {
++    display: inline-block;
++    margin-top: 8px;
++    color: #2e6fd6;
++    font-weight: 600;
++    font-size: 14px;
++    text-decoration: none;
++}
++.fq-guides-link:hover { text-decoration: underline; }
++
++@media (max-width: 600px) {
++    .fq-title { font-size: 24px; }
++    .fg-steps { padding: 16px 16px 16px 34px; }
++}
++</style>
+diff --git a/src/_front/views/FaqPage.vue b/src/_front/views/FaqPage.vue
+index 4a09ea5..cd35db1 100644
+--- a/src/_front/views/FaqPage.vue
++++ b/src/_front/views/FaqPage.vue
+@@ -3,6 +3,13 @@
+   AppHeader/AppFooter are rendered globally by App.vue. Same visual language as the legal pages
+   (views/legal/LegalPage.vue). Bilingual RU/EN with a switch; content is a plain data object,
+   accordion via native <details> (accessible, no deps).
++
++  FAQ CMS (2026-10-30, PENDING — see relay outbox faq-04-cms-plan.md): on mount, tries
++  public.faq (audience/lang/published, RLS-gated). If the table is empty, errors, or doesn't
++  exist (e.g. migration not applied yet / rolled back), falls back to the hardcoded CONTENT
++  below UNCHANGED — no audience tabs, no search, exactly today's page. Tabs/search only render
++  once real DB content exists, because the hardcoded CONTENT was never split by audience and
++  retrofitting that split onto it would change what guests see today for no reason.
+ -->
+ <template>
+     <div class="fq">
+@@ -16,7 +23,15 @@
+             </div>
+             <p class="fq-lead">{{ t.lead }}</p>
+ 
+-            <section v-for="(sec, si) in t.sections" :key="si" class="fq-section">
++            <div v-if="hasDbContent" class="fq-controls">
++                <div class="fq-audience" role="group" aria-label="Аудитория">
++                    <button :class="{ active: audience === 'students' }" @click="audience = 'students'">Ученикам</button>
++                    <button :class="{ active: audience === 'experts' }" @click="audience = 'experts'">Экспертам</button>
++                </div>
++                <input v-model="search" type="search" class="fq-search" placeholder="Поиск по вопросам" />
++            </div>
++
++            <section v-for="(sec, si) in sections" :key="si" class="fq-section">
+                 <h2 class="fq-section-title">{{ sec.title }}</h2>
+                 <details v-for="(item, ii) in sec.items" :key="ii" class="fq-item">
+                     <summary class="fq-q">
+@@ -27,6 +42,8 @@
+                 </details>
+             </section>
+ 
++            <a href="/faq/guides" class="fq-guides-link">Подробные инструкции по разделам →</a>
++
+             <section class="fq-support">
+                 <h2 class="fq-section-title">{{ t.support.title }}</h2>
+                 <p>{{ t.support.intro }}</p>
+@@ -47,7 +64,7 @@
+ </template>
+ 
+ <script setup>
+-import { computed, ref } from 'vue';
++import { computed, ref, onMounted, watch } from 'vue';
+ 
+ // Prefer the browser language on first load; default to Russian.
+ const lang = ref(typeof navigator !== 'undefined' && /^en/i.test(navigator.language || '') ? 'en' : 'ru');
+@@ -326,6 +343,110 @@ const CONTENT = {
+ };
+ 
+ const t = computed(() => CONTENT[lang.value]);
++
++// ---------------------------------------------------------------------------
++// FAQ CMS read path (public.faq) — see 2026-10-30_pending_faq_table.sql /
++// faq-04-cms-plan.md in relay outbox. PENDING: migration not applied yet, table may not exist.
++// ---------------------------------------------------------------------------
++
++// Category display order per audience (faq-02-edit-and-structure.md §3). Categories from the
++// DB that aren't in this list sort after it, alphabetically — keeps new categories from
++// silently vanishing if someone adds one via Studio before this list is updated.
++const CATEGORY_ORDER = {
++    students: ['Оплата и доступ', 'Курсы и обучение', 'Возврат денег', 'Эфиры', 'Клубы (подписки)', 'Бонусы и промокоды', 'Профиль и пароль'],
++    experts: ['Создание курса', 'Цены и скидки', 'Выплаты и комиссия', 'Эфиры', 'Клуб', 'Мероприятия'],
++};
++
++function supa() {
++    const inst = window.wwLib?.wwPlugins?.supabase?.instance;
++    if (!inst) throw new Error('Supabase недоступен на этой странице.');
++    return inst;
++}
++
++// DOMPurify loaded lazily (only once DB rows actually exist) and kept as a module-level
++// singleton so the noopener/noreferrer hook below is registered exactly once.
++let purify = null;
++async function sanitizeAnswer(html) {
++    if (!purify) {
++        const mod = await import('dompurify');
++        purify = mod.default || mod;
++        // Force rel="noopener noreferrer" on every link regardless of what the admin typed in
++        // Supabase Studio — this content is admin-authored, not attacker-controlled, but a
++        // forgotten rel on a target="_blank" link is a real (if minor) tab-nabbing footgun.
++        purify.addHook('afterSanitizeAttributes', (node) => {
++            if (node.tagName === 'A') node.setAttribute('rel', 'noopener noreferrer');
++        });
++    }
++    return purify.sanitize(html, {
++        ALLOWED_TAGS: ['a', 'strong', 'em', 'b', 'i', 'br', 'p', 'ul', 'ol', 'li'],
++        ALLOWED_ATTR: ['href', 'target', 'rel'],
++    });
++}
++
++const audience = ref('students');
++const search = ref('');
++const dbSections = ref(null); // null = no usable DB content yet (fallback to CONTENT); [] never kept as a distinct state
++const hasDbContent = computed(() => !!(dbSections.value && dbSections.value.length));
++
++let loadSeq = 0; // guards against an older in-flight request overwriting a newer one's result
++async function loadFaq() {
++    const mySeq = ++loadSeq;
++    try {
++        const { data, error } = await supa()
++            .from('faq')
++            .select('category, question, answer, sort')
++            .eq('audience', audience.value)
++            .eq('lang', lang.value)
++            .order('sort', { ascending: true });
++        if (mySeq !== loadSeq) return; // a newer call already landed — drop this stale one
++        if (error || !data || !data.length) {
++            dbSections.value = null;
++            return;
++        }
++        const byCategory = new Map();
++        for (const row of data) {
++            if (!byCategory.has(row.category)) byCategory.set(row.category, []);
++            byCategory.get(row.category).push(row);
++        }
++        const order = CATEGORY_ORDER[audience.value] || [];
++        const titles = [...byCategory.keys()].sort((a, b) => {
++            const ia = order.indexOf(a);
++            const ib = order.indexOf(b);
++            if (ia === -1 && ib === -1) return a.localeCompare(b, 'ru');
++            if (ia === -1) return 1;
++            if (ib === -1) return -1;
++            return ia - ib;
++        });
++        const sections = [];
++        for (const title of titles) {
++            const items = [];
++            for (const row of byCategory.get(title)) {
++                items.push({ q: row.question, a: await sanitizeAnswer(row.answer) });
++            }
++            sections.push({ title, items });
++        }
++        if (mySeq === loadSeq) dbSections.value = sections;
++    } catch (e) {
++        // Any failure (network, RLS, "relation public.faq does not exist" after a rollback) —
++        // silently fall back to CONTENT. This page must never show an error state over FAQ text.
++        if (mySeq === loadSeq) dbSections.value = null;
++    }
++}
++
++onMounted(loadFaq);
++watch([audience, lang], loadFaq);
++
++// What actually renders: DB sections if we have them for the current audience/lang, else the
++// untouched hardcoded CONTENT (see the template-side note on why tabs/search are hidden then).
++// Search filters client-side over the already-loaded rows — dataset is small, no extra round-trip.
++const sections = computed(() => {
++    const base = hasDbContent.value ? dbSections.value : t.value.sections;
++    const needle = search.value.trim().toLowerCase();
++    if (!needle) return base;
++    return base
++        .map((sec) => ({ ...sec, items: sec.items.filter((i) => `${i.q} ${i.a}`.toLowerCase().includes(needle)) }))
++        .filter((sec) => sec.items.length);
++});
+ </script>
+ 
+ <style scoped>
+@@ -385,6 +506,56 @@ const t = computed(() => CONTENT[lang.value]);
+     margin: 0 0 24px;
+     font-size: 15px;
+ }
++.fq-controls {
++    display: flex;
++    align-items: center;
++    justify-content: space-between;
++    gap: 12px;
++    flex-wrap: wrap;
++    margin: 0 0 24px;
++}
++.fq-audience {
++    display: inline-flex;
++    border: 1px solid #d6dbe3;
++    border-radius: 999px;
++    overflow: hidden;
++    flex-shrink: 0;
++}
++.fq-audience button {
++    appearance: none;
++    border: none;
++    background: transparent;
++    padding: 7px 16px;
++    font: inherit;
++    font-size: 14px;
++    font-weight: 700;
++    color: #5b6472;
++    cursor: pointer;
++}
++.fq-audience button.active {
++    background: #2e6fd6;
++    color: #fff;
++}
++.fq-search {
++    flex: 1 1 220px;
++    max-width: 320px;
++    padding: 8px 14px;
++    border: 1px solid #d6dbe3;
++    border-radius: 999px;
++    font: inherit;
++    font-size: 14px;
++    color: #1f2733;
++}
++.fq-search:focus { outline: none; border-color: #2e6fd6; }
++.fq-guides-link {
++    display: inline-block;
++    margin: 0 0 28px;
++    color: #2e6fd6;
++    font-weight: 600;
++    font-size: 14px;
++    text-decoration: none;
++}
++.fq-guides-link:hover { text-decoration: underline; }
+ .fq-section { margin-bottom: 28px; }
+ .fq-section-title {
+     font-size: 18px;
+diff --git a/src/_front/views/MyFinancePage.vue b/src/_front/views/MyFinancePage.vue
+index 7536fb8..ca383b5 100644
+--- a/src/_front/views/MyFinancePage.vue
++++ b/src/_front/views/MyFinancePage.vue
+@@ -7,6 +7,7 @@
+ <template>
+     <div class="mf-page">
+         <h1 class="mf-title">Финансы</h1>
++        <a href="/faq/guides#money" class="mf-howto">Как это сделать?</a>
+ 
+         <div class="mf-balance-card">
+             <span class="mf-balance-label">Доступно для вывода</span>
+@@ -53,7 +54,9 @@ onMounted(async () => {
+ <style>
+ .mf-page { max-width: 920px; margin: 0 auto; padding: 24px 16px 64px; width: 100%; box-sizing: border-box; }
+ .mf-page * { box-sizing: border-box; }
+-.mf-title { font-size: 28px; font-weight: 700; color: #1B1F27; margin: 8px 0 20px; }
++.mf-title { font-size: 28px; font-weight: 700; color: #1B1F27; margin: 8px 0 4px; }
++.mf-howto { display: inline-block; margin: 0 0 16px; color: #5495F3; font-weight: 600; font-size: 14px; text-decoration: none; }
++.mf-howto:hover { text-decoration: underline; }
+ .mf-balance-card { display: flex; flex-direction: column; gap: 4px; background: #F4F5F7; border-radius: 14px; padding: 16px 20px; margin-bottom: 20px; }
+ .mf-balance-label { font-size: 14px; color: #8A94A6; }
+ .mf-balance-val { font-size: 26px; font-weight: 700; color: #1B1F27; }
+diff --git a/src/_front/views/StreamsPage.vue b/src/_front/views/StreamsPage.vue
+index 773904c..22d5ab4 100644
+--- a/src/_front/views/StreamsPage.vue
++++ b/src/_front/views/StreamsPage.vue
+@@ -174,7 +174,10 @@
+                 <!-- Create (speakers / institutions) -->
+                 <section v-if="isStreamer" class="sp-card">
+                     <div class="sp-card-head">
+-                        <h2>Начать трансляцию</h2>
++                        <div>
++                            <h2>Начать трансляцию</h2>
++                            <a href="/faq/guides#stream" class="sp-howto">Как это сделать?</a>
++                        </div>
+                         <button v-if="!showForm" class="sp-btn sp-btn-primary" @click="showForm = true">Начать трансляцию</button>
+                     </div>
+                     <form v-if="showForm" class="sp-form" @submit.prevent="createBroadcast">
+@@ -1246,6 +1249,15 @@ onBeforeUnmount(() => {
+     gap: 12px;
+     margin-bottom: 12px;
+ }
++.sp-howto {
++    display: inline-block;
++    margin-top: 4px;
++    color: #5495f3;
++    font-weight: 600;
++    font-size: 0.85rem;
++    text-decoration: none;
++}
++.sp-howto:hover { text-decoration: underline; }
+ .sp-card h2 {
+     font-size: 18px;
+     font-weight: 600;
