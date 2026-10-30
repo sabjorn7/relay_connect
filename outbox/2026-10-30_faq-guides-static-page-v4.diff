@@ -1,0 +1,30 @@
+diff --git a/vite.config.js b/vite.config.js
+index b192e61..8f9d4ab 100644
+--- a/vite.config.js
++++ b/vite.config.js
+@@ -178,6 +178,25 @@ const pages = {"cf9f551f-e733-4934-a682-535575cb7c70-en":{"outputDir":"./promo",
+     }
+ }
+ 
++// Hand-added standalone page (NOT WeWeb-generated): the /faq/guides expert instructions page
++// (FaqGuidesPage.vue). Without a physical dist/faq/guides/index.html a direct hit, refresh, or
++// a full-navigation link click would 404 (there is no SPA fallback) — same gap fixed for
++// /soglasie, /streams, etc. above.
++{
++    const _tpl = pages['cf9f551f-e733-4934-a682-535575cb7c70-en'] || Object.values(pages)[0];
++    if (_tpl) {
++        pages['faq-guides-en'] = {
++            ..._tpl,
++            outputDir: './faq/guides',
++            title: 'Инструкции для экспертов — МитГуру',
++            meta: [
++                { name: 'title', content: 'Инструкции для экспертов — МитГуру' },
++                { name: 'description', content: 'Пошаговые инструкции для экспертов: курсы, эфиры, мероприятия, клуб, финансы.' },
++            ],
++        };
++    }
++}
++
+ // Read the main HTML template
+ const template = fs.readFileSync(path.resolve(__dirname, 'template.html'), 'utf-8');
+ const compiledTemplate = handlebars.compile(template);
