@@ -1,0 +1,119 @@
+diff --git a/src/_front/views/FaqGuidesPage.vue b/src/_front/views/FaqGuidesPage.vue
+index 9f305a1..a4f789a 100644
+--- a/src/_front/views/FaqGuidesPage.vue
++++ b/src/_front/views/FaqGuidesPage.vue
+@@ -48,7 +48,17 @@
+                 >{{ G[g].nav }}</button>
+             </div>
+ 
+-            <section v-for="g in GUIDE_ORDER" :key="g" v-show="activeGuide === g" class="fg-guide">
++            <!-- FIX (2026-10-30): this was v-for + v-show="activeGuide === g" on the SAME
++                 <section> — clicking a tab updated the tab's own aria-selected correctly but the
++                 section's displayed content stayed frozen on whichever guide was active at
++                 mount (confirmed via a stripped-down local repro + inspecting the live
++                 Rolldown-compiled chunk; a bisection down to a single interpolation showed the
++                 v-for loop variable itself went stale inside the toggled section while the same
++                 ref read elsewhere in the template updated fine). Splitting the loop onto its
++                 own <template> and switching to v-if (real mount/unmount per guide, not a
++                 display toggle) sidesteps whatever specific v-show+v-for interaction broke. -->
++            <template v-for="g in GUIDE_ORDER" :key="g">
++            <section v-if="activeGuide === g" class="fg-guide">
+                 <p class="fg-lead">{{ G[g].lead }}</p>
+                 <div class="fg-cols">
+                     <div class="fg-steps">
+@@ -79,6 +89,7 @@
+                 </div>
+                 <div class="fg-tip"><b>{{ G[g].tip[0] }}</b><p>{{ G[g].tip[1] }}</p></div>
+             </section>
++            </template>
+ 
+             <section class="fg-end">
+                 <div>
+@@ -92,7 +103,7 @@
+ </template>
+ 
+ <script setup>
+-import { ref, reactive, onMounted, onUnmounted, nextTick } from 'vue';
++import { ref, reactive, onMounted, onUnmounted, nextTick, watch } from 'vue';
+ 
+ // -----------------------------------------------------------------------
+ // DSL — ported 1:1 from guide2.html (same names/signatures). Builds small HTML
+@@ -251,7 +262,11 @@ function setActive(g, i) {
+ function selectGuide(g) {
+     activeGuide.value = g;
+     try {
+-        history.replaceState(null, '', '#' + g);
++        // FIX (2026-10-30): the page has <base href="/"> (needed so asset URLs resolve the
++        // same from every multi-page entry) — a bare '#'+g argument resolves relative to that
++        // base, not the current path, so it silently rewrote the URL to "/#..." instead of
++        // "/faq/guides/#...". Pass the full current pathname explicitly to sidestep <base>.
++        history.replaceState(null, '', window.location.pathname + '#' + g);
+     } catch (e) { /* ignore — non-browser or sandboxed history */ }
+ }
+ 
+@@ -269,35 +284,41 @@ function ensureFonts() {
+     document.head.appendChild(l);
+ }
+ 
+-const observers = [];
+-onMounted(async () => {
+-    ensureFonts();
++// Only the ACTIVE guide's <section> is mounted at all (v-show was swapped for v-if — see the
++// "FIX" note on the template above), so there is exactly one live IntersectionObserver at a
++// time, torn down and recreated whenever activeGuide changes (and once on initial mount).
++let currentObserver = null;
++async function setupObserverForActiveGuide() {
++    currentObserver?.disconnect();
++    currentObserver = null;
+     await nextTick();
+-    // One IntersectionObserver per guide (mirrors guide2.html): on desktop widths, scrolling a
+-    // step into the "active" viewport band highlights it and swaps the sticky stage scene.
+-    // Steps of inactive guides sit at display:none (v-show) so they never intersect — same
+-    // behaviour as the mockup's always-in-DOM `.guide{display:none}` sections.
+-    GUIDE_ORDER.forEach((g) => {
+-        const steps = rootEl.value?.querySelectorAll(`.fg-step[data-g="${g}"]`) || [];
+-        if (!steps.length) return;
+-        const io = new IntersectionObserver(
+-            (entries) => {
+-                entries.forEach((entry) => {
+-                    if (entry.isIntersecting && window.innerWidth > 860) {
+-                        setActive(g, Number(entry.target.dataset.i));
+-                    }
+-                });
+-            },
+-            { rootMargin: '-40% 0px -50% 0px' },
+-        );
+-        steps.forEach((s) => io.observe(s));
+-        observers.push(io);
+-    });
++    const g = activeGuide.value;
++    const steps = rootEl.value?.querySelectorAll(`.fg-step[data-g="${g}"]`) || [];
++    if (!steps.length) return;
++    const io = new IntersectionObserver(
++        (entries) => {
++            entries.forEach((entry) => {
++                if (entry.isIntersecting && window.innerWidth > 860) {
++                    setActive(g, Number(entry.target.dataset.i));
++                }
++            });
++        },
++        { rootMargin: '-40% 0px -50% 0px' },
++    );
++    steps.forEach((s) => io.observe(s));
++    currentObserver = io;
++}
++
++watch(activeGuide, setupObserverForActiveGuide);
++
++onMounted(() => {
++    ensureFonts();
++    setupObserverForActiveGuide();
+     window.addEventListener('hashchange', onHashChange);
+ });
+ 
+ onUnmounted(() => {
+-    observers.forEach((io) => io.disconnect());
++    currentObserver?.disconnect();
+     window.removeEventListener('hashchange', onHashChange);
+ });
+ </script>
