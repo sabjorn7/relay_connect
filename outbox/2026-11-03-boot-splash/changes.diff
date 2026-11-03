@@ -1,0 +1,413 @@
+diff --git a/src/_front/main.js b/src/_front/main.js
+index 561f2f8..05bb08c 100644
+--- a/src/_front/main.js
++++ b/src/_front/main.js
+@@ -101,2 +101,4 @@ const app = createApp(App);
+ app.config.errorHandler = (err, instance, info) => {
++    // A failed first render must not reveal an empty/partially rendered app behind the splash.
++    if (!window.__mgMounted) window.__mgBootInitError = true;
+     try { logException('vue_error', err, { info, route: location.pathname }); } catch (e) { /* never throw from the handler */ }
+@@ -132,6 +134,9 @@ const init = async function () {
+     app.mount(el);
+-    // Defuse the boot watchdog (template.html): the app mounted, so no white-screen beacon.
++    // Notify the HTML splash: mount alone is insufficient while critical CSS is still pending.
+     try {
+         window.__mgMounted = true;
+-        if (window.__mgBootFired) { try { new Image().src = '/_l?t=boot_late&m=' + encodeURIComponent('mountedAt=' + Math.round(performance.now()) + ' vs=' + document.visibilityState + (window.__mgWasHidden ? ' wasHidden=1' : '') + (document.getElementById('mg-load-error') ? ' le=1' : '')); } catch (e) {} }
++        window.__mgMountedAt = Math.round(performance.now());
++        if (window.__mgBootCheck) window.__mgBootCheck();
++        // Compatibility with an older HTML shell that does not own the CSS readiness gate.
++        else if (window.__mgBootFired) { try { new Image().src = '/_l?t=boot_late&m=' + encodeURIComponent('mountedAt=' + window.__mgMountedAt + ' vs=' + document.visibilityState + (window.__mgWasHidden ? ' wasHidden=1' : '') + (document.getElementById('mg-load-error') ? ' le=1' : '')); } catch (e) {} }
+     } catch (e) { /* never throw */ }
+diff --git a/template.html b/template.html
+index b2c30f5..f60c814 100644
+--- a/template.html
++++ b/template.html
+@@ -1,3 +1,3 @@
+ <!doctype html>
+-<html class="" lang="{{lang}}">
++<html class="mg-boot-pending" lang="{{lang}}">
+     <head>
+@@ -5,6 +5,16 @@
+         <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+-        <script>
+-        /* boot watchdog: if the app hasn't mounted in 15s (bundle didn't load / auth stalled / white
+-           screen), fire a GET beacon to /_l with what loaded — the in-bundle logger can't report a
+-           pre-mount failure. No deps, fully try/catch'd. __mgMounted is set in main.js after mount. */
++        <style id="mg-boot-style">
++          html.mg-boot-pending #app { opacity:0!important; visibility:hidden!important; pointer-events:none!important; }
++          #mg-boot-loading { position:fixed; inset:0; z-index:2147482999; box-sizing:border-box; display:flex; align-items:center; justify-content:center; padding:24px; background:#fff; color:#1f2733; text-align:center; font:16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
++          #mg-boot-loading[hidden], #mg-boot-retry[hidden] { display:none!important; }
++          #mg-boot-panel { max-width:30em; }
++          #mg-boot-message { margin:0 0 20px; font:inherit; }
++          #mg-boot-retry { box-sizing:border-box; min-height:44px; padding:11px 22px; border:0; border-radius:8px; background:#2563eb; color:#fff; cursor:pointer; font:600 16px/1.5 system-ui,-apple-system,sans-serif; }
++          #mg-boot-retry:focus-visible { outline:3px solid #091747; outline-offset:4px; }
++          #mg-boot-retry:disabled { opacity:.65; cursor:default; }
++        </style>
++        <script id="mg-boot-script">
++        /* HTML splash + one boot watchdog: wait for Vue mount AND applied entry CSS.
++           The existing /_l diagnostics work even when the bundle never loads.
++           No external dependencies; __mgMounted is set in main.js after mount. */
+         (function () {
+@@ -12,2 +22,3 @@
+             window.__mgMounted = false; window.__mgBootFired = false;
++            window.__mgBootReady = false; window.__mgBootLateSent = false; window.__mgBootInitError = false;
+             // A backgrounded/hidden tab legitimately defers work (throttled timers, paused loads) —
+@@ -26,31 +37,82 @@
+             window.__mgHid = __mgHid; // SINGLE SOURCE of hidden-time — freezeGuard.getHiddenMs() reads this
+-            // Render-unblock: a <link rel="stylesheet"> in <head> blocks the FIRST PAINT until it
+-            // loads or fails. On a throttled mobile link the main CSS can hang → the whole page
+-            // (incl. the #mg-boot-loading placeholder AND the #mg-boot-msg overlay) stays UNPAINTED
+-            // = pure white, even though the DOM and this watchdog work (confirmed: FCP withheld
+-            // until the CSS resolved). After ~5s, drop any still-unloaded stylesheet from render-
+-            // blocking (media='not all') so the inline-styled placeholder/overlay can paint; restore
+-            // media when the CSS finally arrives. A brief unstyled flash beats an indefinite white.
+-            setTimeout(function () {
++            // The HTML splash lives outside #app, so Vue cannot erase it before entry CSS is applied.
++            // Vite marks only the emitted entry styles as data-mg-critical; optional fonts/icons stay optional.
++            var __mgPaintQueued = false, __mgRetrying = false, __mgBootPoll;
++            function __mgCssState() {
++              var links = document.querySelectorAll('link[data-mg-critical]'), ready = true, failed = false;
++              for (var i = 0; i < links.length; i++) {
++                var state = links[i].getAttribute('data-mg-critical');
++                if (state === 'failed') failed = true;
++                if (state !== 'loaded' || links[i].rel !== 'stylesheet' || !links[i].sheet || links[i].disabled) ready = false;
++                // HTTP 200 with an empty/invalid stylesheet must not uncover an unstyled app.
++                if (state === 'loaded' && links[i].sheet) {
++                  try {
++                    if (links[i].sheet.cssRules && !links[i].sheet.cssRules.length) { ready = false; failed = true; }
++                  } catch (e) { ready = false; failed = true; } // Entry CSS is same-origin, unlike optional CDN styles.
++                }
++              }
++              // No marked CSS is normal in Vite dev mode (styles are injected by JS before mount).
++              return { ready: ready, failed: failed };
++            }
++            function __mgBootProblem(message) {
++              var text = document.getElementById('mg-boot-message'), retry = document.getElementById('mg-boot-retry');
++              if (text && text.textContent !== message) text.textContent = message;
++              if (retry) retry.hidden = false;
++            }
++            window.__mgBootRetry = function () {
++              if (__mgRetrying) return;
++              __mgRetrying = true;
++              var retry = document.getElementById('mg-boot-retry');
++              if (retry) retry.disabled = true;
++              try { location.reload(); }
++              catch (e) { __mgRetrying = false; if (retry) retry.disabled = false; }
++            };
++            function __mgMayReveal() {
++              return window.__mgMounted && !window.__mgBootInitError && __mgCssState().ready;
++            }
++            function __mgFinishBoot() {
+               try {
+-                var links = document.querySelectorAll('link[rel="stylesheet"]:not([data-mg-reattached])');
+-                for (var i = 0; i < links.length; i++) {
+-                  var l = links[i];
+-                  if (!l.sheet) {
+-                    // Safari ignores a media change on an in-flight blocking sheet, so REMOVE it to
+-                    // release the paint, then re-append the same href as a non-blocking link
+-                    // (media='print' → 'all' on load) so styles still apply if the CSS arrives.
+-                    var href = l.href, parent = l.parentNode, co = l.crossOrigin;
+-                    if (parent) parent.removeChild(l);
+-                    var n = document.createElement('link');
+-                    n.rel = 'stylesheet'; n.media = 'print';
+-                    if (co != null) n.crossOrigin = co; // same CORS mode → browser dedupes with the in-flight load (no 2nd 35KB fetch)
+-                    n.href = href;
+-                    n.setAttribute('data-mg-reattached', '1');
+-                    n.onload = function () { try { this.media = 'all'; } catch (e) {} };
+-                    (parent || document.head).appendChild(n);
+-                  }
++                __mgPaintQueued = false;
++                if (window.__mgBootReady || !__mgMayReveal()) return;
++                window.__mgBootReady = true;
++                document.documentElement.classList.remove('mg-boot-pending');
++                var app = document.getElementById('app'), splash = document.getElementById('mg-boot-loading');
++                if (app) { app.removeAttribute('inert'); app.removeAttribute('aria-hidden'); app.setAttribute('aria-busy', 'false'); }
++                if (splash) splash.hidden = true;
++                clearInterval(__mgBootPoll);
++                if (window.__mgBootFired && !window.__mgBootLateSent) {
++                  window.__mgBootLateSent = true;
++                  new Image().src = '/_l?t=boot_late&m=' + encodeURIComponent(
++                    'mountedAt=' + (window.__mgMountedAt || Math.round(performance.now()))
++                    + ' bootReadyAt=' + Math.round(performance.now()) + ' cssReady=1'
++                    + ' vs=' + document.visibilityState + (window.__mgWasHidden ? ' wasHidden=1' : '')
++                    + (document.getElementById('mg-load-error') ? ' le=1' : ''));
++                }
++              } catch (e) {}
++            }
++            window.__mgBootCheck = function () {
++              try {
++                if (window.__mgBootReady) return;
++                var app = document.getElementById('app'), splash = document.getElementById('mg-boot-loading');
++                if (!app || !splash) return; // Do not wait for DOMContentLoaded: a missing module delays it.
++                if (window.__mgLegacy) {
++                  splash.hidden = true; document.documentElement.classList.remove('mg-boot-pending');
++                  app.removeAttribute('inert'); app.removeAttribute('aria-hidden'); app.setAttribute('aria-busy', 'false');
++                  clearInterval(__mgBootPoll); return;
++                }
++                // The existing router error UI is already self-contained. Hand it visibility, not #app.
++                splash.hidden = !!document.getElementById('mg-load-error');
++                var css = __mgCssState();
++                if (window.__mgBootInitError) __mgBootProblem('Не удалось запустить приложение. Проверьте соединение и повторите загрузку.');
++                else if (css.failed) __mgBootProblem('Не удалось загрузить оформление. Проверьте соединение и повторите загрузку.');
++                if (__mgMayReveal() && !__mgPaintQueued) {
++                  __mgPaintQueued = true;
++                  // Two rendering opportunities after applying styles; do not uncover an unstyled app.
++                  var frame = window.requestAnimationFrame || function (fn) { return setTimeout(fn, 16); };
++                  frame(function () { frame(__mgFinishBoot); });
+                 }
+               } catch (e) {}
+-            }, 5000);
++            };
++            __mgBootPoll = setInterval(window.__mgBootCheck, 100);
++            document.addEventListener('DOMContentLoaded', window.__mgBootCheck);
+             var __mgBootRearmed = false;
+@@ -62,3 +124,3 @@
+               try {
+-                if (window.__mgMounted) return;
++                if (window.__mgBootReady || window.__mgBootFired) return;
+                 // Lateness check: if this fired >=2s late by EITHER clock, or the tab was hidden >=1s
+@@ -75,3 +137,3 @@
+                 var byName = {}; res.forEach(function (r) { byName[r.name] = r; });
+-                var sel = 'script[src*="/assets/"], link[rel="modulepreload"][href*="/assets/"], link[rel="stylesheet"][href*="/assets/"]';
++                var sel = 'script[src*="/assets/"], link[rel="modulepreload"][href*="/assets/"], link[rel="stylesheet"][href*="/assets/"], link[data-mg-critical][href*="/assets/"]';
+                 var nodes = document.querySelectorAll(sel), total = 0, missing = [];
+@@ -91,5 +153,7 @@
+                 var appEl = document.getElementById('app');
+-                var ph = (appEl && document.getElementById('mg-boot-loading')) ? 1 : 0;
++                var loadingEl = document.getElementById('mg-boot-loading');
++                var ph = (appEl && loadingEl && appEl.contains(loadingEl)) ? 1 : 0;
+                 var appKids = (appEl ? appEl.childElementCount : 0) - ph;
+                 var m = 'rs=' + document.readyState + ' t=' + Math.round(performance.now())
++                      + ' mounted=' + (window.__mgMounted ? 1 : 0) + ' cssReady=' + (__mgCssState().ready ? 1 : 0)
+                       + ' assets=' + total + ' missing=' + missing.slice(0, 10).join('|')
+@@ -101,17 +165,6 @@
+                 new Image().src = '/_l?t=boot_timeout&m=' + encodeURIComponent(m.slice(0, 1500));
+-                // На legacy-браузере (nomodule уже показал «браузер устарел») оверлей НЕ показываем.
+-                // Если уже показан экран ошибки загрузки (#mg-load-error из роутера) — тоже не рисуем,
+-                // чтобы два оверлея не наложились. Иначе — сообщение + кнопка «Обновить» (БЕЗ
+-                // автоповторов); снять при позднем монтировании (boot_late).
+-                if (!window.__mgLegacy && !document.getElementById('mg-boot-msg') && !document.getElementById('mg-load-error')) {
+-                  var box = document.createElement('div'); box.id = 'mg-boot-msg';
+-                  box.setAttribute('style', 'position:fixed;inset:0;z-index:2147483000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:#fff;color:#1f2733;text-align:center;padding:24px;font:16px/1.45 Raleway,system-ui,-apple-system,sans-serif');
+-                  box.innerHTML = '<div>Сайт загружается дольше обычного.<br>Проверьте соединение.</div>';
+-                  var btn = document.createElement('button'); btn.type = 'button'; btn.textContent = 'Обновить';
+-                  btn.setAttribute('style', 'padding:11px 22px;border:none;border-radius:8px;cursor:pointer;color:#fff;background:#2563eb;font:600 16px Raleway,system-ui,sans-serif');
+-                  btn.onclick = function () { location.reload(); };
+-                  box.appendChild(btn); document.body.appendChild(box);
+-                  var poll = setInterval(function () {
+-                    if (window.__mgMounted) { clearInterval(poll); var e = document.getElementById('mg-boot-msg'); if (e && e.parentNode) e.parentNode.removeChild(e); }
+-                  }, 500);
++                // One watchdog / one beacon. Keep the existing router error screen, if present.
++                if (!window.__mgLegacy && !document.getElementById('mg-load-error')) {
++                  __mgBootProblem('Сайт загружается дольше обычного. Проверьте соединение и повторите загрузку.');
++                  window.__mgBootCheck();
+                 }
+@@ -333,2 +386,3 @@
+         <noscript>
++            <style>#mg-boot-loading { display:none!important; }</style>
+             <strong>
+@@ -338,3 +392,10 @@
+         </noscript>
+-        <div id="app"><div id="mg-boot-loading" style="min-height:60vh;display:flex;align-items:center;justify-content:center;color:#94a3b8;font:15px/1.4 Raleway,system-ui,-apple-system,sans-serif">Загрузка…</div></div>
++        <div id="mg-boot-loading" role="status" aria-live="polite" aria-atomic="true">
++            <div id="mg-boot-panel">
++                <p id="mg-boot-message">Загрузка МитГуру…</p>
++                <button id="mg-boot-retry" type="button" hidden onclick="window.__mgBootRetry()">Повторить загрузку</button>
++            </div>
++        </div>
++        <div id="app" aria-hidden="true" aria-busy="true" inert></div>
++        <script>if (window.__mgBootCheck) window.__mgBootCheck();</script>
+         {{{scripts.body}}}
+diff --git a/vite.config.js b/vite.config.js
+index b192e61..4baa117 100644
+--- a/vite.config.js
++++ b/vite.config.js
+@@ -7,2 +7,3 @@ import { parseEnv } from 'node:util';
+ import handlebars from 'handlebars';
++import { nonBlockingBootCss } from './scripts/lib/boot-html.mjs';
+ 
+@@ -226,3 +227,7 @@ export default defineConfig(({ mode }) => {
+     return {
+-        plugins: [vue()],
++        plugins: [vue(), {
++            name: 'meetguru-boot-css',
++            apply: 'build',
++            transformIndexHtml: { order: 'post', handler: nonBlockingBootCss },
++        }],
+         base: "/",
+diff --git a/scripts/lib/boot-html.mjs b/scripts/lib/boot-html.mjs
+new file mode 100644
+index 0000000..6c557bb
+--- /dev/null
++++ b/scripts/lib/boot-html.mjs
+@@ -0,0 +1,13 @@
++// Applied after Vite has injected the entry CSS. Do not edit generated HTML or dist.
++export function nonBlockingBootCss(html) {
++    return html.replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>|<!--[\s\S]*?-->|<link\b[^>]*>/gi, (tag) => {
++        if (!/^<link\b/i.test(tag) || /\bdata-mg-critical\b/i.test(tag)) return tag;
++        const rel = /\brel\s*=\s*(["'])stylesheet\1/i;
++        const href = /\bhref\s*=\s*(["'])([^"']+)\1/i.exec(tag)?.[2];
++        if (!rel.test(tag) || !href || !/^\/assets\/[^?#]+\.css(?:[?#]|$)/i.test(href)) return tag;
++        return tag.replace(rel,
++            'rel="preload" as="style" data-mg-critical="pending" ' +
++            'onload="this.onload=null;this.rel=\'stylesheet\';this.setAttribute(\'data-mg-critical\',\'loaded\');if(window.__mgBootCheck)window.__mgBootCheck()" ' +
++            'onerror="this.setAttribute(\'data-mg-critical\',\'failed\');if(window.__mgBootCheck)window.__mgBootCheck()"');
++    });
++}
+diff --git a/tests/boot-splash.unit.mjs b/tests/boot-splash.unit.mjs
+new file mode 100644
+index 0000000..9b01b43
+--- /dev/null
++++ b/tests/boot-splash.unit.mjs
+@@ -0,0 +1,150 @@
++// Autonomous HTML bootstrap contract; no network, packages, browser or production access.
++import assert from 'node:assert/strict';
++import fs from 'node:fs';
++import vm from 'node:vm';
++import { nonBlockingBootCss } from '../scripts/lib/boot-html.mjs';
++const template = fs.readFileSync(new URL('../template.html', import.meta.url), 'utf8');
++const boot = template.match(/<script id="mg-boot-script">([\s\S]*?)<\/script>/)[1];
++
++const tag = '<link rel="stylesheet" crossorigin href="/assets/main-hash.css">';
++const transformed = nonBlockingBootCss(tag);
++assert.match(transformed, /rel="preload" as="style" data-mg-critical="pending"/);
++assert.match(transformed, /crossorigin href="\/assets\/main-hash.css"/);
++assert.match(transformed, /this.rel='stylesheet'/);
++assert.equal(nonBlockingBootCss(transformed), transformed);
++assert.equal(nonBlockingBootCss('<link rel="stylesheet" href="https://cdn.invalid/font.css">'), '<link rel="stylesheet" href="https://cdn.invalid/font.css">');
++assert.equal(nonBlockingBootCss('<!-- ' + tag + ' -->'), '<!-- ' + tag + ' -->');
++assert.equal(nonBlockingBootCss('<script>var x=' + JSON.stringify(tag) + '</script>'), '<script>var x=' + JSON.stringify(tag) + '</script>');
++assert.equal(nonBlockingBootCss('<link rel="preload" as="style" href="/fonts/font.css">'), '<link rel="preload" as="style" href="/fonts/font.css">');
++assert.ok(template.indexOf('id="mg-boot-loading"') < template.indexOf('<div id="app"'));
++assert.match(template, /#mg-boot-loading[^}]*font:16px\/1\.5 system-ui/);
++assert.match(template, /<noscript>\s*<style>#mg-boot-loading \{ display:none!important;/);
++
++class Element {
++    constructor(id) { this.id = id; this.attrs = {}; this.hidden = false; this.disabled = false; this.textContent = ''; this.childElementCount = 0; }
++    getAttribute(k) { return this.attrs[k] ?? null; }
++    setAttribute(k, v) { this.attrs[k] = v; }
++    removeAttribute(k) { delete this.attrs[k]; }
++    contains() { return false; }
++}
++function fixture(cssCount = 1) {
++    let t = 0, seq = 0, reloads = 0;
++    const timers = new Map(), events = new Map(), beacons = [];
++    const elements = Object.fromEntries(['app', 'mg-boot-loading', 'mg-boot-message', 'mg-boot-retry'].map(id => [id, new Element(id)]));
++    elements.app.attrs = { inert: '', 'aria-hidden': 'true', 'aria-busy': 'true' };
++    elements['mg-boot-retry'].hidden = true;
++    const classes = new Set(['mg-boot-pending']);
++    const links = Array.from({ length: cssCount }, (_, i) => {
++        const e = new Element('css' + i); e.attrs['data-mg-critical'] = 'pending';
++        e.href = 'https://example.invalid/assets/main-' + i + '.css'; e.rel = 'preload'; e.sheet = null; return e;
++    });
++    const document = {
++        visibilityState: 'visible', readyState: 'interactive',
++        documentElement: { classList: { remove: c => classes.delete(c) } },
++        getElementById: id => elements[id] || null,
++        querySelectorAll: () => links,
++        addEventListener: (type, fn) => { if (!events.has(type)) events.set(type, []); events.get(type).push(fn); },
++    };
++    function timer(fn, ms, interval = 0) { const id = ++seq; timers.set(id, { fn, at: t + ms, interval }); return id; }
++    const context = vm.createContext({
++        document, navigator: { onLine: true }, performance: { now: () => t, getEntriesByType: () => [] },
++        Date: { now: () => 1000000 + t }, Math, encodeURIComponent,
++        setTimeout: (fn, ms) => timer(fn, ms), clearTimeout: id => timers.delete(id),
++        setInterval: (fn, ms) => timer(fn, ms, ms), clearInterval: id => timers.delete(id),
++        requestAnimationFrame: fn => timer(fn, 16), location: { reload: () => reloads++ },
++        Image: class { set src(url) { const q = new URL(url, 'https://example.invalid').searchParams; beacons.push({ type: q.get('t'), message: q.get('m') }); } },
++    });
++    context.window = context;
++    vm.runInContext(boot, context);
++    function advance(ms) {
++        const end = t + ms;
++        while (true) {
++            let next;
++            for (const [id, task] of timers) if (task.at <= end && (!next || task.at < next[1].at)) next = [id, task];
++            if (!next) break;
++            const [id, task] = next; t = task.at;
++            if (task.interval) task.at += task.interval; else timers.delete(id);
++            task.fn();
++        }
++        t = end;
++    }
++    function css(index = 0, state = 'loaded', sheet = true) {
++        links[index].attrs['data-mg-critical'] = state;
++        links[index].rel = state === 'loaded' ? 'stylesheet' : 'preload';
++        links[index].sheet = state === 'loaded' && sheet ? {} : null;
++        context.__mgBootCheck();
++    }
++    function mount(failed = false) {
++        elements.app.childElementCount = failed ? 0 : 1;
++        context.__mgBootInitError = failed; context.__mgMounted = true; context.__mgMountedAt = t;
++        context.__mgBootCheck();
++    }
++    return { context, elements, links, classes, beacons, advance, css, mount, get reloads() { return reloads; },
++        hidden(value) { document.visibilityState = value ? 'hidden' : 'visible'; for (const fn of events.get('visibilitychange') || []) fn(); } };
++}
++function ready(f) {
++    assert.equal(f.context.__mgBootReady, true);
++    assert.equal(f.elements['mg-boot-loading'].hidden, true);
++    assert.equal(f.classes.has('mg-boot-pending'), false);
++    assert.equal(f.elements.app.getAttribute('aria-hidden'), null);
++    assert.equal(f.elements.app.getAttribute('inert'), null);
++}
++function gated(f) { assert.equal(f.classes.has('mg-boot-pending'), true); assert.equal(f.context.__mgBootReady, false); }
++function counts(f, timeout, late) {
++    assert.equal(f.beacons.filter(x => x.type === 'boot_timeout').length, timeout);
++    assert.equal(f.beacons.filter(x => x.type === 'boot_late').length, late);
++}
++{
++    const f = fixture(); f.advance(200); f.css(); f.mount(); gated(f); f.advance(16); gated(f); f.advance(16); ready(f);
++    f.advance(60000); counts(f, 0, 0);
++}
++for (const delay of [30000, 60000]) {
++    const f = fixture(); f.advance(100); f.mount(); f.advance(delay - 100); gated(f);
++    assert.equal(f.elements['mg-boot-retry'].hidden, false); counts(f, 1, 0); assert.equal(f.reloads, 0);
++    f.css(); f.advance(32); ready(f); counts(f, 1, 1);
++    assert.match(f.beacons.find(x => x.type === 'boot_late').message, /mountedAt=100 bootReadyAt=/);
++    f.context.__mgBootCheck(); f.advance(60000); counts(f, 1, 1);
++}
++{
++    const f = fixture(); f.mount(); f.css(0, 'failed'); gated(f);
++    assert.match(f.elements['mg-boot-message'].textContent, /оформление/);
++    f.advance(60000); counts(f, 1, 0); assert.equal(f.reloads, 0);
++    f.css(); f.advance(32); ready(f); counts(f, 1, 1);
++}
++{
++    const f = fixture(); f.css(); f.advance(30000); gated(f); counts(f, 1, 0);
++    f.mount(); f.advance(32); ready(f); counts(f, 1, 1);
++}
++{
++    const f = fixture(); f.css(); f.advance(90000); gated(f); counts(f, 1, 0); assert.equal(f.reloads, 0);
++    f.context.__mgBootRetry(); f.context.__mgBootRetry(); assert.equal(f.reloads, 1); assert.equal(f.elements['mg-boot-retry'].disabled, true);
++    const recovered = fixture(); recovered.css(); recovered.mount(); recovered.advance(32); ready(recovered);
++}
++{
++    const f = fixture(); f.css(); f.mount(true); f.advance(60000); gated(f);
++    assert.match(f.elements['mg-boot-message'].textContent, /запустить приложение/); counts(f, 1, 0);
++}
++{
++    const f = fixture(); f.css(); f.links[0].sheet = { cssRules: [] }; f.mount(); f.advance(16000); gated(f);
++    assert.match(f.elements['mg-boot-message'].textContent, /оформление/); counts(f, 1, 0);
++}
++{
++    const f = fixture(2); f.mount(); f.css(0); f.css(1, 'loaded', false); f.advance(16000); gated(f); counts(f, 1, 0);
++    f.css(1); f.advance(32); ready(f); counts(f, 1, 1);
++}
++{
++    const f = fixture(); f.css(); f.advance(5000); f.hidden(true); f.advance(10000); counts(f, 0, 0);
++    f.advance(15000); counts(f, 1, 0); f.hidden(false); f.mount(); f.advance(32); ready(f); counts(f, 1, 1);
++    assert.match(f.beacons[0].message, /wasHidden=1/); assert.match(f.beacons[0].message, /rearmed=1/);
++}
++{
++    const f = fixture(); f.elements['mg-load-error'] = new Element('mg-load-error'); f.context.__mgBootCheck();
++    assert.equal(f.elements['mg-boot-loading'].hidden, true); gated(f);
++    f.advance(16000); f.mount(); f.css(); f.advance(32); ready(f); counts(f, 1, 1);
++    assert.ok(f.elements['mg-load-error']); assert.match(f.beacons[1].message, /le=1/);
++}
++{
++    const f = fixture(); f.context.__mgLegacy = true; f.context.__mgBootCheck();
++    assert.equal(f.elements['mg-boot-loading'].hidden, true); assert.equal(f.classes.has('mg-boot-pending'), false);
++}
++console.log('PASS boot splash: HTML transform, normal load, CSS 30/60s/failed, delayed/missing JS, failed Vue render, late and manual recovery, all styles applied, freeze context, router error and legacy completion, one-shot diagnostics, no automatic reload.');
