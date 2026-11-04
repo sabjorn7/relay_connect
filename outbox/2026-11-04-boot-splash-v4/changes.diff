@@ -1,0 +1,1426 @@
+diff --git a/src/_front/App.vue b/src/_front/App.vue
+index 79e15fc..f03e6dc 100644
+--- a/src/_front/App.vue
++++ b/src/_front/App.vue
+@@ -1,2 +1,3 @@
+ <template>
++    <span hidden data-mg-boot-shell></span>
+     <AuthBanner />
+@@ -4,3 +5,5 @@
+     <!-- wwFront:start -->
++    <span hidden data-mg-boot-route-start></span>
+     <router-view />
++    <span hidden data-mg-boot-route-end></span>
+     <!-- wwFront:end -->
+@@ -17,2 +20,3 @@ import AuthBanner from '@/_front/chrome/AuthBanner.vue';
+ import InstallPrompt from '@/_front/chrome/InstallPrompt.vue';
++import { trackBootNavigation } from '@/_front/chrome/bootReadiness.js';
+ import { isLikelyLoggedIn } from '@/_front/chrome/headerAccount.js';
+@@ -78,3 +82,3 @@ export default {
+             if (normPath(path) !== '/') return;
+-            if (!isLikelyLoggedIn()) router.replace('/all_course');
++            if (!isLikelyLoggedIn()) trackBootNavigation(router.replace('/all_course'), router);
+         }
+@@ -88,2 +92,4 @@ export default {
+ <style>
++/* Applied entry CSS contract; deliberately absent from inline splash styles. */
++:root { --mg-boot-css: ready-v2; }
+ /* Site-wide (gate class always on <html>): hide the WeWeb header/footer by their exact, stable
+diff --git a/src/_front/main.js b/src/_front/main.js
+index 561f2f8..15ae2aa 100644
+--- a/src/_front/main.js
++++ b/src/_front/main.js
+@@ -1,2 +1,3 @@
+-import { createApp } from 'vue';
++import { createApp, nextTick } from 'vue';
++import { signalBootMounted } from '@/_front/chrome/bootReadiness.js';
+ import axios from 'axios';
+@@ -101,2 +102,8 @@ const app = createApp(App);
+ app.config.errorHandler = (err, instance, info) => {
++    // Only a root setup failure is fatal independently of DOM. Child lifecycle errors
++    // remain recoverable; failed root renders are detected by the shell marker.
++    if (!window.__mgMounted && instance && !instance.$parent &&
++        (info === 'setup function' || String(info).endsWith('#runtime-0'))) {
++        window.__mgBootRootSetupError = true;
++    }
+     try { logException('vue_error', err, { info, route: location.pathname }); } catch (e) { /* never throw from the handler */ }
+@@ -132,7 +139,3 @@ const init = async function () {
+     app.mount(el);
+-    // Defuse the boot watchdog (template.html): the app mounted, so no white-screen beacon.
+-    try {
+-        window.__mgMounted = true;
+-        if (window.__mgBootFired) { try { new Image().src = '/_l?t=boot_late&m=' + encodeURIComponent('mountedAt=' + Math.round(performance.now()) + ' vs=' + document.visibilityState + (window.__mgWasHidden ? ' wasHidden=1' : '') + (document.getElementById('mg-load-error') ? ' le=1' : '')); } catch (e) {} }
+-    } catch (e) { /* never throw */ }
++    await signalBootMounted({ nextTick, router });
+ 
+@@ -156,3 +159,8 @@ const init = async function () {
+ 
+-init();
++init().catch(error => {
++    if (!window.__mgMounted) window.__mgBootInitError = true;
++    try { logException('vue_error', error, { info: 'bootstrap', route: location.pathname }); } catch (e) {}
++    console.error(error);
++    if (window.__mgBootCheck) window.__mgBootCheck();
++});
+ 
+diff --git a/src/_front/views/AllCoursesPage.vue b/src/_front/views/AllCoursesPage.vue
+index 533aec0..82fcf85 100644
+--- a/src/_front/views/AllCoursesPage.vue
++++ b/src/_front/views/AllCoursesPage.vue
+@@ -8,3 +8,3 @@
+ <template>
+-    <main class="pd" :class="{ 'is-ready': ready }">
++    <main class="pd" :class="{ 'is-ready': ready }" :data-mg-boot-state="loading ? 'loading' : 'content'">
+         <!-- ── HERO ─────────────────────────────────────────────── -->
+diff --git a/template.html b/template.html
+index b2c30f5..a4678b8 100644
+--- a/template.html
++++ b/template.html
+@@ -1,3 +1,3 @@
+ <!doctype html>
+-<html class="" lang="{{lang}}">
++<html class="mg-boot-pending" data-mg-boot-css="dev" lang="{{lang}}">
+     <head>
+@@ -5,6 +5,16 @@
+         <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+-        <script>
+-        /* boot watchdog: if the app hasn't mounted in 15s (bundle didn't load / auth stalled / white
+-           screen), fire a GET beacon to /_l with what loaded — the in-bundle logger can't report a
+-           pre-mount failure. No deps, fully try/catch'd. __mgMounted is set in main.js after mount. */
++        <style id="mg-boot-style">
++          html.mg-boot-pending #app { opacity:0!important; visibility:var(--mg-boot-probe-visibility,hidden)!important; pointer-events:none!important; }
++          #mg-boot-loading { position:fixed; inset:0; z-index:2147482999; box-sizing:border-box; display:flex; align-items:center; justify-content:center; padding:24px; background:#fff; color:#1f2733; text-align:center; font:16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
++          #mg-boot-loading[hidden], #mg-boot-retry[hidden] { display:none!important; }
++          #mg-boot-panel { max-width:30em; }
++          #mg-boot-message { margin:0 0 20px; font:inherit; }
++          #mg-boot-retry { box-sizing:border-box; min-height:44px; padding:11px 22px; border:0; border-radius:8px; background:#2563eb; color:#fff; cursor:pointer; font:600 16px/1.5 system-ui,-apple-system,sans-serif; }
++          #mg-boot-retry:focus-visible { outline:3px solid #091747; outline-offset:4px; }
++          #mg-boot-retry:disabled { opacity:.65; cursor:default; }
++        </style>
++        <script id="mg-boot-script">
++        /* HTML splash + one boot watchdog: wait for Vue mount AND applied entry CSS.
++           The existing /_l diagnostics work even when the bundle never loads.
++           No external dependencies; __mgMounted is set in main.js after mount. */
+         (function () {
+@@ -12,2 +22,3 @@
+             window.__mgMounted = false; window.__mgBootFired = false;
++            window.__mgBootReady = false; window.__mgBootLateSent = false; window.__mgBootInitError = false; window.__mgBootRootSetupError = false;
+             // A backgrounded/hidden tab legitimately defers work (throttled timers, paused loads) —
+@@ -26,27 +37,144 @@
+             window.__mgHid = __mgHid; // SINGLE SOURCE of hidden-time — freezeGuard.getHiddenMs() reads this
+-            // Render-unblock: a <link rel="stylesheet"> in <head> blocks the FIRST PAINT until it
+-            // loads or fails. On a throttled mobile link the main CSS can hang → the whole page
+-            // (incl. the #mg-boot-loading placeholder AND the #mg-boot-msg overlay) stays UNPAINTED
+-            // = pure white, even though the DOM and this watchdog work (confirmed: FCP withheld
+-            // until the CSS resolved). After ~5s, drop any still-unloaded stylesheet from render-
+-            // blocking (media='not all') so the inline-styled placeholder/overlay can paint; restore
+-            // media when the CSS finally arrives. A brief unstyled flash beats an indefinite white.
+-            setTimeout(function () {
++            // The HTML splash lives outside #app, so Vue cannot erase it before entry CSS is applied.
++            // Vite marks only the emitted entry styles as data-mg-critical; optional fonts/icons stay optional.
++            var __mgPaintQueued = false, __mgRetrying = false, __mgBootPoll;
++            var __mgPaintEpoch = 0, __mgPaintTimer, __mgRaf1, __mgRaf2, __mgRetryTimer;
++            function __mgCssState() {
++              var links = document.querySelectorAll('link[data-mg-critical]');
++              var expected = document.documentElement.getAttribute('data-mg-boot-css');
++              var ready = expected === 'dev' || (+expected > 0 && links.length === +expected), failed = !ready, allLoaded = links.length > 0;
++              for (var i = 0; i < links.length; i++) {
++                var state = links[i].getAttribute('data-mg-critical');
++                if (state === 'failed') failed = true;
++                if (state !== 'loaded') allLoaded = false;
++                if (state !== 'loaded' || links[i].rel !== 'stylesheet' || !links[i].sheet || links[i].disabled) ready = false;
++              }
++              // Loading and applying are distinct; CSSOM access/length is not a validity test.
++              // This marker comes from App.vue's entry CSS, never from the inline splash.
++              var applied = window.getComputedStyle(document.documentElement).getPropertyValue('--mg-boot-css').trim() === 'ready-v2';
++              if (!applied) { ready = false; if (allLoaded) failed = true; }
++              return { ready: ready, failed: failed };
++            }
++            function __mgBootProblem(message) {
++              var text = document.getElementById('mg-boot-message'), retry = document.getElementById('mg-boot-retry');
++              if (text && text.textContent !== message) text.textContent = message;
++              if (retry) retry.hidden = false;
++            }
++            function __mgResetRetry() {
++              clearTimeout(__mgRetryTimer); __mgRetrying = false;
++              var retry = document.getElementById('mg-boot-retry');
++              if (retry) retry.disabled = false;
++            }
++            window.__mgBootRetry = async function () {
++              if (__mgRetrying || window.__mgBootReady) return;
++              __mgRetrying = true;
++              var retry = document.getElementById('mg-boot-retry');
++              if (retry) retry.disabled = true;
++              // With no CSS links there is no address to repair. A fresh HTML document
++              // is required; reload only in this explicit user action, never from polling.
++              var criticalLinks = document.querySelectorAll('link[data-mg-critical]');
++              if (__mgCssState().ready || !criticalLinks.length) {
++                try { location.reload(); } catch (e) { __mgResetRetry(); }
++                return;
++              }
++              var links = Array.prototype.slice.call(criticalLinks).filter(function (link) {
++                var url = new URL(link.href, location.href);
++                return url.origin === location.origin && /^\/assets\/[^?#]+\.css$/.test(url.pathname);
++              });
++              if (!links.length) { __mgResetRetry(); __mgBootProblem('Не удалось найти оформление текущей версии. Повторите открытие страницы.'); return; }
++              __mgBootProblem('Повторно загружаем оформление…');
++              // Cache matching includes query parameters. Enumerate actual Request keys so Vary
++              // cannot leave another exact-URL entry behind; never delete a cache or other assets.
++              var urls = links.map(function (link) { return link.href; });
++              var cleanup = Promise.resolve().then(async function () {
++                if (!window.caches) return;
++                var names = await caches.keys();
++                await Promise.all(names.map(async function (name) {
++                  var cache = await caches.open(name), keys = await cache.keys();
++                  await Promise.all(keys.filter(function (key) { return urls.indexOf(key.url) >= 0; })
++                    .map(function (key) { return cache.delete(key, { ignoreVary: true }); }));
++                }));
++              }).catch(function () {});
++              // Storage may be denied/stalled. A unique URL also defeats a late SW put of the
++              // original request (SW uses caches.match(req), without ignoreSearch).
++              await Promise.race([cleanup, new Promise(function (resolve) { setTimeout(resolve, 1500); })]);
++              if (window.__mgBootReady) { __mgResetRetry(); return; }
+               try {
+-                var links = document.querySelectorAll('link[rel="stylesheet"]:not([data-mg-reattached])');
+-                for (var i = 0; i < links.length; i++) {
+-                  var l = links[i];
+-                  if (!l.sheet) {
+-                    // Safari ignores a media change on an in-flight blocking sheet, so REMOVE it to
+-                    // release the paint, then re-append the same href as a non-blocking link
+-                    // (media='print' → 'all' on load) so styles still apply if the CSS arrives.
+-                    var href = l.href, parent = l.parentNode, co = l.crossOrigin;
+-                    if (parent) parent.removeChild(l);
+-                    var n = document.createElement('link');
+-                    n.rel = 'stylesheet'; n.media = 'print';
+-                    if (co != null) n.crossOrigin = co; // same CORS mode → browser dedupes with the in-flight load (no 2nd 35KB fetch)
+-                    n.href = href;
+-                    n.setAttribute('data-mg-reattached', '1');
+-                    n.onload = function () { try { this.media = 'all'; } catch (e) {} };
+-                    (parent || document.head).appendChild(n);
++                links.forEach(function (link) {
++                  if (!link.parentNode) return;
++                  var fresh = link.cloneNode(false), url = new URL(link.href, location.href);
++                  url.searchParams.set('__mg_boot_retry', Date.now().toString(36) + Math.random().toString(36).slice(2));
++                  fresh.rel = 'preload'; fresh.setAttribute('as', 'style'); fresh.setAttribute('data-mg-critical', 'pending');
++                  fresh.onload = function () {
++                    this.onload = null; this.rel = 'stylesheet'; this.setAttribute('data-mg-critical', 'loaded');
++                    window.__mgBootCheck();
++                    var current = document.querySelectorAll('link[data-mg-critical]'), pending = false;
++                    for (var i = 0; i < current.length; i++) if (current[i].getAttribute('data-mg-critical') === 'pending') pending = true;
++                    if (!pending) __mgResetRetry();
++                  };
++                  fresh.onerror = function () { this.setAttribute('data-mg-critical', 'failed'); __mgResetRetry(); window.__mgBootCheck(); };
++                  fresh.href = url.href;
++                  link.parentNode.replaceChild(fresh, link);
++                });
++                // Release the button if the request stalls; no reload or further request is automatic.
++                __mgRetryTimer = setTimeout(__mgResetRetry, 15000);
++              } catch (e) { __mgResetRetry(); __mgBootProblem('Не удалось повторить загрузку оформления. Попробуйте ещё раз.'); }
++            };
++            function __mgMayReveal() {
++              var appReady = window.__mgBootAppReady && window.__mgBootAppReady();
++              return document.visibilityState !== 'hidden' && window.__mgMounted && appReady && !window.__mgBootInitError && __mgCssState().ready;
++            }
++            function __mgCancelPaint() {
++              __mgPaintEpoch++; __mgPaintQueued = false; clearTimeout(__mgPaintTimer);
++              if (window.cancelAnimationFrame) { window.cancelAnimationFrame(__mgRaf1); window.cancelAnimationFrame(__mgRaf2); }
++            }
++            function __mgFinishBoot() {
++              try {
++                __mgPaintQueued = false;
++                if (window.__mgBootReady || !__mgMayReveal()) return;
++                window.__mgBootReady = true;
++                document.documentElement.classList.remove('mg-boot-pending');
++                var app = document.getElementById('app'), splash = document.getElementById('mg-boot-loading');
++                if (app) { app.removeAttribute('inert'); app.removeAttribute('aria-hidden'); app.setAttribute('aria-busy', 'false'); }
++                if (splash) splash.hidden = true;
++                clearInterval(__mgBootPoll);
++                if (window.__mgBootFired && !window.__mgBootLateSent) {
++                  window.__mgBootLateSent = true;
++                  new Image().src = '/_l?t=boot_late&m=' + encodeURIComponent(
++                    'mountedAt=' + (window.__mgMountedAt || Math.round(performance.now()))
++                    + ' bootReadyAt=' + Math.round(performance.now()) + ' cssReady=1'
++                    + ' vs=' + document.visibilityState + (window.__mgWasHidden ? ' wasHidden=1' : '')
++                    + (document.getElementById('mg-load-error') ? ' le=1' : ''));
++                }
++              } catch (e) {}
++            }
++            window.__mgBootCheck = function () {
++              try {
++                if (window.__mgBootReady) return;
++                var app = document.getElementById('app'), splash = document.getElementById('mg-boot-loading');
++                if (!app || !splash) return; // Do not wait for DOMContentLoaded: a missing module delays it.
++                if (window.__mgLegacy) {
++                  splash.hidden = true; document.documentElement.classList.remove('mg-boot-pending');
++                  app.removeAttribute('inert'); app.removeAttribute('aria-hidden'); app.setAttribute('aria-busy', 'false');
++                  clearInterval(__mgBootPoll); return;
++                }
++                // The existing router error UI is already self-contained. Hand it visibility, not #app.
++                splash.hidden = !!document.getElementById('mg-load-error');
++                if (window.__mgBootAppReady) window.__mgBootAppReady();
++                var css = __mgCssState();
++                if (window.__mgBootInitError) __mgBootProblem('Не удалось запустить приложение. Проверьте соединение и повторите загрузку.');
++                else if (css.failed) __mgBootProblem('Не удалось загрузить оформление. Проверьте соединение и повторите загрузку.');
++                if (__mgMayReveal() && !__mgPaintQueued) {
++                  __mgPaintQueued = true;
++                  // Two rendering opportunities after applying styles; do not uncover an unstyled app.
++                  var epoch = ++__mgPaintEpoch;
++                  function finish() {
++                    if (epoch !== __mgPaintEpoch) return;
++                    __mgCancelPaint(); __mgFinishBoot();
++                  }
++                  // Even a present rAF can be suspended. The bounded fallback rechecks DOM/CSS
++                  // and visibility, rather than revealing blindly or reloading the page.
++                  __mgPaintTimer = setTimeout(finish, 250);
++                  if (window.requestAnimationFrame) {
++                    __mgRaf1 = window.requestAnimationFrame(function () { __mgRaf2 = window.requestAnimationFrame(finish); });
+                   }
+@@ -54,3 +182,11 @@
+               } catch (e) {}
+-            }, 5000);
++            };
++            __mgBootPoll = setInterval(window.__mgBootCheck, 100);
++            document.addEventListener('DOMContentLoaded', window.__mgBootCheck);
++            function __mgResumeBoot() {
++              if (window.__mgBootReady) return;
++              __mgCancelPaint(); window.__mgBootCheck();
++            }
++            document.addEventListener('visibilitychange', __mgResumeBoot);
++            window.addEventListener('pageshow', __mgResumeBoot);
+             var __mgBootRearmed = false;
+@@ -62,3 +198,3 @@
+               try {
+-                if (window.__mgMounted) return;
++                if (window.__mgBootReady || window.__mgBootFired) return;
+                 // Lateness check: if this fired >=2s late by EITHER clock, or the tab was hidden >=1s
+@@ -75,3 +211,3 @@
+                 var byName = {}; res.forEach(function (r) { byName[r.name] = r; });
+-                var sel = 'script[src*="/assets/"], link[rel="modulepreload"][href*="/assets/"], link[rel="stylesheet"][href*="/assets/"]';
++                var sel = 'script[src*="/assets/"], link[rel="modulepreload"][href*="/assets/"], link[rel="stylesheet"][href*="/assets/"], link[data-mg-critical][href*="/assets/"]';
+                 var nodes = document.querySelectorAll(sel), total = 0, missing = [];
+@@ -91,5 +227,7 @@
+                 var appEl = document.getElementById('app');
+-                var ph = (appEl && document.getElementById('mg-boot-loading')) ? 1 : 0;
++                var loadingEl = document.getElementById('mg-boot-loading');
++                var ph = (appEl && loadingEl && appEl.contains(loadingEl)) ? 1 : 0;
+                 var appKids = (appEl ? appEl.childElementCount : 0) - ph;
+                 var m = 'rs=' + document.readyState + ' t=' + Math.round(performance.now())
++                      + ' mounted=' + (window.__mgMounted ? 1 : 0) + ' cssReady=' + (__mgCssState().ready ? 1 : 0)
+                       + ' assets=' + total + ' missing=' + missing.slice(0, 10).join('|')
+@@ -101,17 +239,6 @@
+                 new Image().src = '/_l?t=boot_timeout&m=' + encodeURIComponent(m.slice(0, 1500));
+-                // На legacy-браузере (nomodule уже показал «браузер устарел») оверлей НЕ показываем.
+-                // Если уже показан экран ошибки загрузки (#mg-load-error из роутера) — тоже не рисуем,
+-                // чтобы два оверлея не наложились. Иначе — сообщение + кнопка «Обновить» (БЕЗ
+-                // автоповторов); снять при позднем монтировании (boot_late).
+-                if (!window.__mgLegacy && !document.getElementById('mg-boot-msg') && !document.getElementById('mg-load-error')) {
+-                  var box = document.createElement('div'); box.id = 'mg-boot-msg';
+-                  box.setAttribute('style', 'position:fixed;inset:0;z-index:2147483000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:#fff;color:#1f2733;text-align:center;padding:24px;font:16px/1.45 Raleway,system-ui,-apple-system,sans-serif');
+-                  box.innerHTML = '<div>Сайт загружается дольше обычного.<br>Проверьте соединение.</div>';
+-                  var btn = document.createElement('button'); btn.type = 'button'; btn.textContent = 'Обновить';
+-                  btn.setAttribute('style', 'padding:11px 22px;border:none;border-radius:8px;cursor:pointer;color:#fff;background:#2563eb;font:600 16px Raleway,system-ui,sans-serif');
+-                  btn.onclick = function () { location.reload(); };
+-                  box.appendChild(btn); document.body.appendChild(box);
+-                  var poll = setInterval(function () {
+-                    if (window.__mgMounted) { clearInterval(poll); var e = document.getElementById('mg-boot-msg'); if (e && e.parentNode) e.parentNode.removeChild(e); }
+-                  }, 500);
++                // One watchdog / one beacon. Keep the existing router error screen, if present.
++                if (!window.__mgLegacy && !document.getElementById('mg-load-error')) {
++                  __mgBootProblem('Сайт загружается дольше обычного. Проверьте соединение и повторите загрузку.');
++                  window.__mgBootCheck();
+                 }
+@@ -333,2 +460,3 @@
+         <noscript>
++            <style>#mg-boot-loading { display:none!important; }</style>
+             <strong>
+@@ -338,3 +466,10 @@
+         </noscript>
+-        <div id="app"><div id="mg-boot-loading" style="min-height:60vh;display:flex;align-items:center;justify-content:center;color:#94a3b8;font:15px/1.4 Raleway,system-ui,-apple-system,sans-serif">Загрузка…</div></div>
++        <div id="mg-boot-loading" role="status" aria-live="polite" aria-atomic="true">
++            <div id="mg-boot-panel">
++                <p id="mg-boot-message">Загрузка МитГуру…</p>
++                <button id="mg-boot-retry" type="button" hidden onclick="window.__mgBootRetry()">Повторить загрузку</button>
++            </div>
++        </div>
++        <div id="app" aria-hidden="true" aria-busy="true" inert></div>
++        <script>if (window.__mgBootCheck) window.__mgBootCheck();</script>
+         {{{scripts.body}}}
+diff --git a/vite.config.js b/vite.config.js
+index b192e61..4baa117 100644
+--- a/vite.config.js
++++ b/vite.config.js
+@@ -7,2 +7,3 @@ import { parseEnv } from 'node:util';
+ import handlebars from 'handlebars';
++import { nonBlockingBootCss } from './scripts/lib/boot-html.mjs';
+ 
+@@ -226,3 +227,7 @@ export default defineConfig(({ mode }) => {
+     return {
+-        plugins: [vue()],
++        plugins: [vue(), {
++            name: 'meetguru-boot-css',
++            apply: 'build',
++            transformIndexHtml: { order: 'post', handler: nonBlockingBootCss },
++        }],
+         base: "/",
+diff --git a/scripts/lib/boot-html.mjs b/scripts/lib/boot-html.mjs
+new file mode 100644
+index 0000000..a51e83e
+--- /dev/null
++++ b/scripts/lib/boot-html.mjs
+@@ -0,0 +1,18 @@
++// Applied after Vite has injected the entry CSS. Do not edit generated HTML or dist.
++export function nonBlockingBootCss(html) {
++    let count = 0;
++    const transformed = html.replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>|<!--[\s\S]*?-->|<link\b[^>]*>/gi, (tag) => {
++        if (!/^<link\b/i.test(tag)) return tag;
++        if (/\bdata-mg-critical\b/i.test(tag)) { count++; return tag; }
++        const rel = /\brel\s*=\s*(["'])stylesheet\1/i;
++        const href = /\bhref\s*=\s*(["'])([^"']+)\1/i.exec(tag)?.[2];
++        if (!rel.test(tag) || !href || !/^\/assets\/[^?#]+\.css(?:[?#]|$)/i.test(href)) return tag;
++        count++;
++        return tag.replace(rel,
++            'rel="preload" as="style" data-mg-critical="pending" ' +
++            'onload="this.onload=null;this.rel=\'stylesheet\';this.setAttribute(\'data-mg-critical\',\'loaded\');if(window.__mgBootCheck)window.__mgBootCheck()" ' +
++            'onerror="this.setAttribute(\'data-mg-critical\',\'failed\');if(window.__mgBootCheck)window.__mgBootCheck()"');
++    });
++    // A missing production stylesheet must fail closed; only unbuilt dev HTML uses "dev".
++    return transformed.replace(/data-mg-boot-css="(?:dev|\d+)"/, 'data-mg-boot-css="' + count + '"');
++}
+diff --git a/src/_front/chrome/bootReadiness.js b/src/_front/chrome/bootReadiness.js
+new file mode 100644
+index 0000000..9a00dfd
+--- /dev/null
++++ b/src/_front/chrome/bootReadiness.js
+@@ -0,0 +1,200 @@
++import { isNavigationFailure, NavigationFailureType } from 'vue-router';
++
++// State belongs to this router/boot, rather than a permanent module-wide failure flag.
++const states = new WeakMap();
++const surfaces = new Set();
++function navigationState(router) {
++    let state = states.get(router);
++    if (state) return state;
++    state = { pending: new Map(), failures: [], commits: 0, waiters: new Set() };
++    states.set(router, state);
++    // Only committed successes clear failures. Failed hooks may belong to an older
++    // superseded attempt; classify those through their own tracked promise instead.
++    if (router.afterEach) state.stop = router.afterEach((_to, _from, failure) => {
++        if (!failure) {
++            state.commits++; state.failures = [];
++            for (const [promise, attempt] of state.pending) {
++                // A sync watcher can begin a new navigation after currentRoute was assigned,
++                // but before afterEach for that assignment. It still needs to finish.
++                if (attempt.startRoute === _to) attempt.startedAt = state.commits;
++                else state.pending.delete(promise);
++            }
++            notifyNavigation(state);
++        }
++    });
++    return state;
++}
++
++function notifyNavigation(state) {
++    for (const resolve of state.waiters) resolve();
++    state.waiters.clear();
++}
++
++// Existing redirect decision/promise is preserved. Observers never navigate or retry.
++export function trackBootNavigation(promise, router) {
++    if (window.__mgBootReady) return promise;
++    const state = navigationState(router);
++    const attempt = { startedAt: state.commits, startRoute: router.currentRoute.value };
++    const observed = Promise.resolve(promise).then(
++        failure => {
++            if (failure && !isNavigationFailure(failure, NavigationFailureType.duplicated) && state.commits === attempt.startedAt) {
++                state.failures.push({ kind: isNavigationFailure(failure, NavigationFailureType.cancelled) ? 'pending' : 'failed', startedAt: attempt.startedAt });
++            }
++        },
++        () => { if (state.commits === attempt.startedAt) state.failures.push({ kind: 'failed', startedAt: attempt.startedAt }); },
++    );
++    state.pending.set(observed, attempt);
++    observed.then(() => { state.pending.delete(observed); notifyNavigation(state); });
++    return promise;
++}
++
++// For a page whose only interface is teleported outside the route DOM boundary.
++// Pass the actual target element after mount and call the returned disposer on unmount.
++// Dialogs/unrelated body elements are never discovered or trusted implicitly.
++export function registerBootSurface(element, app = element?.ownerDocument?.getElementById('app')) {
++    if (!element || !app) return () => {};
++    const surface = { element, app };
++    surfaces.add(surface);
++    return () => surfaces.delete(surface);
++}
++
++function positiveRect(rects) {
++    return Array.from(rects).some(rect => rect.width > 0 && rect.height > 0);
++}
++// A legacy ww-icon may render only an SVG inside a real link. Require both
++// the interactive link box and visible paint geometry, never just an <svg> tag.
++function svgLinkContent(link, host) {
++    const href = link.getAttribute('href')?.trim();
++    if (!href || /^(javascript|data|vbscript):/i.test(href) || link.getAttribute('aria-disabled') === 'true' ||
++        !positiveRect(link.getClientRects())) return false;
++    for (const svg of link.querySelectorAll('svg')) {
++        const svgRect = svg.getBoundingClientRect();
++        if (!(svgRect.width > 0 && svgRect.height > 0)) continue;
++        for (const shape of svg.querySelectorAll('path,rect,circle,ellipse,line,polyline,polygon')) {
++            let visible = true;
++            for (let element = shape; element && element !== link; element = element.parentElement) {
++                const style = host.getComputedStyle(element);
++                if (element.hidden || element.getAttribute('aria-hidden') === 'true' ||
++                    ['presentation', 'none'].includes(element.getAttribute('role')) ||
++                    /^(defs|symbol|clipPath|mask|marker|pattern)$/.test(element.localName) ||
++                    style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse' ||
++                    (style.display !== 'contents' && (Number(style.opacity) === 0 || style.contentVisibility === 'hidden'))) { visible = false; break; }
++            }
++            if (!visible) continue;
++            try {
++                const box = shape.getBBox(), rect = shape.getBoundingClientRect(), style = host.getComputedStyle(shape);
++                const hasColor = color => color && color !== 'none' && color !== 'transparent' &&
++                    !/^rgba\([^)]*,\s*0(?:\.0+)?\s*\)$/.test(color) && !/\/\s*0(?:\.0+)?%?\s*\)$/.test(color);
++                const fill = hasColor(style.fill) && Number(style.fillOpacity) > 0 && box.width > 0 && box.height > 0;
++                const stroke = hasColor(style.stroke) && Number(style.strokeOpacity) > 0 && parseFloat(style.strokeWidth) > 0 && (box.width > 0 || box.height > 0);
++                // Do not accept off-canvas geometry from defs/empty icons or a zero-size SVG.
++                const overlaps = rect.right >= svgRect.left && rect.left <= svgRect.right && rect.bottom >= svgRect.top && rect.top <= svgRect.bottom;
++                if ((fill || stroke) && overlaps) return true;
++            } catch (e) { /* Geometry unavailable: keep waiting; never infer readiness. */ }
++        }
++    }
++    return false;
++}
++
++function visibleContent(nodes, host, document, app) {
++    function visit(node) {
++        if (node.nodeType === 3) {
++            if (!node.textContent.trim() || !node.parentElement) return null;
++            const style = host.getComputedStyle(node.parentElement);
++            if (style.visibility === 'hidden' || style.visibility === 'collapse') return null;
++            const range = document.createRange();
++            range.selectNodeContents(node);
++            return positiveRect(range.getClientRects()) ? node.parentElement : null;
++        }
++        if (node.nodeType !== 1 || node.hidden || /^(SCRIPT|STYLE|TEMPLATE|NOSCRIPT)$/.test(node.tagName)) return null;
++        if (node.hasAttribute('data-mg-boot-shell') || node.hasAttribute('data-mg-boot-route-start') || node.hasAttribute('data-mg-boot-route-end')) return null;
++        const style = host.getComputedStyle(node);
++        // The visibility probe lifts only the gate; real page opacity/visibility still apply.
++        if (style.display === 'none' || (style.display !== 'contents' && style.contentVisibility === 'hidden') || (style.display !== 'contents' && node !== app && style.opacity !== '' && Number(style.opacity) === 0)) return null;
++        const visible = style.visibility !== 'hidden' && style.visibility !== 'collapse';
++        const control = /^(INPUT|BUTTON|SELECT|TEXTAREA)$/.test(node.tagName);
++        const image = node.tagName === 'IMG' && node.complete && node.naturalWidth > 0;
++        const media = node.tagName === 'VIDEO' && (node.controls || node.readyState > 0);
++        if (visible && (control || image || media) && positiveRect(node.getClientRects())) return node;
++        if (visible && node.tagName === 'A' && svgLinkContent(node, host)) return node;
++        // A wrapper/Fragment/display:contents need not have a box. Inspect its content.
++        for (const child of node.childNodes) { const result = visit(child); if (result) return result; }
++        return null;
++    }
++    for (const node of nodes) {
++        let blocked = false;
++        for (let ancestor = node.parentElement; ancestor; ancestor = ancestor.parentElement) {
++            const style = host.getComputedStyle(ancestor);
++            if (ancestor.hidden || style.display === 'none' || (style.display !== 'contents' && style.contentVisibility === 'hidden') ||
++                (style.display !== 'contents' && ancestor !== app && style.opacity !== '' && Number(style.opacity) === 0)) { blocked = true; break; }
++        }
++        if (!blocked) { const result = visit(node); if (result) return result; }
++    }
++    return null;
++}
++
++function readBootInterface(host, document) {
++    const app = document.getElementById('app');
++    const shellRendered = !!app?.querySelector('[data-mg-boot-shell]');
++    const start = app?.querySelector('[data-mg-boot-route-start]');
++    const end = app?.querySelector('[data-mg-boot-route-end]');
++    const nodes = [];
++    let routeRendered = false;
++    if (start && end && start.parentNode === end.parentNode) {
++        let node = start.nextSibling;
++        for (; node && node !== end; node = node.nextSibling) nodes.push(node);
++        routeRendered = node === end;
++        // Only trust a complete boundary, never arbitrary chrome or the splash itself.
++        if (!nodes.length || nodes[nodes.length - 1].nextSibling !== end) nodes.length = 0;
++    }
++    let visible = shellRendered ? visibleContent(nodes, host, document, app) : null;
++    for (const surface of surfaces) {
++        if (!surface.element.isConnected) { surfaces.delete(surface); continue; }
++        if (!visible && surface.app === app && shellRendered && routeRendered) visible = visibleContent([surface.element], host, document, app);
++    }
++    let pageState = visible ? 'visible' : 'empty';
++    const declared = visible?.closest('[data-mg-boot-state]')?.getAttribute('data-mg-boot-state');
++    if (['loading', 'content', 'error'].includes(declared)) pageState = declared;
++    return { shellRendered, routeRendered, uiVisible: !!visible, pageState };
++}
++
++// Temporarily remove only the gate's inherited visibility during the synchronous
++// DOM inspection. #app stays opacity:0, inert and aria-hidden, and the style is
++// restored before returning. Page-specific visibility:hidden remains observable.
++export function inspectBootInterface(host = window, document = host.document) {
++    const style = document.getElementById('app')?.style;
++    if (!style) return readBootInterface(host, document);
++    const property = '--mg-boot-probe-visibility';
++    const value = style.getPropertyValue(property), priority = style.getPropertyPriority(property);
++    try {
++        style.setProperty(property, 'visible');
++        return readBootInterface(host, document);
++    } finally {
++        if (value) style.setProperty(property, value, priority);
++        else style.removeProperty(property);
++    }
++}
++
++export async function signalBootMounted({ nextTick, router, host = window, document = host.document }) {
++    const mountedAt = Math.round(host.performance.now()), state = navigationState(router);
++    await nextTick();
++    while (state.pending.size) { await new Promise(resolve => state.waiters.add(resolve)); await nextTick(); }
++    host.__mgBootAppReady = () => {
++        const ui = inspectBootInterface(host, document);
++        const unresolved = state.failures.filter(failure => failure.startedAt === state.commits);
++        const navigation = state.pending.size ? 'pending' : unresolved.some(failure => failure.kind === 'failed') ? 'failed' : unresolved.length ? 'pending' : 'ready';
++        host.__mgBootState = { ...ui, navigation };
++        host.__mgBootInitError = !!host.__mgBootRootSetupError || !ui.shellRendered || navigation === 'failed';
++        return !host.__mgBootInitError && navigation === 'ready' && ui.uiVisible;
++    };
++    host.__mgMounted = true;
++    host.__mgMountedAt = mountedAt;
++    if (host.__mgBootCheck) host.__mgBootCheck();
++    else if (host.__mgBootAppReady() && host.__mgBootFired) {
++        new host.Image().src = '/_l?t=boot_late&m=' + encodeURIComponent(
++            'mountedAt=' + mountedAt + ' vs=' + document.visibilityState +
++            (host.__mgWasHidden ? ' wasHidden=1' : '') +
++            (document.getElementById('mg-load-error') ? ' le=1' : ''));
++    }
++    if (state.stop && host.__mgBootReady) { state.stop(); state.stop = null; }
++}
+diff --git a/tests/boot-splash.unit.mjs b/tests/boot-splash.unit.mjs
+new file mode 100644
+index 0000000..0c1b9b8
+--- /dev/null
++++ b/tests/boot-splash.unit.mjs
+@@ -0,0 +1,414 @@
++// Autonomous bootstrap tests with installed Vue/Router; no network, browser or production access.
++import assert from 'node:assert/strict';
++import fs from 'node:fs';
++import vm from 'node:vm';
++import { createRenderer, h, onMounted, nextTick, watch } from 'vue';
++import { createRouter, createMemoryHistory, useRoute, RouterView } from 'vue-router';
++import { nonBlockingBootCss } from '../scripts/lib/boot-html.mjs';
++const template = fs.readFileSync(new URL('../template.html', import.meta.url), 'utf8');
++const boot = template.match(/<script id="mg-boot-script">([\s\S]*?)<\/script>/)[1];
++
++const tag = '<link rel="stylesheet" crossorigin href="/assets/main-hash.css">';
++const transformed = nonBlockingBootCss(tag);
++assert.match(transformed, /rel="preload" as="style" data-mg-critical="pending"/);
++assert.match(transformed, /crossorigin href="\/assets\/main-hash.css"/);
++assert.match(transformed, /this.rel='stylesheet'/);
++assert.equal(nonBlockingBootCss(transformed), transformed);
++assert.match(nonBlockingBootCss('<html data-mg-boot-css="dev">' + tag), /data-mg-boot-css="1"/);
++assert.match(nonBlockingBootCss('<html data-mg-boot-css="dev">'), /data-mg-boot-css="0"/);
++assert.equal(nonBlockingBootCss('<link rel="stylesheet" href="https://cdn.invalid/font.css">'), '<link rel="stylesheet" href="https://cdn.invalid/font.css">');
++assert.equal(nonBlockingBootCss('<!-- ' + tag + ' -->'), '<!-- ' + tag + ' -->');
++assert.equal(nonBlockingBootCss('<script>var x=' + JSON.stringify(tag) + '</script>'), '<script>var x=' + JSON.stringify(tag) + '</script>');
++assert.equal(nonBlockingBootCss('<link rel="preload" as="style" href="/fonts/font.css">'), '<link rel="preload" as="style" href="/fonts/font.css">');
++assert.ok(template.indexOf('id="mg-boot-loading"') < template.indexOf('<div id="app"'));
++assert.match(template, /#mg-boot-loading[^}]*font:16px\/1\.5 system-ui/);
++assert.match(template, /<noscript>\s*<style>#mg-boot-loading \{ display:none!important;/);
++
++class Element {
++    constructor(id) { this.id = id; this.attrs = {}; this.hidden = false; this.disabled = false; this.textContent = ''; this.childElementCount = 0; }
++    getAttribute(k) { return this.attrs[k] ?? null; }
++    setAttribute(k, v) { this.attrs[k] = v; }
++    removeAttribute(k) { delete this.attrs[k]; }
++    contains() { return false; }
++}
++function fixture(cssCount = 1) {
++    let t = 0, seq = 0, reloads = 0;
++    const timers = new Map(), events = new Map(), beacons = [];
++    const elements = Object.fromEntries(['app', 'mg-boot-loading', 'mg-boot-message', 'mg-boot-retry'].map(id => [id, new Element(id)]));
++    elements.app.attrs = { inert: '', 'aria-hidden': 'true', 'aria-busy': 'true' };
++    elements['mg-boot-retry'].hidden = true;
++    const classes = new Set(['mg-boot-pending']);
++    const links = Array.from({ length: cssCount }, (_, i) => {
++        const e = new Element('css' + i); e.attrs['data-mg-critical'] = 'pending';
++        e.href = 'https://example.invalid/assets/main-' + i + '.css'; e.rel = 'preload'; e.sheet = null; return e;
++    });
++    const document = {
++        visibilityState: 'visible', readyState: 'interactive',
++        documentElement: { getAttribute: () => document.expectedCss, classList: { remove: c => classes.delete(c) } },
++        expectedCss: String(cssCount), appliedCss: false,
++        getElementById: id => elements[id] || null,
++        querySelectorAll: () => links,
++        addEventListener: (type, fn) => { if (!events.has(type)) events.set(type, []); events.get(type).push(fn); },
++    };
++    function timer(fn, ms, interval = 0) { const id = ++seq; timers.set(id, { fn, at: t + ms, interval }); return id; }
++    const context = vm.createContext({
++        document, navigator: { onLine: true }, performance: { now: () => t, getEntriesByType: () => [] },
++        Date: { now: () => 1000000 + t }, Math, encodeURIComponent, URL, Promise,
++        getComputedStyle: () => ({ getPropertyValue: () => document.appliedCss ? 'ready-v2' : '' }),
++        addEventListener: (type, fn) => { if (!events.has(type)) events.set(type, []); events.get(type).push(fn); },
++        setTimeout: (fn, ms) => timer(fn, ms), clearTimeout: id => timers.delete(id),
++        setInterval: (fn, ms) => timer(fn, ms, ms), clearInterval: id => timers.delete(id),
++        requestAnimationFrame: fn => timer(fn, 16), cancelAnimationFrame: id => timers.delete(id),
++        location: { href: 'https://example.invalid/', origin: 'https://example.invalid', reload: () => reloads++ },
++        Image: class { set src(url) { const q = new URL(url, 'https://example.invalid').searchParams; beacons.push({ type: q.get('t'), message: q.get('m') }); } },
++    });
++    context.window = context;
++    vm.runInContext(boot, context);
++    function advance(ms) {
++        const end = t + ms;
++        while (true) {
++            let next;
++            for (const [id, task] of timers) if (task.at <= end && (!next || task.at < next[1].at)) next = [id, task];
++            if (!next) break;
++            const [id, task] = next; t = task.at;
++            if (task.interval) task.at += task.interval; else timers.delete(id);
++            task.fn();
++        }
++        t = end;
++    }
++    function css(index = 0, state = 'loaded', sheet = true) {
++        links[index].attrs['data-mg-critical'] = state;
++        links[index].rel = state === 'loaded' ? 'stylesheet' : 'preload';
++        links[index].sheet = state === 'loaded' && sheet ? {} : null;
++        document.appliedCss = links.every(link => link.sheet);
++        context.__mgBootCheck();
++    }
++    function mount(failed = false) {
++        elements.app.childElementCount = failed ? 0 : 1;
++        context.__mgBootInitError = failed; context.__mgMounted = true; context.__mgMountedAt = t;
++        context.__mgBootAppReady = () => !failed;
++        context.__mgBootCheck();
++    }
++    return { context, document, events, elements, links, classes, beacons, advance, css, mount, get reloads() { return reloads; },
++        hidden(value) { document.visibilityState = value ? 'hidden' : 'visible'; for (const fn of events.get('visibilitychange') || []) fn(); } };
++}
++function ready(f) {
++    assert.equal(f.context.__mgBootReady, true);
++    assert.equal(f.elements['mg-boot-loading'].hidden, true);
++    assert.equal(f.classes.has('mg-boot-pending'), false);
++    assert.equal(f.elements.app.getAttribute('aria-hidden'), null);
++    assert.equal(f.elements.app.getAttribute('inert'), null);
++}
++function gated(f) { assert.equal(f.classes.has('mg-boot-pending'), true); assert.equal(f.context.__mgBootReady, false); }
++function counts(f, timeout, late) {
++    assert.equal(f.beacons.filter(x => x.type === 'boot_timeout').length, timeout);
++    assert.equal(f.beacons.filter(x => x.type === 'boot_late').length, late);
++}
++{
++    const f = fixture(); f.advance(200); f.css(); f.mount(); gated(f); f.advance(16); gated(f); f.advance(16); ready(f);
++    f.advance(60000); counts(f, 0, 0);
++}
++for (const delay of [30000, 60000]) {
++    const f = fixture(); f.advance(100); f.mount(); f.advance(delay - 100); gated(f);
++    assert.equal(f.elements['mg-boot-retry'].hidden, false); counts(f, 1, 0); assert.equal(f.reloads, 0);
++    f.css(); f.advance(32); ready(f); counts(f, 1, 1);
++    assert.match(f.beacons.find(x => x.type === 'boot_late').message, /mountedAt=100 bootReadyAt=/);
++    f.context.__mgBootCheck(); f.advance(60000); counts(f, 1, 1);
++}
++{
++    const f = fixture(); f.mount(); f.css(0, 'failed'); gated(f);
++    assert.match(f.elements['mg-boot-message'].textContent, /оформление/);
++    f.advance(60000); counts(f, 1, 0); assert.equal(f.reloads, 0);
++    f.css(); f.advance(32); ready(f); counts(f, 1, 1);
++}
++{
++    const f = fixture(); f.css(); f.advance(30000); gated(f); counts(f, 1, 0);
++    f.mount(); f.advance(32); ready(f); counts(f, 1, 1);
++}
++{
++    const f = fixture(); f.css(); f.advance(90000); gated(f); counts(f, 1, 0); assert.equal(f.reloads, 0);
++    await f.context.__mgBootRetry(); await f.context.__mgBootRetry(); assert.equal(f.reloads, 1); assert.equal(f.elements['mg-boot-retry'].disabled, true);
++    const recovered = fixture(); recovered.css(); recovered.mount(); recovered.advance(32); ready(recovered);
++}
++{
++    const f = fixture(); f.css(); f.mount(true); f.advance(60000); gated(f);
++    assert.match(f.elements['mg-boot-message'].textContent, /запустить приложение/); counts(f, 1, 0);
++}
++{
++    const f = fixture(); f.css(); f.links[0].sheet = { cssRules: [] }; f.document.appliedCss = false; f.mount(); f.advance(16000); gated(f);
++    counts(f, 1, 0);
++}
++{
++    const f = fixture(2); f.mount(); f.css(0); f.css(1, 'loaded', false); f.advance(16000); gated(f); counts(f, 1, 0);
++    f.css(1); f.advance(32); ready(f); counts(f, 1, 1);
++}
++{
++    const f = fixture(); f.css(); f.advance(5000); f.hidden(true); f.advance(10000); counts(f, 0, 0);
++    f.advance(15000); counts(f, 1, 0); f.hidden(false); f.mount(); f.advance(32); ready(f); counts(f, 1, 1);
++    assert.match(f.beacons[0].message, /wasHidden=1/); assert.match(f.beacons[0].message, /rearmed=1/);
++}
++{
++    const f = fixture(); f.elements['mg-load-error'] = new Element('mg-load-error'); f.context.__mgBootCheck();
++    assert.equal(f.elements['mg-boot-loading'].hidden, true); gated(f);
++    f.advance(16000); f.mount(); f.css(); f.advance(32); ready(f); counts(f, 1, 1);
++    assert.ok(f.elements['mg-load-error']); assert.match(f.beacons[1].message, /le=1/);
++}
++{
++    const f = fixture(); f.context.__mgLegacy = true; f.context.__mgBootCheck();
++    assert.equal(f.elements['mg-boot-loading'].hidden, true); assert.equal(f.classes.has('mg-boot-pending'), false);
++}
++
++// Missing all production CSS links: explicit reload, not another ineffective CSS check.
++for (const expected of ['0', '1']) {
++    const f = fixture(0); f.document.expectedCss = expected; f.mount(); f.advance(60000);
++    gated(f); assert.equal(f.reloads, 0); assert.equal(f.elements['mg-boot-retry'].hidden, false);
++    await f.context.__mgBootRetry(); await f.context.__mgBootRetry();
++    assert.equal(f.reloads, 1); assert.equal(f.elements['mg-boot-retry'].disabled, true);
++    f.advance(60000); assert.equal(f.reloads, 1, 'No automatic reload loop');
++    const fresh = fixture(0); fresh.mount(); fresh.advance(60000); assert.equal(fresh.reloads, 0);
++}
++{
++    const f = fixture(0); f.mount();
++    f.context.location.reload = () => { throw Error('navigation denied'); };
++    await f.context.__mgBootRetry(); assert.equal(f.elements['mg-boot-retry'].disabled, false);
++}
++// Production manifest and computed marker: loading != applying; no CSSOM reads.
++{
++    const f = fixture(0); f.mount(); f.document.appliedCss = true; f.advance(16000); gated(f);
++    f.document.expectedCss = '1'; f.context.__mgBootCheck(); f.advance(300); gated(f);
++    f.document.expectedCss = 'dev'; f.context.__mgBootCheck(); f.advance(32); ready(f);
++}
++{
++    const f = fixture(); f.css(); f.mount();
++    Object.defineProperty(f.links[0].sheet, 'cssRules', { get() { throw Error('CSSOM denied'); } });
++    f.advance(32); ready(f);
++}
++{
++    const f = fixture(); f.css(); f.document.appliedCss = false; f.mount(); f.advance(16000); gated(f);
++    f.document.appliedCss = true; f.context.__mgBootCheck(); f.advance(32); ready(f); counts(f, 1, 1);
++}
++for (const mode of ['stalled-raf', 'return-visible', 'pageshow']) {
++    const f = fixture(); f.context.requestAnimationFrame = () => 99;
++    f.css(); f.mount();
++    if (mode === 'return-visible') { f.hidden(true); f.advance(1000); gated(f); f.hidden(false); }
++    if (mode === 'pageshow') for (const fn of f.events.get('pageshow')) fn({ persisted: true });
++    f.advance(300); ready(f); counts(f, 0, 0);
++}
++// Explicit retry: exact Cache Request keys only, original-URL late put cannot serve nonce URL.
++for (const cacheMode of ['late-put', 'denied', 'stalled']) {
++    const f = fixture(); f.css(); f.document.appliedCss = false; f.mount(); f.advance(16000); gated(f);
++    const original = f.links[0].href, other = 'https://example.invalid/assets/other.css';
++    const cache = new Map([[original, ''], [other, 'keep']]);
++    const deleted = [];
++    f.context.caches = {
++        keys: () => cacheMode === 'denied' ? Promise.reject(Error('denied')) :
++            cacheMode === 'stalled' ? new Promise(() => {}) : Promise.resolve(['mg-shell']),
++        open: async () => ({ keys: async () => [...cache.keys()].map(url => ({ url })),
++            delete: async key => { deleted.push(key.url); return cache.delete(key.url); } }),
++    };
++    let network = 0;
++    const old = f.links[0];
++    old.cloneNode = () => { const fresh = new Element('fresh'); fresh.attrs = { ...old.attrs }; return fresh; };
++    old.parentNode = { replaceChild(fresh, previous) {
++        assert.equal(previous, old);
++        f.links[0] = fresh;
++        // Simulate a delayed put from the original SW request AFTER deletion.
++        cache.set(original, '');
++        assert.equal(cache.has(fresh.href), false, 'Retry must not hit the poisoned cache key');
++        assert.match(fresh.href, /__mg_boot_retry=/);
++        assert.equal(new URL(fresh.href).pathname, new URL(original).pathname);
++        network++;
++    } };
++    const retry = f.context.__mgBootRetry();
++    await f.context.__mgBootRetry(); // concurrent explicit call cannot launch a second operation
++    for (let i = 0; i < 20; i++) await Promise.resolve();
++    f.advance(1600); await retry;
++    assert.equal(network, 1); assert.equal(f.reloads, 0); assert.equal(cache.get(other), 'keep');
++    if (cacheMode === 'late-put') assert.deepEqual(deleted, [original]);
++    f.links[0].sheet = {}; f.document.appliedCss = true; f.links[0].onload();
++    f.advance(32); ready(f); counts(f, 1, 1);
++}
++// Real Vue lifecycle + real memory router; no app plugins, network or production API.
++class VNodeElement {
++    constructor(tag) { this.tag = tag; this.children = []; this.props = {}; this.parent = null; }
++    get hidden() { return !!this.props.hidden; }
++    get nodeType() { return this.tag === '#text' ? 3 : this.tag === '#comment' ? 8 : 1; }
++    get tagName() { return this.tag.toUpperCase(); }
++    get parentNode() { return this.parent; }
++    get parentElement() { return this.parent?.nodeType === 1 ? this.parent : null; }
++    get childNodes() { return this.children; }
++    get nextSibling() { return this.parent?.children[this.parent.children.indexOf(this) + 1] || null; }
++    get isConnected() { return !!this.parent; }
++    get textContent() { return this.text || ''; }
++    getAttribute(key) { return this.props[key] ?? null; }
++    hasAttribute(key) { return key in this.props; }
++    closest(selector) { return this.hasAttribute('data-mg-boot-state') ? this : this.parent?.closest(selector); }
++    querySelector(selector) {
++        const key = selector.slice(1, -1);
++        for (const child of this.children) {
++            if (key in child.props) return child;
++            const found = child.querySelector(selector); if (found) return found;
++        }
++        return null;
++    }
++    getClientRects() { return this.hidden || this.tag === '#comment' || this.tag === '#text' ? [] : [{ width: 100, height: 40 }]; }
++}
++const renderer = createRenderer({
++    createElement: tag => new VNodeElement(tag), createText: text => { const node = new VNodeElement('#text'); node.text = text; return node; },
++    createComment: () => new VNodeElement('#comment'),
++    patchProp: (el, key, prev, next) => { el.props[key] = next; },
++    insert: (el, parent, anchor) => { el.parent = parent; const i = parent.children.indexOf(anchor); parent.children.splice(i < 0 ? parent.children.length : i, 0, el); },
++    remove: el => { const i = el.parent?.children.indexOf(el); if (i >= 0) el.parent.children.splice(i, 1); },
++    setText: (node, text) => { node.text = text; }, setElementText: (node, text) => { const child = new VNodeElement('#text'); child.text = text; child.parent = node; node.children = [child]; }, parentNode: el => el.parent,
++    nextSibling: el => el.parent?.children[el.parent.children.indexOf(el) + 1] || null,
++});
++const main = fs.readFileSync(new URL('../src/_front/main.js', import.meta.url), 'utf8');
++const appSource = fs.readFileSync(new URL('../src/_front/App.vue', import.meta.url), 'utf8');
++assert.match(appSource, /<span hidden data-mg-boot-shell><\/span>/);
++assert.match(appSource, /:root \{ --mg-boot-css: ready-v2; \}/);
++const redirectCode = appSource.match(/function redirectGuestFromHome\(path\) \{[\s\S]*?\n        \}/)[0];
++const handlerCode = main.match(/app.config.errorHandler = ([\s\S]*?);\n\nconst init/)[1];
++for (const scenario of ['child-mounted-error', 'root-render-error', 'root-setup-error', 'guest-redirect']) {
++    const f = fixture(); f.css();
++    const { signalBootMounted, trackBootNavigation } = await import('../src/_front/chrome/bootReadiness.js?test=' + scenario);
++    globalThis.window = f.context;
++    const root = new VNodeElement('root'), logged = [];
++    const doc = { ...f.document, createRange: () => ({ selectNodeContents() {}, getClientRects: () => [{ width: 100, height: 20 }] }), getElementById: id => id === 'app' ? root : f.elements[id] };
++    const host = { ...f.context, document: doc, getComputedStyle: () => ({ display: 'block', opacity: '1', visibility: 'visible' }) };
++    const Child = { setup() { onMounted(() => { if (scenario === 'child-mounted-error') throw Error('recoverable child hook'); }); return () => h('main', 'Page loader'); } };
++    let releaseRoute;
++    const router = createRouter({ history: createMemoryHistory(), routes: [
++        { path: '/', component: Child }, { path: '/all_course', component: Child, beforeEnter: () => new Promise(resolve => { releaseRoute = resolve; }) },
++    ] });
++    await router.push('/');
++    const redirect = vm.runInNewContext('(' + redirectCode + ')', {
++        normPath: p => p, isLikelyLoggedIn: () => false, router, trackBootNavigation,
++    });
++    const Root = {
++        setup() { if (scenario === 'root-setup-error') throw Error('root setup failure'); if (scenario === 'guest-redirect') { const route = useRoute(); watch(() => route.path, redirect, { immediate: true }); } },
++        render() {
++            if (scenario === 'root-render-error') throw Error('root render failure');
++            return [h('span', { hidden: true, 'data-mg-boot-shell': '' }), h('span', { hidden: true, 'data-mg-boot-route-start': '' }), h(RouterView), h('span', { hidden: true, 'data-mg-boot-route-end': '' })];
++        },
++    };
++    const app = renderer.createApp(Root); app.use(router);
++    app.config.errorHandler = vm.runInNewContext('(' + handlerCode + ')', {
++        window: host, location: { pathname: '/' }, logException: type => logged.push(type), console: { error() {} },
++    });
++    app.mount(root);
++    let settled = false;
++    const completion = signalBootMounted({ nextTick, router, host, document: doc }).then(() => { settled = true; });
++    await nextTick(); await Promise.resolve();
++    if (scenario === 'guest-redirect') {
++        assert.equal(settled, false); assert.notEqual(host.__mgMounted, true);
++        for (let i = 0; i < 30 && !releaseRoute; i++) await Promise.resolve();
++        assert.ok(releaseRoute); releaseRoute();
++    }
++    await completion;
++    assert.equal(host.__mgBootAppReady(), !['root-render-error', 'root-setup-error'].includes(scenario));
++    if (scenario === 'guest-redirect') assert.equal(router.currentRoute.value.path, '/all_course');
++    else assert.deepEqual(logged, ['vue_error']);
++    if (scenario === 'child-mounted-error') assert.equal(host.__mgBootInitError, false);
++    if (scenario.startsWith('root-')) assert.equal(host.__mgBootInitError, true);
++    app.unmount(); delete globalThis.window;
++}
++
++// Explicit route DOM contract: chrome/sentinel/empty boxes alone never prove a page.
++const readiness = await import('../src/_front/chrome/bootReadiness.js?v3-contract');
++function domContract() {
++    const root = new VNodeElement('div');
++    const append = (parent, child) => { child.parent = parent; parent.children.push(child); return child; };
++    const element = (tag, props = {}) => { const node = new VNodeElement(tag); node.props = props; return node; };
++    const text = value => { const node = element('#text'); node.text = value; return node; };
++    append(root, element('span', { hidden: true, 'data-mg-boot-shell': '' }));
++    const chrome = append(root, element('header')); append(chrome, text('Chrome is insufficient'));
++    const start = append(root, element('span', { hidden: true, 'data-mg-boot-route-start': '' }));
++    const end = append(root, element('span', { hidden: true, 'data-mg-boot-route-end': '' }));
++    const add = node => { node.parent = root; root.children.splice(root.children.indexOf(end), 0, node); return node; };
++    const document = { getElementById: () => root, visibilityState: 'visible',
++        createRange: () => ({ selectNodeContents() {}, getClientRects: () => [{ width: 120, height: 20 }] }) };
++    const host = { document, performance: { now: () => 10 }, getComputedStyle: node => ({ display: 'block', opacity: '1', visibility: 'visible', ...node.props.style }), __mgBootCheck() {} };
++    return { root, start, end, add, append, element, text, host, document, inspect: () => readiness.inspectBootInterface(host, document) };
++}
++{
++    const d = domContract(); assert.equal(d.inspect().shellRendered, true); assert.equal(d.inspect().uiVisible, false);
++    d.add(d.element('div')); assert.equal(d.inspect().uiVisible, false, 'Empty positive-size wrapper must not pass');
++    const contents = d.add(d.element('div', { style: { display: 'contents' } }));
++    contents.getClientRects = () => [];
++    const nested = d.append(contents, d.element('div', { style: { display: 'contents' }, 'data-mg-boot-state': 'loading' }));
++    nested.getClientRects = () => []; d.append(nested, d.text('Page is loading'));
++    assert.equal(d.inspect().uiVisible, true); assert.equal(d.inspect().pageState, 'loading');
++    nested.props.style.opacity = '0'; assert.equal(d.inspect().uiVisible, true, 'Non-box wrapper opacity does not hide its children');
++    nested.props.style.display = 'block'; assert.equal(d.inspect().uiVisible, false);
++    nested.props.style.opacity = '1'; assert.equal(d.inspect().uiVisible, true);
++}
++{
++    const d = domContract(); d.add(d.text('Top-level Fragment text')); assert.equal(d.inspect().uiVisible, true);
++}
++{
++    const d = domContract(); const body = d.element('body'), target = d.append(body, d.element('section'));
++    d.append(target, d.text('Explicit Teleport surface'));
++    assert.equal(d.inspect().uiVisible, false, 'Unregistered body content must not pass');
++    const dispose = readiness.registerBootSurface(target, d.root); assert.equal(d.inspect().uiVisible, true);
++    dispose(); assert.equal(d.inspect().uiVisible, false);
++}
++// Actual Vue Router promises: abort, duplicate, redirect, reject, supersession and recovery.
++globalThis.window = { __mgBootReady: false };
++for (const scenario of ['success', 'duplicated', 'aborted', 'rejected', 'redirected', 'cancelled-success', 'cancelled-abort', 'cancelled-hangs', 'stale-abort', 'stale-reject']) {
++    const d = domContract(); const content = d.add(d.element('main')); d.append(content, d.text('Usable route UI'));
++    let release, rejectOriginal, mode = scenario;
++    const router = createRouter({ history: createMemoryHistory(), routes: [
++        { path: '/', component: {} },
++        { path: '/all_course', component: {}, beforeEnter: () => {
++            if (mode === 'aborted') return false;
++            if (mode === 'rejected') throw Error('initial guard rejected');
++            if (mode === 'redirected') return '/recovered';
++            if (mode.startsWith('cancelled') || mode.startsWith('stale')) return new Promise((resolve, reject) => { release = resolve; rejectOriginal = reject; });
++        } },
++        { path: '/recovered', component: {}, beforeEnter: () => mode === 'cancelled-abort' ? false : undefined },
++    ] });
++    router.onError(() => {}); await router.push('/');
++    const original = router.replace(scenario === 'duplicated' ? '/' : '/all_course');
++    readiness.trackBootNavigation(original, router);
++    if (mode.startsWith('cancelled') || mode.startsWith('stale')) {
++        for (let i = 0; i < 50 && !release; i++) await Promise.resolve();
++        assert.ok(release); await router.push('/recovered');
++        if (mode === 'stale-reject') rejectOriginal(Error('late failure from superseded guard'));
++        else if (mode !== 'cancelled-hangs') release(mode === 'stale-abort' ? false : undefined);
++    }
++    if (mode !== 'cancelled-hangs') await original.catch(() => {});
++    await Promise.race([
++        readiness.signalBootMounted({ nextTick, router, host: d.host, document: d.document }),
++        new Promise((_, reject) => { const timer = setTimeout(() => reject(Error('stale guard still blocks boot: ' + scenario)), 1000); timer.unref(); }),
++    ]);
++    const failed = ['aborted', 'rejected', 'cancelled-abort'].includes(scenario);
++    assert.equal(d.host.__mgBootAppReady(), !failed, scenario);
++    if (failed) {
++        assert.equal(d.host.__mgBootState.navigation, scenario === 'cancelled-abort' ? 'pending' : 'failed');
++        mode = 'success'; await router.push('/recovered'); await nextTick();
++        assert.equal(d.host.__mgBootAppReady(), true, scenario + ' must recover after a real successful navigation');
++        assert.equal(d.host.__mgBootInitError, false);
++    }
++    if (scenario === 'cancelled-success') assert.equal(router.currentRoute.value.path, '/recovered');
++}
++// A sync route watcher starts B before afterEach(A): A must not prematurely clear B.
++{
++    const d = domContract(); const content = d.add(d.element('main')); d.append(content, d.text('Visible loader'));
++    let release, successor;
++    const router = createRouter({ history: createMemoryHistory(), routes: [
++        { path: '/', component: {} }, { path: '/all_course', component: {} },
++        { path: '/recovered', component: {}, beforeEnter: () => new Promise(resolve => { release = resolve; }) },
++    ] });
++    await router.push('/');
++    const stop = watch(router.currentRoute, route => {
++        if (route.path === '/all_course') { successor = router.push('/recovered'); readiness.trackBootNavigation(successor, router); }
++    }, { flush: 'sync' });
++    const original = router.push('/all_course'); readiness.trackBootNavigation(original, router); await original;
++    let completed = false;
++    const completion = readiness.signalBootMounted({ nextTick, router, host: d.host, document: d.document }).then(() => { completed = true; });
++    for (let i = 0; i < 50 && !release; i++) await Promise.resolve();
++    assert.ok(release); assert.equal(completed, false); release(); await successor; await completion;
++    assert.equal(d.host.__mgBootAppReady(), true); stop();
++}
++delete globalThis.window;
++console.log('PASS boot splash v4 regressions: v2 regression cases + route boundaries, nested/display:contents/Fragment content, explicit Teleport, empty UI rejection, loading state, Router success/duplicate/abort/reject/redirect/cancel/recovery.');
+diff --git a/tests/boot-splash.browser.mjs b/tests/boot-splash.browser.mjs
+new file mode 100644
+index 0000000..72648be
+--- /dev/null
++++ b/tests/boot-splash.browser.mjs
+@@ -0,0 +1,301 @@
++// Isolated Chrome/CDP fixtures using installed runtimes; no downloads or production API.
++import fs from 'node:fs';
++import path from 'node:path';
++import os from 'node:os';
++import {fileURLToPath} from 'node:url';
++import http from 'node:http';
++import {spawn} from 'node:child_process';
++import {createRequire} from 'node:module';
++import assert from 'node:assert/strict';
++import {legacyFixture} from './boot-legacy.fixture.mjs';
++import {nonBlockingBootCss} from '../scripts/lib/boot-html.mjs';
++const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
++const require=createRequire(path.join(root,'package.json'));
++const handlebars=require('handlebars');
++const {parse,compileTemplate,compileStyle}=require('@vue/compiler-sfc');
++const work=fs.mkdtempSync(path.join(os.tmpdir(),'meetguru-splash-v3-'));
++const template=fs.readFileSync(path.join(root,'template.html'),'utf8');
++const main=fs.readFileSync(path.join(root,'src/_front/main.js'),'utf8');
++const handler=main.match(/app.config.errorHandler = ([\s\S]*?);\n\nconst init/)[1];
++const vue=fs.readFileSync(path.join(root,'node_modules/vue/dist/vue.runtime.esm-browser.js'));
++const readiness=fs.readFileSync(path.join(root,'src/_front/chrome/bootReadiness.js'),'utf8').replace("from 'vue-router'","from '/router.js'");
++const sw=fs.readFileSync(path.join(root,'public/serviceworker.js'));
++const appSource=fs.readFileSync(path.join(root,'src/_front/App.vue'),'utf8');
++const cssMarker=appSource.match(/:root \{ --mg-boot-css: ready-v2; \}/)[0];
++const redirect=appSource.match(/function redirectGuestFromHome\(path\) \{[\s\S]*?\n        \}/)[0];
++const routerSource=fs.readFileSync(path.join(root,'node_modules/vue-router/dist/vue-router.esm-browser.js'),'utf8')
++ .replace('from "vue"','from "/vue.js"').replace('import { setupDevtoolsPlugin } from "@vue/devtools-api";', 'const setupDevtoolsPlugin=()=>{};');
++// Actual page templates/styles, fixture state only: scripts/API/auth are never executed.
++const pageFixtures=new Map();
++for(const name of ['HomePage','AllCoursesPage','CoursePage','LoginPage','RegistrationPage','ProfileEditPage','MyCoursePage','CoursesManagePage','StreamsPage','StreamCallPage','DashboardPage','SuperadminPage']){
++ const filename=path.join(root,'src/_front/views',name+'.vue'),{descriptor}=parse(fs.readFileSync(filename,'utf8'));
++ const id='data-v-fixture-'+name.toLowerCase();
++ const rendered=compileTemplate({source:descriptor.template.content,filename,id,scoped:descriptor.styles.some(s=>s.scoped)});
++ assert.equal(rendered.errors.length,0,name+' template compilation');
++ const styles=descriptor.styles.map(style=>{const result=compileStyle({source:style.content,filename,id,scoped:style.scoped,preprocessLang:style.lang});assert.equal(result.errors.length,0,name+' CSS compilation');return result.code;}).join('\n');
++ const methods=[...new Set([...descriptor.template.content.matchAll(/\b([A-Za-z_$][\w$]*)\s*\(/g)].map(m=>m[1]))];
++ const arrays=[...new Set([...descriptor.template.content.matchAll(/\b([A-Za-z_$][\w$]*)\.length/g)].map(m=>m[1]))];
++ pageFixtures.set(name,{arrays,module:rendered.code.replaceAll('from "vue"','from "/vue.js"'),styles,id,methods});
++}
++const legacy=legacyFixture(root);
++const cases=new Map();
++const server=http.createServer((req,res)=>{
++ const url=new URL(req.url,'http://localhost');const id=url.searchParams.get('case');const c=cases.get(id);
++ if(url.pathname==='/_l'){
++  const ref=new URL(req.headers.referer||'http://localhost');const item=cases.get(ref.searchParams.get('case'));
++  if(item)item.beacons.push(url.searchParams.get('t'));
++  res.writeHead(204).end();return;
++ }
++ if(url.pathname==='/readiness.js'){res.writeHead(200,{'Content-Type':'application/javascript'}).end(readiness);return;}
++ if(url.pathname==='/router.js'){res.writeHead(200,{'Content-Type':'application/javascript'}).end(routerSource);return;}
++ if(url.pathname==='/serviceworker.js'){res.writeHead(200,{'Content-Type':'application/javascript','Cache-Control':'no-store'}).end(sw);return;}
++ if(url.pathname==='/vue.js'){res.writeHead(200,{'Content-Type':'application/javascript'}).end(vue);return;}
++ if(legacy.modules.has(url.pathname)){res.writeHead(200,{'Content-Type':'application/javascript'}).end(legacy.modules.get(url.pathname));return;}
++ if(!c){res.writeHead(204).end();return;}
++ if(url.pathname==='/'||url.pathname===legacy.route){
++  c.loads++;
++  let html=handlebars.compile(template)({lang:'ru',title:'Local splash test',baseTag:{href:'/'},cacheVersion:0,scripts:{head:'',body:''}});
++  html=html.replace(/<link\b[^>]*>/g,tag=>/https?:\/\//.test(tag)||/rel="(?:manifest|icon|apple-touch-icon)"/.test(tag)?'':tag);
++  html=html.replace('/src/_front/main.js','/entry.js?case='+id);
++  html=html.replace('</head>','<link rel="stylesheet" href="/assets/main-fixture.css?case='+id+'"></head>');
++  if(c.stalledRaf)html=html.replace('<script id="mg-boot-script">','<script>window.requestAnimationFrame=()=>99;</script><script id="mg-boot-script">');
++  html=nonBlockingBootCss(html);
++  if(c.missingCss==='always'||(c.missingCss==='once'&&c.loads===1))html=html.replace(/<link\b[^>]*data-mg-critical[^>]*>/g,'');
++  res.writeHead(200,{'Content-Type':'text/html','Cache-Control':'no-store'}).end(html);return;
++ }
++ if(url.pathname==='/assets/main-fixture.css'){
++  c.cssRequests++;
++  const send=()=>res.writeHead(200,{'Content-Type':'text/css','Cache-Control':'no-store'}).end(cssMarker+'.proof{color:rgb(12,34,56);padding:12px}'+(c.page?pageFixtures.get(c.page).styles:'')+(c.legacy?legacy.css:''));
++  if(c.css==='hold'){c.releaseCss=send;return;}
++  if(c.css==='empty'){res.writeHead(200,{'Content-Type':'text/css'}).end('');return;}
++  if(c.css==='fail'){res.writeHead(404,{'Content-Type':'text/plain'}).end('missing');return;}
++  send();return;
++ }
++ if(url.pathname==='/page-template.js'){
++  res.writeHead(200,{'Content-Type':'application/javascript'}).end(pageFixtures.get(c.page).module);return;
++ }
++ if(url.pathname==='/fixture-api'){c.apiPending=true;return;}
++ if(url.pathname==='/entry.js'){
++  const send=()=>{
++   const code=`import {createApp,h,onMounted,onBeforeUnmount,nextTick,watch,Teleport,reactive,computed,provide} from '/vue.js';
++    import {signalBootMounted,trackBootNavigation,registerBootSurface} from '/readiness.js';
++    ${c.legacy?legacy.imports:''}
++    ${c.page?"import {render as pageRender} from '/page-template.js?case="+id+"';":''}
++    import {createRouter,createMemoryHistory,useRoute,RouterView} from '/router.js';
++    const logException=(type,error)=>{window.fixtureLastError=String(error);window.fixtureErrors=(window.fixtureErrors||0)+1;};
++    ${c.js==='init-fail'?"throw new Error('fixture init failure');":''}
++    ${c.legacy?legacy.initialize(c.legacy):''}
++    window.fixtureSvgClicks=0;
++    function svgControl(register){
++     const mode=${JSON.stringify(c.svg||'')};
++     const props={viewBox:'0 0 24 24',width:mode==='zero'?0:32,height:mode==='zero'?0:32};
++     if(mode==='display-none')props.style='display:none';
++     if(mode==='decorative-link')props.role='presentation';
++     const shape=mode==='empty'?null:h(mode==='stroke'?'line':'path',mode==='stroke'?{x1:2,y1:12,x2:22,y2:12,stroke:'#204060','stroke-width':2,fill:'none'}:{d:mode==='empty-path'?'':'M4 4h16v16H4z',fill:mode==='no-paint'?'none':mode==='transparent'?'transparent':'#204060',style:mode==='hidden-shape'?'display:none':''});
++     const svg=h('svg',props,mode==='defs-only'?h('defs',[shape]):shape);
++     if(mode==='decorative')return svg;
++     const link=h('a',{id:'svg-action',href:'#local-action',style:'display:inline-flex;width:32px;height:32px','aria-label':'Local icon',
++       'aria-disabled':mode==='disabled'?'true':undefined,ref:register,onClick:event=>{event.preventDefault();window.fixtureSvgClicks++;}},[svg]);
++     return mode==='parent-hidden'?h('div',{style:'display:none'},[link]):mode==='parent-opacity'?h('div',{style:'opacity:0'},[link]):link;
++    }
++    const Child=${c.svg?`{setup(){let dispose;onBeforeUnmount(()=>{if(dispose)dispose();});return ()=>${c.svg==='outside-boundary'?"null":['teleport','unregistered-teleport'].includes(c.svg)?"h(Teleport,{to:'body'},[svgControl("+(c.svg==='teleport'?"element=>{if(element&&!dispose)dispose=registerBootSurface(element);}":'undefined')+")])":"svgControl()"};}}`:c.legacy?'LegacyPage':c.page?`{__scopeId:${JSON.stringify(pageFixtures.get(c.page).id)},data(){const methods={};for(const name of ${JSON.stringify(pageFixtures.get(c.page).methods)})methods[name]=()=>'';for(const name of ${JSON.stringify(pageFixtures.get(c.page).arrays)})methods[name]=[];return {...methods,loading:true,ready:${['LoginPage','RegistrationPage'].includes(c.page)?'true':'false'},course:null,author:null,courses:[],upcoming:[],recent:null,name:'',categories:[],filtered:[],selectedTags:[],streams:[],activeStreamId:null,detailLoading:true,phase:'connecting',screenShares:[],cameraEntries:[],uid:null,showComposer:false,showEdit:false,roleOptions:[]};},render:pageRender}`:
++    `{setup(){let cleanup;onMounted(()=>{${c.js==='child-error'?"throw new Error('fixture recoverable hook');":''}});onBeforeUnmount(()=>{if(cleanup)cleanup();});return ()=>${c.layout==='empty'?"h('div',{style:'height:200px'})":
++      c.layout==='hidden'?"h('main',{id:'proof',class:'proof',style:'visibility:hidden'},'Hidden until restored')":
++      c.layout==='contents'?"h('div',{style:'display:contents;opacity:0'},[h('div',{style:'display:contents'},h('main',{id:'proof',class:'proof'},'Nested layout'))])":
++      c.layout==='fragment'?"[h('main',{id:'proof',class:'proof'},'Fragment layout'),h('aside','Aside')]":
++      c.layout==='teleport'?"h(Teleport,{to:'body'},h('main',{id:'proof',class:'proof',ref:el=>{if(el&&!cleanup)cleanup=registerBootSurface(el);}},'Teleport interface'))":
++      "h('main',{id:'proof',class:'proof'},'Приложение готово')"};}}`};
++    ${c.apiHold?"fetch('/fixture-api?case="+id+"').catch(()=>{});":''}
++    const router=createRouter({history:createMemoryHistory(),routes:[{path:'/',component:Child},{path:${JSON.stringify(legacy.route)},component:Child},{path:'/recovered',component:Child},{path:'/all_course',component:Child,beforeEnter:()=>new Promise(resolve=>{window.releaseRoute=resolve;})}]});
++    window.fixtureRouter=router;await router.push(${JSON.stringify(c.legacy?legacy.route:'/')});
++    const normPath=p=>p,isLikelyLoggedIn=()=>false;
++    ${redirect}
++    const app=createApp({setup(){${c.legacy?"provide('wwFrontState',{});":''}${c.guest?"const route=useRoute();watch(()=>route.path,redirectGuestFromHome,{immediate:true});":''}},render(){${c.js==='render-fail'?"throw new Error('fixture render failure');":"return [h('span',{hidden:true,'data-mg-boot-shell':''}),"+(c.layout==='empty'?"h('header','Chrome only'),":c.svg==='outside-boundary'?"h('header',[svgControl()]),":'')+"h('span',{hidden:true,'data-mg-boot-route-start':''}),h(RouterView),h('span',{hidden:true,'data-mg-boot-route-end':''})];"}}});
++    app.use(router);${c.legacy?legacy.register:''}app.config.errorHandler=${handler};
++    app.mount('#app');await signalBootMounted({nextTick,router});window.fixturePath=router.currentRoute.value.path;`;
++   res.writeHead(200,{'Content-Type':'application/javascript','Cache-Control':'no-store'}).end(code);
++  };
++  if(c.js==='hold'){c.releaseJs=send;return;}
++  if(c.js==='fail'){res.writeHead(404,{'Content-Type':'text/plain'}).end('missing');return;}
++  send();return;
++ }
++ res.writeHead(204).end();
++});
++await new Promise(r=>server.listen(0,'127.0.0.1',r));const port=server.address().port;
++const chrome=spawn(process.env.CHROME_BIN||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',[
++ '--headless=new','--disable-gpu','--no-first-run','--no-default-browser-check','--disable-background-networking','--disable-component-update','--disable-sync','--metrics-recording-only',
++ '--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost, EXCLUDE 127.0.0.1',
++ '--remote-debugging-port=0','--user-data-dir='+work+'/chrome-profile','about:blank'
++],{stdio:['ignore','ignore','pipe']});
++let ws;
++try{
++ const address=await new Promise((resolve,reject)=>{
++  let text='';const timeout=setTimeout(()=>reject(Error('Chrome startup timeout')),20000);
++  chrome.stderr.on('data',chunk=>{text+=chunk;const m=/DevTools listening on (ws:\/\/[^\s]+)/.exec(text);if(m){clearTimeout(timeout);resolve(m[1]);}});
++  chrome.on('exit',code=>{clearTimeout(timeout);reject(Error('Chrome exited '+code));});
++ });
++ ws=new WebSocket(address);await new Promise((resolve,reject)=>{ws.addEventListener('open',resolve,{once:true});ws.addEventListener('error',reject,{once:true});});
++ let serial=0;const pending=new Map(),listeners=new Map();
++ ws.addEventListener('message',event=>{
++  const m=JSON.parse(event.data);
++  if(m.id){const p=pending.get(m.id);if(p){pending.delete(m.id);if(m.error)p.reject(Error(m.error.message));else p.resolve(m.result);}}
++  if(m.method){const key=(m.sessionId||'')+':'+m.method;for(const fn of listeners.get(key)||[])fn(m.params);}
++ });
++ const send=(method,params={},sessionId)=>new Promise((resolve,reject)=>{const id=++serial;pending.set(id,{resolve,reject});ws.send(JSON.stringify({id,method,params,...(sessionId?{sessionId}:{})}));});
++ async function open(id,config){
++  const c={...config,loads:0,cssRequests:0,beacons:[]};cases.set(id,c);
++  const {targetId}=await send('Target.createTarget',{url:'about:blank'});const {sessionId}=await send('Target.attachToTarget',{targetId,flatten:true});
++  await send('Page.enable',{},sessionId);await send('Runtime.enable',{},sessionId);await send('Page.bringToFront',{},sessionId);
++  await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true},sessionId);
++  const evaluate=async expression=>{
++   const r=await send('Runtime.evaluate',{expression,returnByValue:true},sessionId);
++   if(r.exceptionDetails)throw Error('Fixture evaluation failed');return r.result.value;
++  };
++  const advance=async budget=>{
++   const key=sessionId+':Emulation.virtualTimeBudgetExpired';
++   const done=new Promise(resolve=>listeners.set(key,[()=>{listeners.delete(key);resolve();}]));
++   await send('Emulation.setVirtualTimePolicy',{policy:'advance',budget},sessionId);await done;
++  };
++  async function until(expression){
++   for(let i=0;i<40;i++){if(await evaluate(expression))return;await advance(100);await new Promise(r=>setTimeout(r,10));}
++   throw Error(id+': condition timeout '+expression+' '+JSON.stringify(await evaluate('({boot:window.__mgBootState,error:window.fixtureLastError})')));
++  }
++  await send('Page.navigate',{url:'http://127.0.0.1:'+port+(config.legacy?legacy.route:'/')+'?case='+id},sessionId);
++  await until('!!document.getElementById("mg-boot-loading")');
++  const state=()=>evaluate(`(()=>{const s=document.getElementById('mg-boot-loading'),a=document.getElementById('app'),p=document.getElementById('proof'),b=document.getElementById('mg-boot-retry');return{ready:!!window.__mgBootReady,mounted:!!window.__mgMounted,splash:s&&!s.hidden,appOpacity:getComputedStyle(a).opacity,appVisibility:getComputedStyle(a).visibility,retry:b&&!b.hidden,paint:performance.getEntriesByType('paint').map(x=>({name:x.name,start:x.startTime})),proofColor:p?getComputedStyle(p).color:null,message:document.getElementById('mg-boot-message').textContent}})()`);
++  return{c,targetId,sessionId,evaluate,advance,until,state,close:()=>send('Target.closeTarget',{targetId})};
++ }
++ const results=[];
++ {
++  const p=await open('normal',{});await p.until('window.__mgBootReady===true');const s=await p.state();assert.equal(s.splash,false);assert.equal(s.appOpacity,'1');assert.equal(s.proofColor,'rgb(12, 34, 56)');assert.equal(p.c.loads,1);assert.equal(p.c.cssRequests,1,'preload/stylesheet must reuse one download');results.push({scenario:'normal',pass:true});await p.close();
++ }
++ for(const delay of [30000,60000]){
++  const p=await open('css-'+delay,{css:'hold'});await p.until('window.__mgMounted===true');await p.advance(500);
++  // CDP virtual time can finish before the compositor produces a frame. Flush it
++  // while CSS is still held, then inspect the actual paint entry (no timing substitution).
++  const shot=await send('Page.captureScreenshot',{format:'png'},p.sessionId);fs.writeFileSync(work+'/css-held-'+delay+'.png',Buffer.from(shot.data,'base64'));
++  await p.advance(100);let s=await p.state();assert.equal(s.splash,true);assert.equal(s.appOpacity,'0');assert.equal(s.appVisibility,'hidden');
++  assert.ok(s.paint.some(x=>x.name==='first-contentful-paint'),'Splash must paint without CSS');
++  const fcp=s.paint.find(x=>x.name==='first-contentful-paint').start;assert.ok(fcp<5000,'Splash should not wait for old 5s workaround');
++  await p.advance(delay);s=await p.state();assert.equal(s.ready,false);assert.equal(s.retry,true);assert.equal(p.c.loads,1);
++  assert.ok(p.c.releaseCss);p.c.releaseCss();await p.until('window.__mgBootReady===true');s=await p.state();assert.equal(s.proofColor,'rgb(12, 34, 56)');assert.equal(s.splash,false);
++  await p.advance(100);assert.equal(p.c.beacons.filter(x=>x==='boot_timeout').length,1);assert.equal(p.c.beacons.filter(x=>x==='boot_late').length,1);
++  results.push({scenario:'css_delayed_'+delay/1000+'s',firstContentfulPaint_ms:Math.round(fcp),pass:true});await p.close();
++ }
++ {
++  const p=await open('css-failed',{css:'fail'});await p.until('window.__mgMounted===true');await p.advance(16000);const s=await p.state();assert.equal(s.ready,false);assert.equal(s.appOpacity,'0');assert.equal(s.retry,true);assert.equal(p.c.loads,1);p.c.css=undefined;await p.evaluate('document.getElementById("mg-boot-retry").click()');await p.until('window.__mgBootReady===true');assert.equal(p.c.loads,1);assert.equal(p.c.cssRequests,2);results.push({scenario:'css_404_manual_recovery',pass:true});await p.close();
++ }
++ {
++  const p=await open('css-empty',{css:'empty'});await p.until('window.__mgMounted===true');await p.advance(16000);const s=await p.state();assert.equal(s.ready,false);assert.equal(s.appOpacity,'0');assert.equal(s.retry,true);assert.equal(p.c.loads,1);results.push({scenario:'css_empty_200',pass:true});await p.close();
++ }
++ {
++  const p=await open('js-delayed',{js:'hold'});await p.until('!!document.querySelector("link[data-mg-critical]").sheet');await p.advance(16000);const s=await p.state();assert.equal(s.splash,true);assert.equal(s.retry,true);assert.equal(p.c.loads,1);p.c.releaseJs();await p.until('window.__mgBootReady===true');results.push({scenario:'js_delayed_recovery',pass:true});await p.close();
++ }
++ for(const failure of ['fail','init-fail','render-fail']){
++  const id='js-'+failure,p=await open(id,{js:failure});await p.advance(17000);let s=await p.state();assert.equal(s.ready,false);assert.equal(s.splash,true);assert.equal(s.retry,true);assert.equal(s.appOpacity,'0');assert.equal(p.c.loads,1);
++  if(failure==='render-fail')assert.match(s.message,/запустить/);
++  // Only an explicit user retry reloads. The next attempt succeeds.
++  p.c.js=undefined;await p.evaluate('document.getElementById("mg-boot-retry").click()');await p.until('window.__mgBootReady===true');assert.equal(p.c.loads,2);results.push({scenario:id+'_manual_recovery',pass:true});await p.close();
++ }
++ {
++  const p=await open('child-error',{js:'child-error'});await p.until('window.__mgBootReady===true');assert.equal(await p.evaluate('window.fixtureErrors'),1);results.push({scenario:'real_vue_child_onMounted_error_recovered',pass:true});await p.close();
++ }
++ {
++  const p=await open('guest',{guest:true});await p.until('!!window.releaseRoute');await p.advance(500);let s=await p.state();assert.equal(s.ready,false);assert.equal(s.mounted,false);
++  await p.evaluate('window.releaseRoute()');await p.until('window.__mgBootReady===true');assert.equal(await p.evaluate('window.fixturePath'),'/all_course');results.push({scenario:'real_guest_redirect_waits_for_navigation',pass:true});await p.close();
++ }
++ {
++  const p=await open('raf-stalled',{stalledRaf:true});await p.until('window.__mgBootReady===true');results.push({scenario:'native_raf_stalled_timer_fallback',pass:true});await p.close();
++ }
++ {
++  const p=await open('sw-empty',{css:'empty'});await p.until('window.__mgMounted===true');await p.advance(16000);assert.equal((await p.state()).ready,false);
++  await p.evaluate(`navigator.serviceWorker.register('/serviceworker.js').then(()=>navigator.serviceWorker.ready).then(()=>{window.swRegistered=true;})`);
++  await p.until('window.swRegistered && !!navigator.serviceWorker.controller');
++  await p.evaluate(`caches.open('mg-shell').then(async c=>{const url=document.querySelector('link[data-mg-critical]').href;await c.put(url,new Response('',{headers:{'Content-Type':'text/css'}}));await c.put('/assets/unrelated.css',new Response('keep'));window.cacheSeeded=true;})`);
++  await p.until('window.cacheSeeded');p.c.css=undefined;
++  await p.evaluate('document.getElementById("mg-boot-retry").click()');await p.until('window.__mgBootReady===true');
++  assert.equal(p.c.loads,1);assert.equal(p.c.cssRequests,2);
++  await p.evaluate(`caches.open('mg-shell').then(async c=>{window.cacheChecked=!!(await c.match('/assets/unrelated.css'));})`);
++  await p.until('window.cacheChecked');assert.equal((await p.state()).proofColor,'rgb(12, 34, 56)');
++  results.push({scenario:'real_unchanged_SW_empty_200_cache_targeted_recovery',pass:true});await p.close();
++ }
++ {
++  const p=await open('guest-superseded-hang',{guest:true});await p.until('!!window.releaseRoute');
++  await p.evaluate('window.fixtureRouter.push("/recovered")');await p.until('window.__mgBootReady===true');
++  assert.equal(await p.evaluate('window.fixturePath'),'/recovered');results.push({scenario:'superseded_guard_never_settles_but_new_route_reveals',pass:true});await p.close();
++ }
++ {
++  const p=await open('hidden-ui',{layout:'hidden'});await p.until('window.__mgMounted===true');await p.advance(16000);assert.equal((await p.state()).ready,false);
++  assert.equal(await p.evaluate('document.getElementById("app").style.getPropertyValue("--mg-boot-probe-visibility")'),'');
++  await p.evaluate('document.getElementById("proof").style.visibility="visible"');await p.until('window.__mgBootReady===true');
++  results.push({scenario:'hidden_route_not_revealed_probe_restored_late_UI_recovers',pass:true});await p.close();
++ }
++ for(const mode of ['once','always']){
++  const p=await open('missing-critical-'+mode,{missingCss:mode});await p.until('window.__mgMounted===true');await p.advance(16000);
++  assert.equal((await p.state()).ready,false);assert.equal(p.c.loads,1);assert.equal(p.c.cssRequests,0);
++  await p.evaluate('document.getElementById("mg-boot-retry").click()');
++  if(mode==='once'){
++   await p.until('window.__mgBootReady===true');assert.equal(p.c.loads,2);assert.equal(p.c.cssRequests,1);
++  }else{
++   await p.until('window.__mgMounted===true && !document.getElementById("mg-boot-retry").disabled');await p.advance(60000);
++   assert.equal(p.c.loads,2);assert.equal(p.c.cssRequests,0);assert.equal((await p.state()).ready,false);assert.equal((await p.state()).retry,true);
++  }
++  results.push({scenario:'missing_critical_links_'+mode+'_explicit_reload_no_loop',pass:true});await p.close();
++ }
++ for(const layout of ['contents','fragment','teleport']){
++  const p=await open('layout-'+layout,{layout});await p.until('window.__mgBootReady===true');assert.equal((await p.state()).splash,false);results.push({scenario:'DOM_contract_'+layout,pass:true});await p.close();
++ }
++ {
++  const p=await open('empty-ui',{layout:'empty'});await p.until('window.__mgMounted===true');await p.advance(16000);const s=await p.state();assert.equal(s.ready,false);assert.equal(s.retry,true);assert.equal(await p.evaluate('window.__mgBootState.uiVisible'),false);results.push({scenario:'empty_positive_box_stays_gated_with_manual_retry',pass:true});await p.close();
++ }
++ for(const mode of ['form','delayed','empty','icon']){
++  const p=await open('legacy-'+mode,{legacy:mode});await p.until('window.__mgMounted===true');
++  if(mode==='form'){
++   await p.until('window.__mgBootReady===true');
++   await p.evaluate('document.querySelector("#legacy-form button").click()');assert.equal(await p.evaluate('window.fixtureLegacyClicks'),1);
++  }else if(mode==='delayed'){
++   await p.advance(16000);assert.equal((await p.state()).ready,false);assert.equal((await p.state()).retry,true);
++   await p.evaluate('window.fixtureLegacyState.page.pageLoaded=true');await p.until('window.__mgBootReady===true');
++  }else if(mode==='icon'){
++   await p.until('window.__mgBootReady===true');
++   const point=await p.evaluate(`(()=>{const r=document.querySelector('a.ww-icon').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2,width:r.width,height:r.height};})()`);
++   assert.ok(point.width>0&&point.height>0);
++   await send('Input.dispatchMouseEvent',{type:'mousePressed',x:point.x,y:point.y,button:'left',clickCount:1},p.sessionId);
++   await send('Input.dispatchMouseEvent',{type:'mouseReleased',x:point.x,y:point.y,button:'left',clickCount:1},p.sessionId);
++   assert.equal(await p.evaluate('window.fixtureLegacyClicks'),1);
++  }else{
++   await p.advance(16000);assert.equal((await p.state()).ready,false);assert.equal((await p.state()).retry,true);
++   assert.equal(await p.evaluate('window.__mgBootState.uiVisible'),false);
++
++  }
++  assert.equal(await p.evaluate('window.fixtureErrors||0'),0);
++  results.push({scenario:'legacy_wwPage_'+mode,pass:true,scope:mode==='icon'?'Actual icon link reveals automatically and handles real click':'Actual legacy page/section components; mock layout/data/services, not full WeWeb E2E'});await p.close();
++ }
++ for(const mode of ['link','stroke','decorative','decorative-link','empty','display-none','parent-hidden','parent-opacity','outside-boundary','teleport','unregistered-teleport','zero','empty-path','no-paint','transparent','hidden-shape','defs-only','disabled']){
++  const p=await open('svg-'+mode,{svg:mode});await p.until('window.__mgMounted===true');
++  const expected=['link','stroke','teleport'].includes(mode);
++  if(expected){
++   await p.until('window.__mgBootReady===true');
++   const point=await p.evaluate(`(()=>{const r=document.getElementById('svg-action').getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2};})()`);
++   await send('Input.dispatchMouseEvent',{type:'mousePressed',x:point.x,y:point.y,button:'left',clickCount:1},p.sessionId);
++   await send('Input.dispatchMouseEvent',{type:'mouseReleased',x:point.x,y:point.y,button:'left',clickCount:1},p.sessionId);
++   assert.equal(await p.evaluate('window.fixtureSvgClicks'),1);
++  }else{
++   await p.advance(16000);assert.equal((await p.state()).ready,false);assert.equal((await p.state()).retry,true);
++   assert.equal(await p.evaluate('window.__mgBootState.uiVisible'),false);
++  }
++  results.push({scenario:'svg_contract_'+mode,pass:true});await p.close();
++ }
++ for(const page of pageFixtures.keys()){
++  const p=await open('template-'+page,{page,apiHold:page==='AllCoursesPage'});await p.until('window.__mgBootReady===true');
++  if(page==='AllCoursesPage'){await p.advance(60000);assert.equal(p.c.apiPending,true);assert.equal(await p.evaluate('window.__mgBootReady'),true);assert.equal(await p.evaluate('window.__mgBootState.pageState'),'loading');}
++  results.push({scenario:'actual_template_fixture_'+page,pass:true,scope:'Template/styles + fake initial state, not real page E2E'});await p.close();
++ }
++ {
++  const p=await open('visual',{css:'hold'});await p.until('window.__mgMounted===true');await p.advance(16000);
++  let shot=await send('Page.captureScreenshot',{format:'png'},p.sessionId);fs.writeFileSync(work+'/splash-mobile.png',Buffer.from(shot.data,'base64'));
++  await send('Emulation.setDeviceMetricsOverride',{width:1200,height:800,deviceScaleFactor:1,mobile:false},p.sessionId);await p.advance(100);
++  shot=await send('Page.captureScreenshot',{format:'png'},p.sessionId);fs.writeFileSync(work+'/splash-desktop.png',Buffer.from(shot.data,'base64'));await p.close();
++ }
++ fs.writeFileSync(work+'/browser-results.json',JSON.stringify(results,null,2));console.log(JSON.stringify(results,null,2));console.log('Artifacts: '+work);
++}finally{if(ws)ws.close();chrome.kill();server.closeAllConnections();server.close();}
+diff --git a/tests/boot-legacy.fixture.mjs b/tests/boot-legacy.fixture.mjs
+new file mode 100644
+index 0000000..7413ced
+--- /dev/null
++++ b/tests/boot-legacy.fixture.mjs
+@@ -0,0 +1,99 @@
++// Compile real legacy rendering components. Only data/services/layout are mocked;
++// never import main.js, generated page registration modules, Auth or production APIs.
++import fs from 'node:fs';
++import path from 'node:path';
++import assert from 'node:assert/strict';
++import { createRequire } from 'node:module';
++const require = createRequire(import.meta.url);
++const { parse, compileTemplate, compileStyle } = require('@vue/compiler-sfc');
++
++export function legacyFixture(root) {
++    const modules = new Map();
++    let css = '';
++    function component(file, name, imports) {
++        const filename = path.join(root, file), { descriptor } = parse(fs.readFileSync(filename, 'utf8'));
++        const id = 'data-v-legacy-' + name;
++        const template = compileTemplate({ source: descriptor.template.content, filename, id,
++            scoped: descriptor.styles.some(style => style.scoped) });
++        assert.equal(template.errors.length, 0, file + ' template');
++        const rewrite = source => source.replace(/from\s+(['"])([^'"]+)\1/g, (_match, _quote, specifier) => {
++            const target = specifier === 'vue' ? '/vue.js' : imports[specifier];
++            assert.ok(target, 'Unmocked import: ' + specifier);
++            return 'from ' + JSON.stringify(target);
++        });
++        const script = rewrite(descriptor.script.content).replace('export default', 'const component =');
++        const render = rewrite(template.code).replace('export function render', 'function render');
++        modules.set('/legacy/' + name + '.js', script + '\n' + render +
++            '\ncomponent.render=render;component.__scopeId=' + JSON.stringify(id) + ';export default component;');
++        for (const style of descriptor.styles) {
++            const result = compileStyle({ source: style.content, filename, id, scoped: style.scoped, preprocessLang: style.lang });
++            assert.equal(result.errors.length, 0, file + ' CSS'); css += result.code;
++        }
++    }
++    const mocks = '/legacy/mocks.js';
++    component('src/_front/views/wwPage.vue', 'page', {
++        vuex: mocks, '@/_front/components/wwPageLoadProgress.vue': '/legacy/progress.js',
++        '@/_front/helpers/wwBackgroungStyle.js': mocks, '@/pinia/popup.js': mocks,
++        '@/_front/components/wwFrontPopup.vue': '/legacy/empty.js', '@unhead/vue': mocks,
++    });
++    component('src/_front/components/wwPageLoadProgress.vue', 'progress', { vuex: mocks });
++    component('src/_front/components/wwSection.vue', 'section', {
++        '@/_front/components/wwSectionComponent.vue': '/legacy/section-component.js',
++    });
++    component('src/_front/components/wwSectionComponent.vue', 'section-component', Object.fromEntries([
++        '@/_common/helpers/component/component', '@/_common/use/useComponent',
++        '@/_front/use/useComponentStates', '@/_front/use/useComponentAdvancedInteractions',
++        '@/_common/use/useActions', '@/_front/helpers/wwBackgroungStyle',
++        '@/_common/helpers/configuration/configuration',
++    ].map(specifier => [specifier, mocks])));
++    component('src/components/sections/section-99586bd3-2b15-4d6b-a025-6a50d07ca845/src/wwSection.vue', 'section-base', {});
++    component('src/components/elements/element-1b1e2173-9b78-42cc-a8ee-a6167caea340/src/wwElement.vue', 'icon', {});
++    modules.set('/legacy/empty.js', 'export default {render(){return null}};');
++    modules.set(mocks, `import {ref} from '/vue.js';
++        export const useStore=()=>window.fixtureLegacyStore;
++        export const mapGetters=map=>Object.fromEntries(Object.entries(map).map(([key,value])=>[key,function(){return this.$store.getters[value];}]));
++        export const usePopupStore=()=>({stackedPopupUids:{},singlePopupUids:[],instances:{}});
++        export const useHead=()=>{};
++        export const getBackgroundStyle=()=>'';
++        export const getComponentIcon=()=>'';
++        export const getComponentLabel=()=>'';
++        export const getComponentVueComponentName=()=> 'fixture-section';
++        export const getComponentSize=(value,fallback)=>value||fallback;
++        export const getDisplayValue=value=>value||'block';
++        export const useComponentData=()=>({content:{},style:{conditionalRendering:true,display:'block',width:'100%'},state:{attributes:[]},configuration:{},name:'Fixture'});
++        export const useComponentStates=()=>({currentStates:ref([]),addInternalState(){},removeInternalState(){},toggleInternalState(){}});
++        export const useComponentTriggerEvent=()=>({listeners:{},triggerEvent(){}});
++        export const useComponentAdvancedInteractions=()=>{};
++        export const useComponentActions=()=>{};
++        export const inheritFrom=()=>false;`);
++    const routerSource = fs.readFileSync(path.join(root, 'src/_front/router.js'), 'utf8');
++    const info = JSON.parse(routerSource.split('window.wwg_designInfo = ')[1].split(';\nwindow.wwg_cacheVersion')[0]);
++    const page = info.pages.find(page => page.paths.default === 'feedback');
++    assert.ok(page, 'Real legacy feedback page must exist in local designInfo');
++    assert.ok(!/wwPath:\s*'feedback'/.test(routerSource), 'Feedback must not be overridden');
++    return {
++        modules, css, route: '/feedback',
++        imports: `import LegacyPage from '/legacy/page.js';
++            import LegacySection from '/legacy/section.js';
++            import LegacySectionBase from '/legacy/section-base.js';
++            import LegacyIcon from '/legacy/icon.js';`,
++        initialize(mode) {
++            return `window.fixtureLegacyClicks=0;
++                const state=reactive({mode:${JSON.stringify(mode)},page:{id:${JSON.stringify(page.id)},meta:{},sections:${mode === 'empty' ? '[]' : "[{uid:'fixture-section'}]"},pageLoaded:${mode !== 'delayed'}}});
++                window.fixtureLegacyState=state;
++                window.fixtureLegacyStore={getters:{'websiteData/getPage':state.page,'websiteData/getDesignInfo':{homePageId:state.page.id},
++                    'websiteData/getPageById':()=>state.page,'websiteData/getSections':{'fixture-section':{uid:'fixture-section',sectionTitle:'Fixture'}},
++                    'websiteData/getPageId':state.page.id,'front/getActiveLinkPopup':null,'front/getScreenSize':'default','front/getTheme':'light','front/showPageLoadProgress':false}};
++                window.wwLib={$store:window.fixtureLegacyStore,getFrontDocument:()=>document,wwLang:{lang:'en',getText:()=>''},
++                    wwUtils:{sanitize:()=>'',getLengthUnit:()=>[0,'px']},
++                    useIcons:()=>({getIcon:async()=>'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 4h16v16H4z" fill="currentColor"/></svg>'}),
++                    wwElement:{useLink:()=>({hasLink:computed(()=>true),tag:computed(()=>'a'),properties:computed(()=>({href:'#local-action','aria-label':'Local action',
++                        onClick:event=>{event.preventDefault();window.fixtureLegacyClicks++;}}))})}};
++                const LegacyLayout={render(){return state.mode==='icon'?
++                    h('div',{style:'width:48px;height:48px'},[h(LegacyIcon,{content:{icon:'local-fixture',color:'#204060'},wwElementState:{props:{}}})]):
++                    h('form',{id:'legacy-form'},[h('label','Fixture form'),h('input',{'aria-label':'Fixture input'}),h('button',{type:'button',onClick:()=>window.fixtureLegacyClicks++},'Local action')]);}};`;
++        },
++        register: `app.config.globalProperties.$store=window.fixtureLegacyStore;
++            app.component('wwSection',LegacySection);app.component('fixture-section',LegacySectionBase);app.component('wwLayout',LegacyLayout);`,
++    };
++}
