@@ -1,0 +1,34 @@
+{
+  "repository": "n8n-io/n8n",
+  "ref": "n8n@1.90.2",
+  "files": {
+    "LICENSE.md": {
+      "sha256": "d2f621f59aa4c10eab79b6333e59d9d3d5b53307dcfd16dbd75e40e679e84965",
+      "gitBlobSha": "f85f59baa906530c26cee26e0c9ddd6bd5f86dbd"
+    },
+    "packages/core/src/execution-engine/workflow-execute.ts": {
+      "sha256": "a40aaed0588e69dd8fc1d52807b7334636ae95ec5eb37297123a1a1b4990e48a",
+      "gitBlobSha": "b735103ce09e4ac3740204b240ebbb53c5f82919"
+    },
+    "packages/nodes-base/nodes/Code/Code.node.ts": {
+      "sha256": "a12eb56bd94b548fab64184a9b29ce0a4b253448bf9bbc2030d3fb6d7553e65b",
+      "gitBlobSha": "a55eeae603bef10e3860127116fea01ce35ccfbf"
+    },
+    "packages/nodes-base/nodes/Code/Sandbox.ts": {
+      "sha256": "b001afa337e168624b4203ec8c0ae8afab3596d2f8016a592b252902626f8164",
+      "gitBlobSha": "b3e3057d2373586ebb0b90b0c7736f4860947e02"
+    },
+    "packages/nodes-base/nodes/Supabase/GenericFunctions.ts": {
+      "sha256": "8564b72229ee247f039b734e3a296de4479af5401192dae3d58eb829eb946284",
+      "gitBlobSha": "6f92f35c44fdd32e4aff3890f0b30f7a81ce86b7"
+    },
+    "packages/nodes-base/nodes/Supabase/Supabase.node.ts": {
+      "sha256": "bc627d1fcb0b0a5a09481ef5da04bd80c57d2575ffd2f3e075e5c1824215efc4",
+      "gitBlobSha": "ea42dfca4b618669acb97176b637a53431dd5bd0"
+    },
+    "packages/workflow/src/WorkflowDataProxy.ts": {
+      "sha256": "302226a088d03e5a17119420571032a520181579ab7b3d18205891a4b72e432d",
+      "gitBlobSha": "b791670063e36525114c102fcc184cf32ae2273a"
+    }
+  }
+}

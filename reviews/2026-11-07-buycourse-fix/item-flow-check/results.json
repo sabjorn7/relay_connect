@@ -1,0 +1,42 @@
+[
+  {
+    "name": "actual fixed graph is one acyclic single-output path, without executeOnce or item-by-item Code",
+    "status": "PASS"
+  },
+  {
+    "name": "one purchased course reaches BuildAllAccesses",
+    "status": "PASS"
+  },
+  {
+    "name": "four courses: 4 -> 4 -> 4 -> 4 -> 4 -> one complete plan",
+    "status": "PASS"
+  },
+  {
+    "name": "repeated author IDs remain four linked items; all courses use their own author",
+    "status": "PASS"
+  },
+  {
+    "name": "multiple positions of the same course are retained",
+    "status": "PASS"
+  },
+  {
+    "name": "Supabase pairedItem links remain correct when an upstream lookup returns no row",
+    "status": "PASS"
+  },
+  {
+    "name": "missing paid shop position fails closed before a transaction can be called",
+    "status": "PASS"
+  },
+  {
+    "name": "all() is not filtered to current paired item and uses the latest run by default",
+    "status": "PASS"
+  },
+  {
+    "name": "all() follows connected output branch and never silently reads branch zero",
+    "status": "PASS"
+  },
+  {
+    "name": "unexecuted node raises instead of returning an invented or partial item list",
+    "status": "PASS"
+  }
+]
