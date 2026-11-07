@@ -1,0 +1,82 @@
+[
+  {
+    "name": "one course: access + sale + author balance + paid + receipt atomically",
+    "status": "PASS"
+  },
+  {
+    "name": "four courses: four accesses/sales and exact sum of commissions",
+    "status": "PASS"
+  },
+  {
+    "name": "mixed authors: each sale and commission credited to its own author",
+    "status": "PASS"
+  },
+  {
+    "name": "repeat/lost RPC response: no duplicate sales, credit, expiry or notification",
+    "status": "PASS"
+  },
+  {
+    "name": "parallel callbacks: exactly one full settlement",
+    "status": "PASS"
+  },
+  {
+    "name": "parallel different orders: atomic balance increments cannot overwrite each other",
+    "status": "PASS"
+  },
+  {
+    "name": "failure after accesses/sales and first author credit: EVERYTHING rolls back; retry settles once",
+    "status": "PASS"
+  },
+  {
+    "name": "third-course failure leaves no accesses, sales, credits, paid flag or receipt",
+    "status": "PASS"
+  },
+  {
+    "name": "early renewal keeps remaining time, full timestamp and JS month rollover; repeat cannot extend twice",
+    "status": "PASS"
+  },
+  {
+    "name": "expired finite access renews from NOW, not its old expired date",
+    "status": "PASS"
+  },
+  {
+    "name": "new finite purchase keeps the original UTC date-only month convention",
+    "status": "PASS"
+  },
+  {
+    "name": "lifetime course and existing NULL/infinity access stay lifetime",
+    "status": "PASS"
+  },
+  {
+    "name": "legacy UTC/Moscow same-day no-expiry sentinels are not converted to finite terms",
+    "status": "PASS"
+  },
+  {
+    "name": "historical paid order/manual repair: no access, sales, balance or notification changes",
+    "status": "PASS"
+  },
+  {
+    "name": "JS half-cent rounding preserved (1.005 -> 1.00), NULL starting balance handled",
+    "status": "PASS"
+  },
+  {
+    "name": "untrusted roles/missing verified proof cannot settle an order",
+    "status": "PASS"
+  },
+  {
+    "name": "missing positions, substituted author or invented amount roll back",
+    "status": "PASS"
+  },
+  {
+    "name": "two paid positions for one course: two sales, one entitlement and one extension",
+    "status": "PASS"
+  },
+  {
+    "name": "payment-ID collision at final receipt insert rolls back even paid and author credits",
+    "status": "PASS"
+  },
+  {
+    "name": "temporary PostgreSQL stopped; loopback port closed",
+    "status": "PASS"
+  }
+]

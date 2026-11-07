@@ -1,0 +1,563 @@
+--- a/BuyCourse.production.redacted.json
++++ b/BuyCourse.production.redacted.json
+@@ -13,6 +13,17 @@
+         ]
+       ]
+     },
++    "BuildAllAccesses": {
++      "main": [
++        [
++          {
++            "index": 0,
++            "node": "FulfillAllAccesses",
++            "type": "main"
++          }
++        ]
++      ]
++    },
+     "CheckPaid": {
+       "main": [
+         [
+@@ -35,26 +46,9 @@
+         ]
+       ]
+     },
+-    "Code1": {
+-      "main": [
+-        [
+-          {
+-            "index": 0,
+-            "node": "Supabase1",
+-            "type": "main"
+-          }
+-        ]
+-      ]
+-    },
+-    "Create_Sales": {
+-      "main": [
+-        [
+-          {
+-            "index": 0,
+-            "node": "GetUserCourse",
+-            "type": "main"
+-          }
+-        ]
++    "FulfillAllAccesses": {
++      "main": [
++        []
+       ]
+     },
+     "GetCourse": {
+@@ -79,17 +73,6 @@
+         ]
+       ]
+     },
+-    "GetUserCourse": {
+-      "main": [
+-        [
+-          {
+-            "index": 0,
+-            "node": "PickBuyerRow",
+-            "type": "main"
+-          }
+-        ]
+-      ]
+-    },
+     "HTTP Request": {
+       "main": [
+         [
+@@ -156,35 +139,6 @@
+         ]
+       ]
+     },
+-    "IF_Exists": {
+-      "main": [
+-        [
+-          {
+-            "index": 0,
+-            "node": "UpdateUserCourse",
+-            "type": "main"
+-          }
+-        ],
+-        [
+-          {
+-            "index": 0,
+-            "node": "Supabase5",
+-            "type": "main"
+-          }
+-        ]
+-      ]
+-    },
+-    "PickBuyerRow": {
+-      "main": [
+-        [
+-          {
+-            "index": 0,
+-            "node": "IF_Exists",
+-            "type": "main"
+-          }
+-        ]
+-      ]
+-    },
+     "RestoreBody": {
+       "main": [
+         [
+@@ -229,22 +183,6 @@
+         ]
+       ]
+     },
+-    "Supabase1": {
+-      "main": [
+-        [
+-          {
+-            "index": 0,
+-            "node": "Supabase2",
+-            "type": "main"
+-          }
+-        ]
+-      ]
+-    },
+-    "Supabase2": {
+-      "main": [
+-        []
+-      ]
+-    },
+     "Supabase3": {
+       "main": [
+         [
+@@ -267,17 +205,6 @@
+         ]
+       ]
+     },
+-    "Supabase5": {
+-      "main": [
+-        [
+-          {
+-            "index": 0,
+-            "node": "Code1",
+-            "type": "main"
+-          }
+-        ]
+-      ]
+-    },
+     "TG_Bot": {
+       "main": [
+         [
+@@ -294,23 +221,12 @@
+         ]
+       ]
+     },
+-    "UpdateUserCourse": {
+-      "main": [
+-        [
+-          {
+-            "index": 0,
+-            "node": "Code1",
+-            "type": "main"
+-          }
+-        ]
+-      ]
+-    },
+     "UsersBuyer": {
+       "main": [
+         [
+           {
+             "index": 0,
+-            "node": "Create_Sales",
++            "node": "BuildAllAccesses",
+             "type": "main"
+           }
+         ]
+@@ -399,18 +315,6 @@
+       "id": "d8009c1f-ef5a-49c6-8a03-e79d0a14932c",
+       "name": "Supabase",
+       "parameters": {
+-        "fieldsUi": {
+-          "fieldValues": [
+-            {
+-              "fieldId": "paid",
+-              "fieldValue": "=true"
+-            },
+-            {
+-              "fieldId": "payment_id",
+-              "fieldValue": "={{ $json.body.order_id }}"
+-            }
+-          ]
+-        },
+         "filters": {
+           "conditions": [
+             {
+@@ -420,7 +324,7 @@
+             }
+           ]
+         },
+-        "operation": "update",
++        "operation": "get",
+         "tableId": "order"
+       },
+       "position": [
+@@ -610,59 +514,6 @@
+       "webhookId": "61b3e175-3515-4b78-9df4-0b158ed5ff7a"
+     },
+     {
+-      "id": "372accc5-1bfe-4643-a8b9-f70507af99e3",
+-      "name": "Code1",
+-      "onError": "continueRegularOutput",
+-      "parameters": {
+-        "jsCode": "// --- 1. Складываем ВСЕ amount из Create_Sales ---\nconst salesItems = $('Create_Sales').all();\n\nconst totalSalesAmount = salesItems.reduce((sum, item) => {\n  return sum + Number(item.json.amount || 0);\n}, 0);\n\n// --- 2. Берём UsersCreater.Ammount ---\nconst userCreator = $('UsersCreater').first()?.json || {};\nconst userCreatorAmount = Number(userCreator.Ammount || 0);\n\n// --- 3. Получаем user_id из UsersCreater ---\nconst userId = userCreator.id || userCreator.user_id || null;\n\n// --- 4. Получаем order.id из ноды Supabase5 (update) ---\nconst orderNode = $('Supabase').first()?.json || {};\nconst orderId = orderNode.id || orderNode.order_id || null;\n\n// --- 5. Итоговая сумма ---\nconst result = totalSalesAmount + userCreatorAmount;\n\n// --- 6. Возвращаем ОДИН item ---\nreturn [\n  {\n    result,\n    user_id: userId,\n    order_id: orderId\n  }\n];"
+-      },
+-      "position": [
+-        1980,
+-        160
+-      ],
+-      "type": "n8n-nodes-base.code",
+-      "typeVersion": 2
+-    },
+-    {
+-      "credentials": {
+-        "supabaseApi": {
+-          "id": "__KEEP_EXISTING_CREDENTIAL__",
+-          "name": "__KEEP_EXISTING_CREDENTIAL__"
+-        }
+-      },
+-      "executeOnce": true,
+-      "id": "008b69dc-a205-4f14-a360-5c81689d53f6",
+-      "name": "Supabase1",
+-      "onError": "continueRegularOutput",
+-      "parameters": {
+-        "fieldsUi": {
+-          "fieldValues": [
+-            {
+-              "fieldId": "Ammount",
+-              "fieldValue": "={{ $json.result }}"
+-            }
+-          ]
+-        },
+-        "filters": {
+-          "conditions": [
+-            {
+-              "condition": "eq",
+-              "keyName": "id",
+-              "keyValue": "={{ $json.user_id }}"
+-            }
+-          ]
+-        },
+-        "operation": "update",
+-        "tableId": "users"
+-      },
+-      "position": [
+-        2200,
+-        160
+-      ],
+-      "type": "n8n-nodes-base.supabase",
+-      "typeVersion": 1
+-    },
+-    {
+       "id": "de2aaa55-44a4-4154-95be-06abb0447198",
+       "name": "Webhook",
+       "parameters": {
+@@ -783,252 +634,6 @@
+       ],
+       "type": "n8n-nodes-base.httpRequest",
+       "typeVersion": 4.2
+-    },
+-    {
+-      "credentials": {
+-        "supabaseApi": {
+-          "id": "__KEEP_EXISTING_CREDENTIAL__",
+-          "name": "__KEEP_EXISTING_CREDENTIAL__"
+-        }
+-      },
+-      "id": "ad03486f-5751-4c9c-aed0-47a522b5b674",
+-      "name": "Supabase5",
+-      "parameters": {
+-        "fieldsUi": {
+-          "fieldValues": [
+-            {
+-              "fieldId": "user",
+-              "fieldValue": "={{ $('UsersBuyer').item.json.id }}"
+-            },
+-            {
+-              "fieldId": "course",
+-              "fieldValue": "={{ $('GetCourse').item.json.id }}"
+-            },
+-            {
+-              "fieldId": "Free",
+-              "fieldValue": "={{ $('GetCourse').item.json.Free }}"
+-            },
+-            {
+-              "fieldId": "end_period",
+-              "fieldValue": "={{ \n  (() => {\n    const now = new Date();\n    now.setMonth(now.getMonth() + $('GetCourse').item.json.DurationLong);\n    return now.toISOString().split('T')[0];\n  })() \n}}"
+-            },
+-            {
+-              "fieldId": "buy",
+-              "fieldValue": "TRUE"
+-            }
+-          ]
+-        },
+-        "tableId": "user_course"
+-      },
+-      "position": [
+-        1760,
+-        160
+-      ],
+-      "type": "n8n-nodes-base.supabase",
+-      "typeVersion": 1
+-    },
+-    {
+-      "credentials": {
+-        "supabaseApi": {
+-          "id": "__KEEP_EXISTING_CREDENTIAL__",
+-          "name": "__KEEP_EXISTING_CREDENTIAL__"
+-        }
+-      },
+-      "id": "d2bf189a-8866-41b8-995c-d08c5e2cd9b2",
+-      "name": "Create_Sales",
+-      "parameters": {
+-        "fieldsUi": {
+-          "fieldValues": [
+-            {
+-              "fieldId": "user",
+-              "fieldValue": "={{ $('UsersCreater').item.json.id }}"
+-            },
+-            {
+-              "fieldId": "amount",
+-              "fieldValue": "={{ ($('GetPositions').item.json.price*$('UsersCreater').item.json.authorCommission/100).toFixed(2)}}"
+-            },
+-            {
+-              "fieldId": "price",
+-              "fieldValue": "={{ $('GetPositions').item.json.price}}"
+-            },
+-            {
+-              "fieldId": "position",
+-              "fieldValue": "={{ $('Code').item.json.id }}"
+-            },
+-            {
+-              "fieldId": "position_name",
+-              "fieldValue": "={{ $('GetCourse').item.json.Title }}"
+-            },
+-            {
+-              "fieldId": "position_category",
+-              "fieldValue": "={{ $('GetCourse').item.json.Category }}"
+-            }
+-          ]
+-        },
+-        "tableId": "sales"
+-      },
+-      "position": [
+-        1540,
+-        160
+-      ],
+-      "type": "n8n-nodes-base.supabase",
+-      "typeVersion": 1
+-    },
+-    {
+-      "alwaysOutputData": false,
+-      "credentials": {
+-        "supabaseApi": {
+-          "id": "__KEEP_EXISTING_CREDENTIAL__",
+-          "name": "__KEEP_EXISTING_CREDENTIAL__"
+-        }
+-      },
+-      "id": "d6429731-d5ec-4124-89cf-594977da08d9",
+-      "name": "Supabase2",
+-      "onError": "continueRegularOutput",
+-      "parameters": {
+-        "filters": {
+-          "conditions": [
+-            {
+-              "condition": "eq",
+-              "keyName": "id",
+-              "keyValue": "={{ $('Code1').item.json.order_id }}"
+-            }
+-          ]
+-        },
+-        "operation": "update",
+-        "tableId": "order",
+-        "useCustomSchema": true
+-      },
+-      "position": [
+-        2420,
+-        160
+-      ],
+-      "type": "n8n-nodes-base.supabase",
+-      "typeVersion": 1
+-    },
+-    {
+-      "alwaysOutputData": true,
+-      "credentials": {
+-        "supabaseApi": {
+-          "id": "__KEEP_EXISTING_CREDENTIAL__",
+-          "name": "__KEEP_EXISTING_CREDENTIAL__"
+-        }
+-      },
+-      "id": "live-getuc",
+-      "name": "GetUserCourse",
+-      "onError": "continueRegularOutput",
+-      "parameters": {
+-        "filters": {
+-          "conditions": [
+-            {
+-              "condition": "eq",
+-              "keyName": "user",
+-              "keyValue": "={{ $('UsersBuyer').item.json.id }}"
+-            },
+-            {
+-              "condition": "eq",
+-              "keyName": "course",
+-              "keyValue": "={{ $('GetCourse').item.json.id }}"
+-            }
+-          ]
+-        },
+-        "operation": "getAll",
+-        "returnAll": true,
+-        "tableId": "user_course"
+-      },
+-      "position": [
+-        1600,
+-        360
+-      ],
+-      "type": "n8n-nodes-base.supabase",
+-      "typeVersion": 1
+-    },
+-    {
+-      "id": "live-if",
+-      "name": "IF_Exists",
+-      "parameters": {
+-        "conditions": {
+-          "combinator": "and",
+-          "conditions": [
+-            {
+-              "id": "cond-has-id",
+-              "leftValue": "={{ $json.id }}",
+-              "operator": {
+-                "operation": "notEmpty",
+-                "singleValue": true,
+-                "type": "string"
+-              },
+-              "rightValue": ""
+-            }
+-          ],
+-          "options": {
+-            "caseSensitive": true,
+-            "typeValidation": "loose"
+-          }
+-        },
+-        "options": {}
+-      },
+-      "position": [
+-        1760,
+-        360
+-      ],
+-      "type": "n8n-nodes-base.if",
+-      "typeVersion": 2
+-    },
+-    {
+-      "credentials": {
+-        "supabaseApi": {
+-          "id": "__KEEP_EXISTING_CREDENTIAL__",
+-          "name": "__KEEP_EXISTING_CREDENTIAL__"
+-        }
+-      },
+-      "id": "live-updateuc",
+-      "name": "UpdateUserCourse",
+-      "parameters": {
+-        "fieldsUi": {
+-          "fieldValues": [
+-            {
+-              "fieldId": "end_period",
+-              "fieldValue": "={{ \n  (() => {\n    const now = new Date();\n    now.setMonth(now.getMonth() + $('GetCourse').item.json.DurationLong);\n    return now.toISOString().split('T')[0];\n  })() \n}}"
+-            },
+-            {
+-              "fieldId": "buy",
+-              "fieldValue": "TRUE"
+-            }
+-          ]
+-        },
+-        "filters": {
+-          "conditions": [
+-            {
+-              "condition": "eq",
+-              "keyName": "id",
+-              "keyValue": "={{ $json.id }}"
+-            }
+-          ]
+-        },
+-        "operation": "update",
+-        "tableId": "user_course"
+-      },
+-      "position": [
+-        1760,
+-        60
+-      ],
+-      "type": "n8n-nodes-base.supabase",
+-      "typeVersion": 1
+-    },
+-    {
+-      "id": "5a2fee56-59d7-4bac-9aa1-19c0ed44d862",
+-      "name": "PickBuyerRow",
+-      "parameters": {
+-        "jsCode": "const buyer = $('UsersBuyer').item.json.id;\nconst courseId = $('GetCourse').item.json.id;\nconst match = $input.all()\n  .map(i => i.json)\n  .find(j => j && j.id && j.user === buyer && j.course === courseId);\nreturn [{ json: match || {}, pairedItem: { item: 0 } }];",
+-        "mode": "runOnceForAllItems"
+-      },
+-      "position": [
+-        1680,
+-        360
+-      ],
+-      "type": "n8n-nodes-base.code",
+-      "typeVersion": 2
+     },
+     {
+       "id": "fe1e9077-a048-4c76-a4e1-66d5b9631109",
+@@ -1293,6 +898,51 @@
+       ],
+       "type": "n8n-nodes-base.code",
+       "typeVersion": 2
++    },
++    {
++      "id": "payment-build-all-accesses",
++      "name": "BuildAllAccesses",
++      "parameters": {
++        "jsCode": "function buildOrderAccessPlan(order, positions, courses, authors) {\n    if (!order?.id || !order.owner || !Array.isArray(order.course_positions) || !order.course_positions.length) {\n        throw new Error('Invalid course order');\n    }\n    if (new Set(order.course_positions).size !== order.course_positions.length) throw new Error('Duplicate shop position');\n    return order.course_positions.map(id => {\n        const matches = positions.filter(p => p.id === id);\n        if (matches.length !== 1) throw new Error('Missing or ambiguous shop position');\n        const position = matches[0];\n        if (position.owner !== order.owner) throw new Error('Buyer mismatch');\n        const course = courses.find(c => c.id === position.course_id);\n        const author = course && authors.find(a => a.id === course.owner);\n        if (!course || !author) throw new Error('Missing course or author');\n        if ((position.price !== null && !Number.isFinite(position.price))\n            || (author.authorCommission !== null && !Number.isFinite(author.authorCommission))) {\n            throw new Error('Invalid financial snapshot');\n        }\n        // EXACT production Create_Sales formula, including JS floating-point/toFixed\n        // rounding and null -> zero. Never replace it silently with SQL round(numeric).\n        const authorAmount = (position.price * author.authorCommission / 100).toFixed(2);\n        if (!/^-?\\d+\\.\\d{2}$/.test(authorAmount)) throw new Error('Invalid author amount');\n        return {\n            shop_id: id, course_id: course.id, author_id: author.id,\n            price: position.price, author_commission: author.authorCommission,\n            author_amount: authorAmount,\n        };\n    });\n}\nconst order = $('CheckPaid').first().json;\nconst plan = buildOrderAccessPlan(order, $('GetPositions').all().map(i => i.json), $('GetCourse').all().map(i => i.json), $('UsersCreater').all().map(i => i.json));\nreturn [{json:{plan},pairedItem:{item:0}}];",
++        "mode": "runOnceForAllItems"
++      },
++      "position": [
++        1200,
++        600
++      ],
++      "type": "n8n-nodes-base.code",
++      "typeVersion": 2
++    },
++    {
++      "alwaysOutputData": true,
++      "continueOnFail": false,
++      "credentials": {
++        "supabaseApi": {
++          "id": "__KEEP_EXISTING_CREDENTIAL__",
++          "name": "__KEEP_EXISTING_CREDENTIAL__"
++        }
++      },
++      "executeOnce": true,
++      "id": "payment-fulfill-access-transaction",
++      "name": "FulfillAllAccesses",
++      "onError": "stopWorkflow",
++      "parameters": {
++        "authentication": "predefinedCredentialType",
++        "jsonBody": "={{ {\n  p_order_id: $('CheckPaid').first().json.id,\n  p_payment_id: String($('Shop').first().json.body.order_id || ''),\n  p_proof_id: $('AuditWarn').first().json.id,\n  p_access_plan: $json.plan\n} }}",
++        "method": "POST",
++        "nodeCredentialType": "supabaseApi",
++        "options": {},
++        "sendBody": true,
++        "specifyBody": "json",
++        "url": "https://existing-supabase.invalid/rest/v1/rpc/fulfill_paid_course_order"
++      },
++      "position": [
++        1420,
++        600
++      ],
++      "retryOnFail": false,
++      "type": "n8n-nodes-base.httpRequest",
++      "typeVersion": 4.2
+     }
+   ],
+   "reviewOnly": true,

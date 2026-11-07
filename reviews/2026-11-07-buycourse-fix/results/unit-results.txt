@@ -1,0 +1,16 @@
+✔ reproduces production PickBuyerRow collapsing four items to one (0.803041ms)
+✔ single and four-course plans include every paid position and the actual buyer (0.229542ms)
+✔ commission retains exact old JS floating point/toFixed rounding, including half-cent and null (0.150834ms)
+✔ missing courses, positions or buyer mismatches fail before any write (0.16025ms)
+✔ workflow reads order early; one atomic RPC replaces every access/sales/balance write (0.599084ms)
+✔ signature/amount checks, other webhook branches and paid-history skip stay unchanged (0.374542ms)
+✔ new all-items Code routes each product to its own author without balance snapshots (1.053792ms)
+✔ configuration drift stops local patch generation (0.161333ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 7.380292

@@ -1,0 +1,1302 @@
+{
+  "id": "6rEQ42XwaLMFcvbB",
+  "name": "BuyCourse",
+  "active": false,
+  "createdAt": "2025-05-05T13:08:04.416Z",
+  "updatedAt": "2026-10-29T14:14:01.485Z",
+  "activeVersionId": null,
+  "versionCreatedAt": null,
+  "versionName": null,
+  "nodes": [
+    {
+      "parameters": {
+        "__PRESERVE_FROM_PRODUCTION__": true
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        420
+      ],
+      "id": "003f8043-1105-4452-9602-622d18d776f1",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "order",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.body.order_num }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "paid",
+              "fieldValue": "=true"
+            },
+            {
+              "fieldId": "payment_id",
+              "fieldValue": "={{ $json.body.order_id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        220,
+        160
+      ],
+      "id": "d8009c1f-ef5a-49c6-8a03-e79d0a14932c",
+      "name": "Supabase",
+      "credentials": {
+        "supabaseApi": {
+          "id": "__KEEP_EXISTING_CREDENTIAL__",
+          "name": "__KEEP_EXISTING_CREDENTIAL__"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return $json.course_positions.map(id => {\n  return { json: { id } }\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        160
+      ],
+      "id": "0c00769c-4826-4f59-8524-08c62a95d4f1",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "shop",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "keyValue": "={{ $json.id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        660,
+        160
+      ],
+      "id": "5b93661f-34fc-4969-9503-437e964b397c",
+      "name": "GetPositions",
+      "credentials": {
+        "supabaseApi": {
+          "id": "__KEEP_EXISTING_CREDENTIAL__",
+          "name": "__KEEP_EXISTING_CREDENTIAL__"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "course",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "keyValue": "={{ $json.course_id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        880,
+        160
+      ],
+      "id": "ecacc0ab-f433-499e-b018-24d96ba7145c",
+      "name": "GetCourse",
+      "credentials": {
+        "supabaseApi": {
+          "id": "__KEEP_EXISTING_CREDENTIAL__",
+          "name": "__KEEP_EXISTING_CREDENTIAL__"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "users",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "keyValue": "={{ $json.owner }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1100,
+        160
+      ],
+      "id": "2f5e8809-e9f2-4a80-8797-27798d90c260",
+      "name": "UsersCreater",
+      "credentials": {
+        "supabaseApi": {
+          "id": "__KEEP_EXISTING_CREDENTIAL__",
+          "name": "__KEEP_EXISTING_CREDENTIAL__"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "users",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "keyValue": "={{ $('GetPositions').item.json.owner }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1320,
+        160
+      ],
+      "id": "5acd7188-1f4a-4e68-a1e1-05d9ca32e650",
+      "name": "UsersBuyer",
+      "credentials": {
+        "supabaseApi": {
+          "id": "__KEEP_EXISTING_CREDENTIAL__",
+          "name": "__KEEP_EXISTING_CREDENTIAL__"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "__PRESERVE_FROM_PRODUCTION__": true
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2860,
+        160
+      ],
+      "id": "8ff1e0a7-dbe0-46bd-b876-5ee483bfc2c4",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "__PRESERVE_FROM_PRODUCTION__": true
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3080,
+        160
+      ],
+      "id": "fc2f9036-955b-4343-8897-d15522c6e5d7",
+      "name": "HTTP Request2"
+    },
+    {
+      "parameters": {
+        "__PRESERVE_FROM_PRODUCTION__": true
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        420
+      ],
+      "id": "13ad501f-b0be-460f-bb46-03ee419cc20d",
+      "name": "SendEmail",
+      "webhookId": "64277b75-849f-45c6-81bc-64da11a7d530"
+    },
+    {
+      "parameters": {
+        "__PRESERVE_FROM_PRODUCTION__": true
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        160
+      ],
+      "id": "03e256af-4ac7-4214-953f-0ea092c0f391",
+      "name": "Shop",
+      "webhookId": "61b3e175-3515-4b78-9df4-0b158ed5ff7a"
+    },
+    {
+      "parameters": {
+        "jsCode": "// --- 1. Складываем ВСЕ amount из Create_Sales ---\nconst salesItems = $('Create_Sales').all();\n\nconst totalSalesAmount = salesItems.reduce((sum, item) => {\n  return sum + Number(item.json.amount || 0);\n}, 0);\n\n// --- 2. Берём UsersCreater.Ammount ---\nconst userCreator = $('UsersCreater').first()?.json || {};\nconst userCreatorAmount = Number(userCreator.Ammount || 0);\n\n// --- 3. Получаем user_id из UsersCreater ---\nconst userId = userCreator.id || userCreator.user_id || null;\n\n// --- 4. Получаем order.id из ноды Supabase5 (update) ---\nconst orderNode = $('Supabase').first()?.json || {};\nconst orderId = orderNode.id || orderNode.order_id || null;\n\n// --- 5. Итоговая сумма ---\nconst result = totalSalesAmount + userCreatorAmount;\n\n// --- 6. Возвращаем ОДИН item ---\nreturn [\n  {\n    result,\n    user_id: userId,\n    order_id: orderId\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        160
+      ],
+      "id": "372accc5-1bfe-4643-a8b9-f70507af99e3",
+      "name": "Code1",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "users",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.user_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "Ammount",
+              "fieldValue": "={{ $json.result }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2200,
+        160
+      ],
+      "id": "008b69dc-a205-4f14-a360-5c81689d53f6",
+      "name": "Supabase1",
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "__KEEP_EXISTING_CREDENTIAL__",
+          "name": "__KEEP_EXISTING_CREDENTIAL__"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "__PRESERVE_FROM_PRODUCTION__": true
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        -100
+      ],
+      "id": "de2aaa55-44a4-4154-95be-06abb0447198",
+      "name": "Webhook",
+      "webhookId": "c5d9d192-2405-413b-be31-6b445eb9e2b8"
+    },
+    {
+      "parameters": {
+        "__PRESERVE_FROM_PRODUCTION__": true
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        220,
+        -100
+      ],
+      "id": "008ce527-1501-42a1-8634-8a5a04b3c88d",
+      "name": "Supabase3",
+      "credentials": {
+        "supabaseApi": {
+          "id": "__KEEP_EXISTING_CREDENTIAL__",
+          "name": "__KEEP_EXISTING_CREDENTIAL__"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "__PRESERVE_FROM_PRODUCTION__": true
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        -100
+      ],
+      "id": "84a52525-7667-4df1-8522-cfd1f231f3d0",
+      "name": "HTTP Request3",
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "__PRESERVE_FROM_PRODUCTION__": true
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        440,
+        -100
+      ],
+      "id": "ea132a2f-530d-493a-a963-2e56f143a094",
+      "name": "Supabase4",
+      "credentials": {
+        "supabaseApi": {
+          "id": "__KEEP_EXISTING_CREDENTIAL__",
+          "name": "__KEEP_EXISTING_CREDENTIAL__"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "__PRESERVE_FROM_PRODUCTION__": true
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        -360
+      ],
+      "id": "111e4b6c-058f-47d5-8917-28cf787f0670",
+      "name": "TG_Bot",
+      "webhookId": "839eb212-d89f-458b-9a6f-3cdcb46099fe"
+    },
+    {
+      "parameters": {
+        "__PRESERVE_FROM_PRODUCTION__": true
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        420
+      ],
+      "id": "9e10b421-d8af-4d91-8c45-56366a243b51",
+      "name": "HTTP Request4",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "__PRESERVE_FROM_PRODUCTION__": true
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        -360
+      ],
+      "id": "cd5cc709-a28a-48f2-89e1-44c24218e607",
+      "name": "HTTP Request5",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "__PRESERVE_FROM_PRODUCTION__": true
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2640,
+        160
+      ],
+      "id": "6e3ad662-9daf-4a0c-93e9-8d0b358b9f9a",
+      "name": "HTTP Request6"
+    },
+    {
+      "parameters": {
+        "tableId": "user_course",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "user",
+              "fieldValue": "={{ $('UsersBuyer').item.json.id }}"
+            },
+            {
+              "fieldId": "course",
+              "fieldValue": "={{ $('GetCourse').item.json.id }}"
+            },
+            {
+              "fieldId": "Free",
+              "fieldValue": "={{ $('GetCourse').item.json.Free }}"
+            },
+            {
+              "fieldId": "end_period",
+              "fieldValue": "={{ \n  (() => {\n    const now = new Date();\n    now.setMonth(now.getMonth() + $('GetCourse').item.json.DurationLong);\n    return now.toISOString().split('T')[0];\n  })() \n}}"
+            },
+            {
+              "fieldId": "buy",
+              "fieldValue": "TRUE"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1760,
+        160
+      ],
+      "id": "ad03486f-5751-4c9c-aed0-47a522b5b674",
+      "name": "Supabase5",
+      "credentials": {
+        "supabaseApi": {
+          "id": "__KEEP_EXISTING_CREDENTIAL__",
+          "name": "__KEEP_EXISTING_CREDENTIAL__"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "sales",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "user",
+              "fieldValue": "={{ $('UsersCreater').item.json.id }}"
+            },
+            {
+              "fieldId": "amount",
+              "fieldValue": "={{ ($('GetPositions').item.json.price*$('UsersCreater').item.json.authorCommission/100).toFixed(2)}}"
+            },
+            {
+              "fieldId": "price",
+              "fieldValue": "={{ $('GetPositions').item.json.price}}"
+            },
+            {
+              "fieldId": "position",
+              "fieldValue": "={{ $('Code').item.json.id }}"
+            },
+            {
+              "fieldId": "position_name",
+              "fieldValue": "={{ $('GetCourse').item.json.Title }}"
+            },
+            {
+              "fieldId": "position_category",
+              "fieldValue": "={{ $('GetCourse').item.json.Category }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1540,
+        160
+      ],
+      "id": "d2bf189a-8866-41b8-995c-d08c5e2cd9b2",
+      "name": "Create_Sales",
+      "credentials": {
+        "supabaseApi": {
+          "id": "__KEEP_EXISTING_CREDENTIAL__",
+          "name": "__KEEP_EXISTING_CREDENTIAL__"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "useCustomSchema": true,
+        "operation": "update",
+        "tableId": "order",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Code1').item.json.order_id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2420,
+        160
+      ],
+      "id": "d6429731-d5ec-4124-89cf-594977da08d9",
+      "name": "Supabase2",
+      "alwaysOutputData": false,
+      "credentials": {
+        "supabaseApi": {
+          "id": "__KEEP_EXISTING_CREDENTIAL__",
+          "name": "__KEEP_EXISTING_CREDENTIAL__"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "live-getuc",
+      "name": "GetUserCourse",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1600,
+        360
+      ],
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "user_course",
+        "returnAll": true,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "user",
+              "condition": "eq",
+              "keyValue": "={{ $('UsersBuyer').item.json.id }}"
+            },
+            {
+              "keyName": "course",
+              "condition": "eq",
+              "keyValue": "={{ $('GetCourse').item.json.id }}"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "__KEEP_EXISTING_CREDENTIAL__",
+          "name": "__KEEP_EXISTING_CREDENTIAL__"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "live-if",
+      "name": "IF_Exists",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        360
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "cond-has-id",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "live-updateuc",
+      "name": "UpdateUserCourse",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1760,
+        60
+      ],
+      "parameters": {
+        "operation": "update",
+        "tableId": "user_course",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "end_period",
+              "fieldValue": "={{ \n  (() => {\n    const now = new Date();\n    now.setMonth(now.getMonth() + $('GetCourse').item.json.DurationLong);\n    return now.toISOString().split('T')[0];\n  })() \n}}"
+            },
+            {
+              "fieldId": "buy",
+              "fieldValue": "TRUE"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "__KEEP_EXISTING_CREDENTIAL__",
+          "name": "__KEEP_EXISTING_CREDENTIAL__"
+        }
+      }
+    },
+    {
+      "id": "5a2fee56-59d7-4bac-9aa1-19c0ed44d862",
+      "name": "PickBuyerRow",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        360
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const buyer = $('UsersBuyer').item.json.id;\nconst courseId = $('GetCourse').item.json.id;\nconst match = $input.all()\n  .map(i => i.json)\n  .find(j => j && j.id && j.user === buyer && j.course === courseId);\nreturn [{ json: match || {}, pairedItem: { item: 0 } }];"
+      }
+    },
+    {
+      "id": "fe1e9077-a048-4c76-a4e1-66d5b9631109",
+      "name": "AlertEmail_Withdrawal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        -540
+      ],
+      "parameters": {
+        "__PRESERVE_FROM_PRODUCTION__": true
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "bd162211-b10b-486f-97f6-4dfc710dd7e0",
+      "name": "AlertEmail_NewUser",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        560
+      ],
+      "parameters": {
+        "__PRESERVE_FROM_PRODUCTION__": true
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "6826c4ea-3540-4b4f-805f-70a92f5a561f",
+      "name": "CheckPaid",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        160,
+        300
+      ],
+      "parameters": {
+        "operation": "get",
+        "tableId": "order",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Shop').first().json.body.order_num }}"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "__KEEP_EXISTING_CREDENTIAL__",
+          "name": "__KEEP_EXISTING_CREDENTIAL__"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "a9ff8a10-997a-4b1c-8937-30e20ea3910a",
+      "name": "IF_AlreadyPaid",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        380,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c-paid",
+              "leftValue": "={{ $json.paid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "97628894-7f30-4b76-9a38-60825ae94236",
+      "name": "AuditDuplicate",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        600,
+        160
+      ],
+      "parameters": {
+        "tableId": "payment_audit",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "order_id",
+              "fieldValue": "={{ $('Shop').first().json.body.order_num }}"
+            },
+            {
+              "fieldId": "event",
+              "fieldValue": "duplicate"
+            },
+            {
+              "fieldId": "paid",
+              "fieldValue": "={{ $('Shop').first().json.body.sum }}"
+            },
+            {
+              "fieldId": "detail",
+              "fieldValue": "={{ { note: 'already paid, skipped', payment_status: $('Shop').first().json.body.payment_status } }}"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "__KEEP_EXISTING_CREDENTIAL__",
+          "name": "__KEEP_EXISTING_CREDENTIAL__"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "b951b5d3-d60c-45b6-9372-2b72b8b5f356",
+      "name": "VerifySign",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        600,
+        420
+      ],
+      "parameters": {
+        "jsCode": "// Сериализация тела Prodamus под их Hmac SDK (без секрета и без обращения к окружению — только строит строку).\n// Prodamus Hmac (PHP): array_walk_recursive -> strval листьев; рекурсивный ksort; json_encode($data, JSON_UNESCAPED_UNICODE).\n// => кириллица/Unicode НЕ экранируются (literal UTF-8, как JS JSON.stringify), а '/' экранируется в '\\/'\n//    (JSON_UNESCAPED_SLASHES у Prodamus НЕ выставлен). Тело приходит form-urlencoded с ПЛОСКИМИ ключами\n//    products[0][name] -> разворачиваем во вложенную структуру (как PHP $_POST), числовые последовательные\n//    ключи -> массив (как PHP numeric-list -> json [..]). Подписывается только тело; Sign берём из заголовка.\n// !! ГЛАВНЫЙ РИСК: точная форма сериализации Prodamus. Проверяется на реальном платеже в WARN (valid=true).\nconst shop    = $('Shop').first().json || {};\nconst body    = shop.body || {};\nconst headers = shop.headers || {};\nconst sign    = String(headers['sign'] || headers['Sign'] || '').toLowerCase();\nfunction unflatten(flat){\n  const root = {};\n  for (const fk of Object.keys(flat)){\n    const parts = (String(fk).match(/[^\\[\\]]+/g)) || [fk];\n    let node = root;\n    for (let i = 0; i < parts.length; i++){\n      const k = parts[i];\n      if (i === parts.length - 1){ node[k] = flat[fk]; }\n      else { if (node[k] === undefined || node[k] === null || typeof node[k] !== 'object') node[k] = {}; node = node[k]; }\n    }\n  }\n  return root;\n}\nfunction arrayify(v){\n  if (Array.isArray(v)) return v.map(arrayify);\n  if (v && typeof v === 'object'){\n    const keys = Object.keys(v);\n    const seq = keys.length > 0 && keys.every((k, i) => k === String(i));\n    const out = seq ? [] : {};\n    for (const k of keys){ if (seq) out.push(arrayify(v[k])); else out[k] = arrayify(v[k]); }\n    return out;\n  }\n  return v;\n}\nfunction toStrDeep(v){\n  if (Array.isArray(v)) return v.map(toStrDeep);\n  if (v && typeof v === 'object'){ const o = {}; for (const k of Object.keys(v)) o[k] = toStrDeep(v[k]); return o; }\n  if (v === true)  return '1';\n  if (v === false) return '';\n  if (v === null || v === undefined) return '';\n  return String(v);\n}\nfunction ksortDeep(v){\n  if (Array.isArray(v)) return v.map(ksortDeep);\n  if (v && typeof v === 'object'){ const o = {}; for (const k of Object.keys(v).sort()) o[k] = ksortDeep(v[k]); return o; }\n  return v;\n}\nconst prepared   = ksortDeep(toStrDeep(arrayify(unflatten(body))));\nconst serialized = JSON.stringify(prepared).replace(/\\//g, '\\\\/');\nreturn [{ json: { serialized, sign } }];\n"
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "8c48f7e1-f233-40c9-8d5e-fcc4c4289961",
+      "name": "VerifySignRPC",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        820,
+        420
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://existing-supabase.invalid/rest/v1/rpc/verify_prodamus_sign",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"serialized\": {{ JSON.stringify($json.serialized) }}, \"sign\": {{ JSON.stringify($json.sign) }} }",
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "__KEEP_EXISTING_CREDENTIAL__",
+          "name": "__KEEP_EXISTING_CREDENTIAL__"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "01381fd0-8f4a-424f-9523-b5a85d232710",
+      "name": "VerifyAmount",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1040,
+        420
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://existing-supabase.invalid/rest/v1/rpc/verify_order_payment",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"p_order_id\": \"{{ $('Shop').first().json.body.order_num }}\", \"p_paid_amount\": {{ ($('Shop').first().json.body.sum === undefined || $('Shop').first().json.body.sum === null || $('Shop').first().json.body.sum === '') ? 'null' : Number($('Shop').first().json.body.sum) }} }",
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "__KEEP_EXISTING_CREDENTIAL__",
+          "name": "__KEEP_EXISTING_CREDENTIAL__"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "de0d7066-765b-4d76-95d0-92348c552eb3",
+      "name": "AuditWarn",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1260,
+        420
+      ],
+      "parameters": {
+        "tableId": "payment_audit",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "order_id",
+              "fieldValue": "={{ $('Shop').first().json.body.order_num }}"
+            },
+            {
+              "fieldId": "event",
+              "fieldValue": "={{ ($('VerifySignRPC').first().json.valid && $json.ok) ? 'ok' : (!$('VerifySignRPC').first().json.valid ? 'sig_fail' : 'amount_mismatch') }}"
+            },
+            {
+              "fieldId": "expected",
+              "fieldValue": "={{ $json.expected ?? $json.expected_min ?? null }}"
+            },
+            {
+              "fieldId": "paid",
+              "fieldValue": "={{ $('Shop').first().json.body.sum }}"
+            },
+            {
+              "fieldId": "detail",
+              "fieldValue": "={{ { sig_valid: $('VerifySignRPC').first().json.valid, secret_present: $('VerifySignRPC').first().json.secret_present, verify: $json, payment_status: $('Shop').first().json.body.payment_status, mode: 'warn' } }}"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "__KEEP_EXISTING_CREDENTIAL__",
+          "name": "__KEEP_EXISTING_CREDENTIAL__"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "762b5bcb-061f-4715-bf35-e5acbe57cad9",
+      "name": "RestoreBody",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1480,
+        420
+      ],
+      "parameters": {
+        "jsCode": "// Тривиально, без pairedItem: вернуть json исходного вебхука, чтобы 'Supabase' видел $json.body.*\nreturn [{ json: $('Shop').first().json }];\n"
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    }
+  ],
+  "connections": {
+    "Supabase": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "GetPositions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GetPositions": {
+      "main": [
+        [
+          {
+            "node": "GetCourse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GetCourse": {
+      "main": [
+        [
+          {
+            "node": "UsersCreater",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "UsersCreater": {
+      "main": [
+        [
+          {
+            "node": "UsersBuyer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "UsersBuyer": {
+      "main": [
+        [
+          {
+            "node": "Create_Sales",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SendEmail": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code1": {
+      "main": [
+        [
+          {
+            "node": "Supabase1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase1": {
+      "main": [
+        [
+          {
+            "node": "Supabase2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Supabase3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase3": {
+      "main": [
+        [
+          {
+            "node": "Supabase4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request3": {
+      "main": [
+        []
+      ]
+    },
+    "Supabase4": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TG_Bot": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request5",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AlertEmail_Withdrawal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request4",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AlertEmail_NewUser",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request2": {
+      "main": [
+        []
+      ]
+    },
+    "Supabase5": {
+      "main": [
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request6": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase2": {
+      "main": [
+        []
+      ]
+    },
+    "Create_Sales": {
+      "main": [
+        [
+          {
+            "node": "GetUserCourse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF_Exists": {
+      "main": [
+        [
+          {
+            "node": "UpdateUserCourse",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Supabase5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "UpdateUserCourse": {
+      "main": [
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GetUserCourse": {
+      "main": [
+        [
+          {
+            "node": "PickBuyerRow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PickBuyerRow": {
+      "main": [
+        [
+          {
+            "node": "IF_Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shop": {
+      "main": [
+        [
+          {
+            "node": "CheckPaid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CheckPaid": {
+      "main": [
+        [
+          {
+            "node": "IF_AlreadyPaid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF_AlreadyPaid": {
+      "main": [
+        [
+          {
+            "node": "AuditDuplicate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "VerifySign",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VerifySign": {
+      "main": [
+        [
+          {
+            "node": "VerifySignRPC",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VerifySignRPC": {
+      "main": [
+        [
+          {
+            "node": "VerifyAmount",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VerifyAmount": {
+      "main": [
+        [
+          {
+            "node": "AuditWarn",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AuditWarn": {
+      "main": [
+        [
+          {
+            "node": "RestoreBody",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RestoreBody": {
+      "main": [
+        [
+          {
+            "node": "Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "reviewOnly": true
+}
