@@ -1,0 +1,91 @@
+--- a/src/server.mjs
++++ b/src/server.mjs
+@@ -7,7 +7,7 @@
+ import rateLimit from 'express-rate-limit';
+ import { config } from './config.mjs';
+ import { requireAuth } from './auth.mjs';
+-import { getStream, getVideoRun, reserveVideoStart, holdVideoStart, releaseVideoStart, getUserRole, getMembership, markJoined, getUserName, setStreamLive, setStreamEnded, ensureOwnerMembership, resolveUserByEmail, inviteCohost, removeCohost } from './db.mjs';
++import { getStream, getVideoRun, isFullHdAllowed, reserveVideoStart, holdVideoStart, releaseVideoStart, getUserRole, getMembership, markJoined, getUserName, setStreamLive, setStreamEnded, ensureOwnerMembership, resolveUserByEmail, inviteCohost, removeCohost } from './db.mjs';
+ import { mintPublishToken, ensureRoom, startEgress, stopEgress, stopUncommittedEgress, isEgressActive, readEgressState, kickParticipant } from './livekit.mjs';
+ import { createLive, deleteLive } from './peertube.mjs';
+ 
+@@ -57,7 +57,7 @@
+             identity: sub,
+             role: member.role,
+             expires_at: expiresAt,
+-            video_quality: stream.livekit_egress_id ? (await getVideoRun(stream))?.profile || 'hd' : videoProfile(stream.video_quality).id,
++            video_quality: stream.livekit_egress_id ? (await getVideoRun(stream))?.profile || 'hd' : (stream.video_quality === 'full_hd' && !(await isFullHdAllowed(stream)) ? 'hd' : videoProfile(stream.video_quality).id),
+             quality_contract: 1,
+         });
+     } catch (e) {
+@@ -86,7 +86,7 @@
+ 
+         const profile = videoProfile(stream.video_quality).id;
+         // Admission is checked BEFORE allocating Egress/transcoding resources.
+-        const reservation = await reserveVideoStart(stream, profile);
++        const reservation = await reserveVideoStart(stream, profile, req.user.sub);
+         const room = stream.livekit_room || stream.id;
+         let live, egressId, egressRequested = false;
+         try {
+@@ -96,14 +96,15 @@
+             await holdVideoStart(reservation);
+             egressRequested = true;
+             egressId = await startEgress({ room, streamKey: live.streamKey, profile });
+-            await setStreamLive(stream, { egressId, videoId: live.video.uuid, profile, reservation });
++            await setStreamLive(stream, { egressId, videoId: live.video.uuid, profile, reservation, actorId: req.user.sub });
+         } catch (error) {
+             if (egressRequested && !egressId) throw new Error('video_start_reconciliation_required');
+             // Verify commit state before compensation; if reads fail, preserve resources for reconciliation.
+             if (egressId) {
+-                const current = await getStream(stream.id);
++                let current;
++                try { current = await getStream(stream.id); } catch { throw new Error('video_start_reconciliation_required'); }
+                 if (current?.livekit_egress_id === egressId) throw new Error('video_start_reconciliation_required');
+-                await stopUncommittedEgress(egressId);
++                try { await stopUncommittedEgress(egressId); } catch { throw new Error('video_start_reconciliation_required'); }
+             }
+             if (live) await deleteLive(live.video.uuid).catch(() => {});
+             await releaseVideoStart(reservation).catch(() => {});
+@@ -111,7 +112,7 @@
+         }
+         return res.json({ room, peertube_video_id: live.video.uuid, egress_id: egressId, video_quality: profile });
+     } catch (e) {
+-        const expected = ['full_hd_capacity', 'full_hd_not_enabled', 'stream_settings_changed', 'stream_start_in_progress', 'video_reservation_expired', 'video_start_reconciliation_required'];
++        const expected = ['full_hd_capacity', 'full_hd_not_enabled', 'full_hd_actor_contract_required', 'not_owner', 'stream_settings_changed', 'stream_start_in_progress', 'video_reservation_expired', 'video_start_reconciliation_required'];
+         if (expected.includes(e?.message)) return res.status(409).json({ error: e.message });
+         console.error('[/live/start]', e);
+         return res.status(500).json({ error: 'internal' });
+--- a/src/db.mjs
++++ b/src/db.mjs
+@@ -23,8 +23,8 @@
+     if (error) throw error;
+     return data;
+ }
+-export async function reserveVideoStart(stream, profile) {
+-    const { data, error } = await sb.rpc('reserve_stream_video_start', { p_stream_id: stream.id, p_expected_quality: profile, p_expected_egress_id: stream.livekit_egress_id || null });
++export async function reserveVideoStart(stream, profile, actorId) {
++    const { data, error } = await sb.rpc('reserve_stream_video_start_scoped', { p_stream_id: stream.id, p_actor_id: actorId, p_expected_quality: profile, p_expected_egress_id: stream.livekit_egress_id || null });
+     if (error) throw error;
+     return data;
+ }
+@@ -41,8 +41,8 @@
+     if (error) throw error;
+     return data?.role;
+ }
+-export async function setStreamLive(stream, { egressId, videoId, profile, reservation }) {
+-    const { error } = await sb.rpc('mark_stream_video_started', { p_stream_id: stream.id, p_expected_quality: profile,
++export async function setStreamLive(stream, { egressId, videoId, profile, reservation, actorId }) {
++    const { error } = await sb.rpc('mark_stream_video_started_scoped', { p_stream_id: stream.id, p_actor_id: actorId, p_expected_quality: profile,
+         p_expected_egress_id: stream.livekit_egress_id || null, p_egress_id: egressId, p_video_id: videoId, p_reservation: reservation });
+     if (error) {
+         // An HTTP error is not proof of transaction failure. Never stop a possibly committed run.
+@@ -142,3 +142,9 @@
+     if (upErr) throw upErr;
+     return { outcome: 'removed' };
+ }
++
++export async function isFullHdAllowed(stream) {
++    const { data, error } = await sb.rpc('stream_full_hd_test_allowed', { p_stream_id: stream.id, p_owner_id: stream.author });
++    if (error) throw error;
++    return data === true;
++}

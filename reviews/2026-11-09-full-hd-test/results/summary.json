@@ -1,0 +1,18 @@
+{
+  "new_unit": 3,
+  "new_orchestrator_vm": 16,
+  "new_pg_postgrest": 23,
+  "new_browser": 11,
+  "regression_visibility_unit": 20,
+  "regression_video_stats_unit": 15,
+  "regression_quality_unit": 9,
+  "regression_my_streams_browser": 11,
+  "regression_diagnostics_browser": 12,
+  "regression_quality_browser": 9,
+  "fail": 0,
+  "actual_full_hd_media": "NOT RUN",
+  "Safari": "NOT RUN",
+  "production_changed": false,
+  "production_main_base": "d3a56150b96cdecb23d20726f9aa6c957e3f1b73",
+  "isolated_main_build_without_postbuild": "PASS"
+}

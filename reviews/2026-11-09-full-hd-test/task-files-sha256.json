@@ -1,0 +1,23 @@
+{
+  "reviews/2026-11-09-full-hd-test/README.md": "4e486a752387da21e31fb29575b99faeaf77fefcc78009ab27f1b7d585112b46",
+  "reviews/2026-11-09-full-hd-test/assign-grant.sql": "219308cf499ac769baf5e1078d90032feacaf1b47b504c5b59d35273041ac97a",
+  "reviews/2026-11-09-full-hd-test/deployment.md": "058ebfc4be83151c56824ab284198b763afea31a57b69eead1a030a9b9dad1c5",
+  "reviews/2026-11-09-full-hd-test/frontend.diff": "45dfd059e8d3fe8b4730f21309cc8af7aa6ed967b169e36a337d95cd2c707533",
+  "reviews/2026-11-09-full-hd-test/orchestrator/src/db.mjs": "a887bc388e618cfdc8da8bdd8c4cd970689eeb6d710545f9cecb57d6ab4e8833",
+  "reviews/2026-11-09-full-hd-test/orchestrator/src/livekit.mjs": "dfe45cc4b199bbd376aa0c72ca747c0f936fa564d23bf0013fe25a66902445f3",
+  "reviews/2026-11-09-full-hd-test/orchestrator/src/server.mjs": "21ce476ee4afedb051fc94576d6a9fed9abfe8d0d2f3c8f54e138c1c262649ac",
+  "reviews/2026-11-09-full-hd-test/orchestrator/src/videoQuality.mjs": "2bd4cc13497e2a931bcb5d381b7a72c90669c4ef34c3bcff876509a318ebe7a1",
+  "reviews/2026-11-09-full-hd-test/orchestrator.diff": "829e3232c772991405a40ad76f3d188ef873f2213474de462982745e8200c958",
+  "reviews/2026-11-09-full-hd-test/production-baseline-sha256.json": "d3a45260ff47e22f59e420379fcf2adcc2a3c0b80b85e57235cd17aac3df24db",
+  "reviews/2026-11-09-full-hd-test/results/postgresql-postgrest.json": "453d7b67ba49feab633a1dcdb9dd61efe3b4003cbaf4fee0cfe79f8ee4d87786",
+  "reviews/2026-11-09-full-hd-test/results/summary.json": "4d2298093f9fda3c5cd3307383edb5812d0c76571a9c824cc0b208dfdab4739f",
+  "reviews/2026-11-09-full-hd-test/revoke-grant.sql": "3d298fc1436b617b91586b5bdf03b919d4541a294f4165481a686c8c356c869d",
+  "src/_front/streams/streamQualityAccess.js": "5110be93e3cfafc6de81a15733f39f0df2e93ef49de5ccb7146411653baa671c",
+  "supabase/migrations/pending_stream_full_hd_test.sql": "d7e8a7a05d3fec6a6657e57a914366c78a416d70838edda113330197046d5438",
+  "supabase/migrations/pending_stream_full_hd_test_rollback.sql": "49ba261c4a919f4db3a8aa7ad7c79d78e0194d6dd3ce7e5358e972baecc669cd",
+  "supabase/migrations/verify_stream_full_hd_test.sql": "15d3c3a2cbcb3a1c17b04fe66f21b87ef28823275fc59ac93bae90715eaf2c74",
+  "tests/full-hd-test.browser.mjs": "9870ddf010fa42bd2277f91fb629651509e5ea88a317ea3da1786f73b0d52a3e",
+  "tests/full-hd-test.integration.py": "3eec9234bacce39d354d0986b4d11692edeacb18cdbfc9a89cb21b5d88b503ed",
+  "tests/full-hd-test.orchestrator.mjs": "5313cdc5e9f753582a99b55cf1f1941d3153bed08086094309060f60f73d8f35",
+  "tests/full-hd-test.unit.mjs": "39319fb2bc1f7d14cdef23699991644b943d3e1fa59b319b53ee4d9e21697d25"
+}

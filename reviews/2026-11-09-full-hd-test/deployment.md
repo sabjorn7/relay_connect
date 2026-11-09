@@ -1,0 +1,38 @@
+# Порядок внедрения и реального теста — отдельно согласовать
+
+Ни один production-шаг ниже не выполнен. SQL выполняет владелец в Supabase SQL Editor. Не использовать старый глобальный UPDATE full_hd_enabled=true.
+
+1. Выбрать окно без активных LiveKit комнат/Egress, streams.status=live и резервирований. Сохранить защищённый backup текущих определений RPC/триггеров, streams/settings/run/reservation и серверных исходников/артефактов. Сверить SHA production с production-baseline-sha256.json; при drift остановиться. Миграция сама отказывается при live/reservations или неожиданных global settings.
+2. Владелец применяет `supabase/migrations/pending_stream_full_hd_test.sql` **один раз**, затем отдельно `NOTIFY pgrst, 'reload schema';`. Не применять старую базовую миграцию качества повторно. Запустить `verify_stream_full_hd_test.sql`: все checks PASS, нет enabled grants, global=false/max=1. Отсутствие migration в репозитории не означает отсутствие объектов — перед повтором проверить схему.
+3. На read-only PostgREST убедиться: anon не вызывает stream_video_quality_for_stream; authenticated non-owner получает false; старый HD backend сохраняет RPC-совместимость. Не вызывать reserve/mark на реальных записях для health-check.
+4. После отдельного разрешения заменить только candidate orchestrator src/db.mjs и src/server.mjs. Config/auth/PeerTube/SDK/livekit adapter не трогать. Потребуется согласованный restart только live-orchestrator, без docker compose down. Старые HD runtime-правила сохраняются. Проверить healthz, 401 без JWT, доступность новых RPC в schema cache.
+5. Выпустить изолированный frontend от актуальной main: только два изменённых Vue-файла и streamQualityAccess.js плюс тесты/миграция. Сохранить PeerTube native iframe, диагностику и «Мои трансляции». Зависимости/сборку production не менять. До назначения допуска новая UI должна показывать только HD.
+6. Организатор создаёт в HD скрытый бесплатный тест с форматом «Со-ведущие» (multi), НЕ начинает эфир. Это существующая функция, не новый публичный endpoint. Владелец SQL читает `SELECT id, author, mode, status, visibility, price, hidden FROM public.streams WHERE id='<UUID>';` и проверяет нужный ID/организатора. Не копировать capability hash/RTMP key в SQL или чат.
+7. Владелец вручную запускает `assign-grant.sql`, заменив ТОЛЬКО REPLACE_STREAM_UUID и REPLACE_OWNER_UUID. Скрипт проверяет текущего владельца, idle hidden free multi-stream, global=false/max=1, отсутствие других enabled grants/запусков. Допуск ограничен двумя часами; grant management API нет. При необходимости продолжения срока повторить назначение осознанно после сверки состояния.
+8. Организатор переоткрывает настройки: Full HD виден только здесь. Выбирает его и сохраняет; перечитывает настройку. На другом собственном эфире и под другим аккаунтом Full HD отсутствует. В Supabase global flag всё ещё false.
+9. До подключения в LiveKit выбрать источник. FaceTime 1280×720 из предыдущего теста НЕ является доказательством поддержки 1920×1080. Использовать совместимую имеющуюся USB/UVC/виртуальную камеру, подтверждённую фактическими getSettings, либо тестовый 1080p canvas с мелким текстом/движением. Синтетический canvas не доказывает совместимость физической камеры. Неподдержанный capture не блокируется: текущий fallback/предупреждение сохранены. После изменения будущего профиля переподключить ведущих до запуска; уже работающий эфир не перенастраивать.
+10. Перед реальным тестом проверить PeerTube original live resolution (см. ниже), ресурсы существующим read-only мониторингом и отсутствие важного параллельного эфира. Отдельно разрешённый короткий тест: сначала 3–5 минут одним ведущим. Зафиксировать capture 1920×1080, HIGH (f) actual width/height/FPS/bitrate после двух samples, snapshot Full HD и Egress state; затем HLS manifest/segment resolution и decoded videoWidth/videoHeight зрителя + звук. Заданный Egress preset, HIGH у ведущего и label плеера по отдельности не доказывают весь путь. Сохранить только обезличенные метрики, без SDP/ICE/токенов/медиасекретов.
+11. Следить за CPU/RAM/очередями/сетью LiveKit, Egress и PeerTube; 1080p содержит 2,25× пикселей HD, Egress target 3→4,5 Мбит/с, upstream камеры 1,7→4,5 Мбит/с плюс simulcast/audio/overhead. Это расчёт настроек, не оценка реальной ёмкости. При нестабильности завершить ТОЛЬКО тестовый эфир штатной кнопкой, отозвать допуск, не трогать другие комнаты/контейнеры. Нагрузочный тест в этот план не входит.
+12. После теста вручную выполнить `revoke-grant.sql` с той же парой ID. Он идемпотентен, не меняет global flag и не останавливает уже работающий Egress. Проверить новый старт запрещён, история сохранена. Для последующего HD организатор выбирает HD в настройках.
+
+## PeerTube 7.0.1
+
+Публичная production-конфигурация: live/transcoding=true, remoteRunners=false, additional live resolutions=[]. Документация и defaults v7.0.1 поддерживают исходное live-разрешение; default always_transcode_original_resolution=true, но это НЕ доказательство эффективной production-настройки.
+
+Владелец/администратор должен только прочитать live transcoding: включено ли «Also transcode original resolution» / live.transcoding.always_transcode_original_resolution. При true первый ограниченный тест можно проводить с исходным 1080p без добавления глобальной лестницы. Доступность реального 1080p всё равно подтвердить manifest/decoded frames. При false/неизвестно — не заявлять end-to-end 1080p; сначала согласовать необходимую настройку. Менять настройки PeerTube автоматически нельзя.
+
+Добавление 720p/480p HLS-вариантов может затронуть все НОВЫЕ live-трансляции и CPU; это отдельное согласование, не часть персонального допуска. Не перезапускать PeerTube, LiveKit или Egress ради этой функции. Не включать сломанный внешний Embed API-контроллер: качество переключается штатными средствами PeerTube, только среди реально доступных вариантов.
+
+Источники: https://docs.joinpeertube.org/admin/configuration ; https://github.com/Chocobozzz/PeerTube/blob/v7.0.1/config/default.yaml
+
+## Неопределённый результат внешнего запуска
+
+При video_start_reconciliation_required НЕ повторять старт и не освобождать резерв по времени. SQL verify показывает stream_id, owner_id, profile, expires_at, но не внутренний reservation token.
+
+Администратор сверяет только этот room/stream в LiveKit Egress API и БД. Если run уже committed — сохранить его и резерв не удалять вслепую. Если найден НОВЫЙ незакоммиченный Egress — остановить именно его с отдельным разрешением и подтвердить terminal state. При отсутствии доказательства остановки удерживать слот; это безопаснее повторного allocation. После подтверждённого отсутствия/остановки всех provisional jobs владелец может вручную удалить резерв ТОЛЬКО этой пары stream_id/owner_id, предварительно перечитав состояние. Полный EgressInfo/RTMP URL не выводить. Provisional PeerTube при неизвестном create также сверять адресно, без массового удаления.
+
+## Откат
+
+Первый шаг — `pending_stream_full_hd_test_rollback.sql`: отключает все pilot grants. Он НЕ меняет settings, run history, streams.video_quality, доступы или media. Старый rollback только через full_hd_enabled=false больше не отключает персональные допуски — использовать НОВЫЙ scoped rollback.
+
+Работающий Full HD сохраняет профиль до штатного завершения; не возвращать старый backend при active Full HD или held reservation. После окончания и сверки можно вернуть прежние два server-файла/артефакты frontend из backup и перезапустить только orchestrator. Перед старым backend владельцу выбрать будущий HD для тестового эфира. Аддитивную таблицу/owner_id/RPC и историю не удалять: старые HD wrappers совместимы, pilot старым RPC закрыт. SQL destructive rollback не нужен.

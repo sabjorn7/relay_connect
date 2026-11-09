@@ -1,0 +1,94 @@
+[
+  {
+    "name": "grant table cannot be enumerated or managed by clients; server key cannot self-grant",
+    "status": "PASS"
+  },
+  {
+    "name": "unapproved owner cannot save Full HD",
+    "status": "PASS"
+  },
+  {
+    "name": "PostgREST exposes scoped boolean only to matching authenticated owner; extra owner cannot spoof",
+    "status": "PASS"
+  },
+  {
+    "name": "approved owner saves Full HD with global flag false",
+    "status": "PASS"
+  },
+  {
+    "name": "other stream/owner has no matching grant",
+    "status": "PASS"
+  },
+  {
+    "name": "browser cannot invoke start RPC; legacy Full HD and actor mismatch fail closed",
+    "status": "PASS"
+  },
+  {
+    "name": "two parallel starts reserve exactly one slot",
+    "status": "PASS"
+  },
+  {
+    "name": "grant row lock serializes concurrent revoke and admission",
+    "status": "PASS"
+  },
+  {
+    "name": "revocation between reserve and external create is rejected by hold",
+    "status": "PASS"
+  },
+  {
+    "name": "revocation after hold rolls back mark; unknown external state remains bounded and fail-closed",
+    "status": "PASS"
+  },
+  {
+    "name": "revoke preserves active Egress snapshot; restart requires renewed grant",
+    "status": "PASS"
+  },
+  {
+    "name": "max_full_hd_live=1 survives reassignment of the pilot grant",
+    "status": "PASS"
+  },
+  {
+    "name": "unique index prevents two enabled pilot grants",
+    "status": "PASS"
+  },
+  {
+    "name": "expired grant hides choice and blocks new start",
+    "status": "PASS"
+  },
+  {
+    "name": "expiration after external-start hold rejects atomic mark",
+    "status": "PASS"
+  },
+  {
+    "name": "owner transfer invalidates grant permanently even when ownership returns",
+    "status": "PASS"
+  },
+  {
+    "name": "actor/reservation binding prevents commit after owner change",
+    "status": "PASS"
+  },
+  {
+    "name": "legacy HD start/hold/mark remains compatible without pilot grant",
+    "status": "PASS"
+  },
+  {
+    "name": "existing RLS, hidden enumeration protection and eight actual paid-access assertions preserved",
+    "status": "PASS"
+  },
+  {
+    "name": "operational rollback disables new Full HD without deleting history/stopping active snapshot",
+    "status": "PASS"
+  },
+  {
+    "name": "exact manual assignment/revocation scripts work with synthetic IDs and keep global flag false",
+    "status": "PASS"
+  },
+  {
+    "name": "manual verification SQL is read-only and all checks pass",
+    "status": "PASS"
+  },
+  {
+    "name": "temporary PostgreSQL/PostgREST stopped; ports closed",
+    "status": "PASS"
+  }
+]
