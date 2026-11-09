@@ -1,0 +1,266 @@
+--- a/src/server.mjs
++++ b/src/server.mjs
+@@ -1,3 +1,4 @@
++import { videoProfile } from './videoQuality.mjs';
+ // MeetGuru live orchestrator — server-authoritative control plane for multi-host (co-host) rooms.
+ // Endpoints: /live/token (2.2), /live/start + /live/stop (2.3), /live/invite (2.4),
+ // /live/remove (2.4b). All gated on a verified Supabase JWT.
+@@ -6,8 +7,8 @@
+ import rateLimit from 'express-rate-limit';
+ import { config } from './config.mjs';
+ import { requireAuth } from './auth.mjs';
+-import { getStream, getMembership, markJoined, getUserName, setStreamLive, setStreamEnded, ensureOwnerMembership, resolveUserByEmail, inviteCohost, removeCohost } from './db.mjs';
+-import { mintPublishToken, ensureRoom, startEgress, stopEgress, isEgressActive, kickParticipant } from './livekit.mjs';
++import { getStream, getVideoRun, reserveVideoStart, holdVideoStart, releaseVideoStart, getUserRole, getMembership, markJoined, getUserName, setStreamLive, setStreamEnded, ensureOwnerMembership, resolveUserByEmail, inviteCohost, removeCohost } from './db.mjs';
++import { mintPublishToken, ensureRoom, startEgress, stopEgress, stopUncommittedEgress, isEgressActive, readEgressState, kickParticipant } from './livekit.mjs';
+ import { createLive, deleteLive } from './peertube.mjs';
+ 
+ const app = express();
+@@ -26,6 +27,10 @@
+     legacyHeaders: false,
+     message: { error: 'rate_limited' },
+ });
++
++// Diagnostics polling must never consume the token-mint limiter's budget.
++const diagnosticsLimiter = rateLimit({ windowMs: 60 * 1000, limit: 120, standardHeaders: true, legacyHeaders: false,
++    message: { error: 'rate_limited' } });
+ 
+ app.post('/live/token', tokenLimiter, requireAuth, async (req, res) => {
+     try {
+@@ -52,6 +57,8 @@
+             identity: sub,
+             role: member.role,
+             expires_at: expiresAt,
++            video_quality: stream.livekit_egress_id ? (await getVideoRun(stream))?.profile || 'hd' : videoProfile(stream.video_quality).id,
++            quality_contract: 1,
+         });
+     } catch (e) {
+         console.error('[/live/token]', e);
+@@ -77,28 +84,55 @@
+             return res.status(409).json({ error: 'already_live', egress_id: stream.livekit_egress_id, peertube_video_id: stream.peertube_video_id });
+         }
+ 
++        const profile = videoProfile(stream.video_quality).id;
++        // Admission is checked BEFORE allocating Egress/transcoding resources.
++        const reservation = await reserveVideoStart(stream, profile);
+         const room = stream.livekit_room || stream.id;
+-        await ensureOwnerMembership(stream.id, req.user.sub);
+-
+-        await ensureRoom(room);
+-
+-        const live = await createLive({ name: stream.title || 'Эфир', saveReplay: true });
+-
+-        let egressId;
++        let live, egressId, egressRequested = false;
+         try {
+-            egressId = await startEgress({ room, streamKey: live.streamKey });
+-        } catch (e) {
+-            await deleteLive(live.video.uuid).catch(() => {});
+-            console.error('[/live/start] egress failed, rolled back live:', e?.message);
+-            return res.status(502).json({ error: 'egress_start_failed' });
++            await ensureOwnerMembership(stream.id, req.user.sub);
++            await ensureRoom(room);
++            live = await createLive({ name: stream.title || 'Эфир', saveReplay: true });
++            await holdVideoStart(reservation);
++            egressRequested = true;
++            egressId = await startEgress({ room, streamKey: live.streamKey, profile });
++            await setStreamLive(stream, { egressId, videoId: live.video.uuid, profile, reservation });
++        } catch (error) {
++            if (egressRequested && !egressId) throw new Error('video_start_reconciliation_required');
++            // Verify commit state before compensation; if reads fail, preserve resources for reconciliation.
++            if (egressId) {
++                const current = await getStream(stream.id);
++                if (current?.livekit_egress_id === egressId) throw new Error('video_start_reconciliation_required');
++                await stopUncommittedEgress(egressId);
++            }
++            if (live) await deleteLive(live.video.uuid).catch(() => {});
++            await releaseVideoStart(reservation).catch(() => {});
++            throw error;
+         }
+-
+-        await setStreamLive(stream.id, { egressId, videoId: live.video.uuid });
+-        return res.json({ room, peertube_video_id: live.video.uuid, egress_id: egressId });
+-    } catch (e) {
++        return res.json({ room, peertube_video_id: live.video.uuid, egress_id: egressId, video_quality: profile });
++    } catch (e) {
++        const expected = ['full_hd_capacity', 'full_hd_not_enabled', 'stream_settings_changed', 'stream_start_in_progress', 'video_reservation_expired', 'video_start_reconciliation_required'];
++        if (expected.includes(e?.message)) return res.status(409).json({ error: e.message });
+         console.error('[/live/start]', e);
+         return res.status(500).json({ error: 'internal' });
+     }
++});
++
++// Authenticated diagnostic read: creator/cohost or the existing users.role='admin'.
++app.post('/live/quality', diagnosticsLimiter, requireAuth, async (req, res) => {
++    try {
++        const streamId = req.body?.stream_id;
++        if (!UUID.test(streamId || '')) return res.status(400).json({ error: 'bad_stream_id' });
++        const stream = await getStream(streamId);
++        if (!stream) return res.status(404).json({ error: 'stream_not_found' });
++        const member = stream.author === req.user.sub || await getMembership(streamId, req.user.sub);
++        if (!member && await getUserRole(req.user.sub) !== 'admin') return res.status(403).json({ error: 'not_a_cohost' });
++        const run = await getVideoRun(stream);
++        const active = stream.livekit_egress_id ? videoProfile(run?.profile || 'hd') : null;
++        const state = await readEgressState(stream.livekit_egress_id);
++        return res.json({ requested: videoProfile(stream.video_quality).id, profile: active, ...state,
++            measuredBitrate: null, cpuPercent: null, memoryBytes: null });
++    } catch { return res.status(503).json({ error: 'quality_unavailable' }); }
+ });
+ 
+ app.post('/live/stop', requireAuth, async (req, res) => {
+--- a/src/db.mjs
++++ b/src/db.mjs
+@@ -10,19 +10,49 @@
+ export async function getStream(id) {
+     const { data, error } = await sb
+         .from('streams')
+-        .select('id, author, title, mode, status, livekit_room, livekit_egress_id, peertube_video_id')
++        .select('id, author, title, mode, status, livekit_room, livekit_egress_id, peertube_video_id, video_quality')
+         .eq('id', id)
+         .limit(1);
+     if (error) throw error;
+     return data?.[0] || null;
+ }
+ 
+-export async function setStreamLive(streamId, { egressId, videoId }) {
+-    const { error } = await sb
+-        .from('streams')
+-        .update({ livekit_egress_id: egressId, peertube_video_id: videoId, mode: 'multi', status: 'live', livekit_room: streamId })
+-        .eq('id', streamId);
++export async function getVideoRun(stream) {
++    if (!stream.livekit_egress_id) return null;
++    const { data, error } = await sb.from('stream_video_runs').select('profile,started_at,ended_at').eq('egress_id', stream.livekit_egress_id).eq('stream_id', stream.id).maybeSingle();
+     if (error) throw error;
++    return data;
++}
++export async function reserveVideoStart(stream, profile) {
++    const { data, error } = await sb.rpc('reserve_stream_video_start', { p_stream_id: stream.id, p_expected_quality: profile, p_expected_egress_id: stream.livekit_egress_id || null });
++    if (error) throw error;
++    return data;
++}
++export async function releaseVideoStart(token) {
++    const { error } = await sb.from('stream_video_start_reservations').delete().eq('token', token);
++    if (error) throw error;
++}
++export async function holdVideoStart(token) {
++    const { error } = await sb.rpc('hold_stream_video_start', { p_token: token });
++    if (error) throw error;
++}
++export async function getUserRole(userId) {
++    const { data, error } = await sb.from('users').select('role').eq('id', userId).maybeSingle();
++    if (error) throw error;
++    return data?.role;
++}
++export async function setStreamLive(stream, { egressId, videoId, profile, reservation }) {
++    const { error } = await sb.rpc('mark_stream_video_started', { p_stream_id: stream.id, p_expected_quality: profile,
++        p_expected_egress_id: stream.livekit_egress_id || null, p_egress_id: egressId, p_video_id: videoId, p_reservation: reservation });
++    if (error) {
++        // An HTTP error is not proof of transaction failure. Never stop a possibly committed run.
++        const current = await getStream(stream.id);
++        if (current?.livekit_egress_id === egressId) {
++            const run = await getVideoRun(current);
++            if (run?.profile === profile) return;
++        }
++        throw error;
++    }
+ }
+ 
+ export async function setStreamEnded(streamId) {
+--- a/src/livekit.mjs
++++ b/src/livekit.mjs
+@@ -1,3 +1,4 @@
++import { videoProfile } from './videoQuality.mjs';
+ // Mints a LiveKit access token that grants PUBLISH into one room. Called only after both
+ // authorization gates pass. identity is forced to the Supabase user id by the caller.
+ import { AccessToken, EgressClient, RoomServiceClient, StreamOutput, StreamProtocol, EncodingOptionsPreset } from 'livekit-server-sdk';
+@@ -33,12 +34,13 @@
+     return { token, expiresAt: new Date(payload.exp * 1000).toISOString() };
+ }
+ 
+-export async function startEgress({ room, streamKey }) {
++export async function startEgress({ room, streamKey, profile = 'hd' }) {
++    const selected = videoProfile(profile);
+     const rtmp = `${config.peertubeRtmpBase.replace(/\/$/, '')}/${streamKey}`;
+     const output = new StreamOutput({ protocol: StreamProtocol.RTMP, urls: [rtmp] });
+     const info = await egressClient.startRoomCompositeEgress(room, output, {
+         layout: 'grid',
+-        encodingOptions: EncodingOptionsPreset.H264_720P_30,
++        encodingOptions: EncodingOptionsPreset[selected.egressPreset],
+         customBaseUrl: config.egressTemplateUrl,
+     });
+     return info.egressId;
+@@ -63,3 +65,23 @@
+         return false;
+     }
+ }
++
++export async function readEgressState(egressId) {
++    if (!egressId) return { state: 'not_started', error: null };
++    const rows = await egressClient.listEgress({ egressId });
++    const run = rows[0];
++    const states = ['starting', 'active', 'ending', 'complete', 'failed', 'aborted', 'limit_reached'];
++    // Never expose EgressInfo.streamResults, output URLs, raw error text or credentials.
++    return { state: run ? (states[run.status] || 'unknown') : 'unavailable', error: run?.error ? 'Ошибка Egress; подробности доступны на сервере.' : null };
++}
++
++export async function stopUncommittedEgress(egressId) {
++    // Used only for our own failed NEW start. Never swallow an ambiguous stop or release capacity early.
++    await egressClient.stopEgress(egressId);
++    for (let i = 0; i < 10; i++) {
++        const rows = await egressClient.listEgress({ egressId });
++        if (rows[0] && rows[0].status >= 3) return;
++        await new Promise(resolve => setTimeout(resolve, 1000));
++    }
++    throw new Error('video_start_reconciliation_required');
++}
+--- /dev/null
++++ b/src/videoQuality.mjs
+@@ -0,0 +1,48 @@
++// Shared, dependency-free profile contract. Capture is a request, never a measured result.
++export const VIDEO_QUALITY_PROFILES = Object.freeze({
++    hd: Object.freeze({ id: 'hd', label: 'HD (720p)', width: 1280, height: 720, fps: 30, cameraBitrate: 1_700_000, egressBitrate: 3_000_000, egressPreset: 'H264_720P_30' }),
++    full_hd: Object.freeze({ id: 'full_hd', label: 'Full HD (1080p)', width: 1920, height: 1080, fps: 30, cameraBitrate: 4_500_000, egressBitrate: 4_500_000, egressPreset: 'H264_1080P_30' }),
++});
++export function videoProfile(value) {
++    if (value == null) return VIDEO_QUALITY_PROFILES.hd;
++    if (!Object.hasOwn(VIDEO_QUALITY_PROFILES, value)) throw new Error('Неизвестный профиль качества эфира.');
++    return VIDEO_QUALITY_PROFILES[value];
++}
++export function roomVideoOptions(value) {
++    const p = videoProfile(value);
++    return {
++        adaptiveStream: true, dynacast: true,
++        videoCaptureDefaults: { resolution: { width: p.width, height: p.height, frameRate: p.fps } },
++        publishDefaults: {
++            videoCodec: 'vp8', simulcast: true,
++            videoEncoding: { maxBitrate: p.cameraBitrate, maxFramerate: p.fps },
++            videoSimulcastLayers: [
++                { width: 320, height: 180, encoding: { maxBitrate: 160_000, maxFramerate: 20 } },
++                { width: p.width / 2, height: p.height / 2, encoding: { maxBitrate: p.id === 'hd' ? 450_000 : 800_000, maxFramerate: p.id === 'hd' ? 20 : 25 } },
++            ],
++            screenShareEncoding: { maxBitrate: p.egressBitrate, maxFramerate: 30 },
++        },
++    };
++}
++export async function enableProfileCamera(participant, value) {
++    const p = videoProfile(value);
++    try {
++        return await participant.setCameraEnabled(true, { resolution: { width: p.width, height: p.height, frameRate: p.fps } });
++    } catch (error) {
++        // Do not retry permission/device-in-use errors, only unsupported constraints.
++        if (!['OverconstrainedError', 'ConstraintNotSatisfiedError'].includes(error?.name)) throw error;
++        return participant.setCameraEnabled(true, { resolution: { width: 640, height: 360, frameRate: 30 } });
++    }
++}
++export function captureWarning(settings, value) {
++    const p = videoProfile(value);
++    if (!Number.isFinite(settings?.width) || !Number.isFinite(settings?.height)) return 'Фактическое разрешение камеры недоступно.';
++    return settings.width < p.width || settings.height < p.height
++        ? `Камера передаёт ${settings.width}×${settings.height}, ниже выбранного ${p.label}. Эфир продолжает работать.` : '';
++}
++export function availableResolutions(rows) {
++    if (!Array.isArray(rows)) return [];
++    const seen = new Set();
++    return rows.filter(r => Number.isInteger(r.id) && (r.id === -1 || [480, 720, 1080].includes(Number(r.height))) && !seen.has(r.id) && seen.add(r.id))
++        .map(r => ({ id: r.id, label: r.id === -1 ? 'Авто' : `${Number(r.height)}p`, active: r.active === true }));
++}

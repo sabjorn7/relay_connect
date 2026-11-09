@@ -1,0 +1,6 @@
+{
+  "src/db.mjs": "e600f9e0ad9a3879ef487b90dcd7f05d742aa3a3131dbe5d9ec82c1c65444375",
+  "src/livekit.mjs": "dbc95ce59bfc7446a33f6fe3ac25d3379754b1831d1564c7472cf84340df03f4",
+  "src/server.mjs": "babad36c64637c4a32838bd887ce3168322cb877b87c4aa7ebfb208d8a2e85f1",
+  "template/grid.html": "63774a2bcd1e4a4ead89f341f55e0078c27fb37f6102bbc76a6e6160d862699a"
+}

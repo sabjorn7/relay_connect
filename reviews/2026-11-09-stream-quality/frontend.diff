@@ -1,0 +1,1092 @@
+--- a/src/_front/views/StreamsPage.vue
++++ b/src/_front/views/StreamsPage.vue
+@@ -68,14 +68,8 @@
+                         </div>
+                     </div>
+                     <!-- Live / ended (replay ready): PeerTube iframe -->
+-                    <div v-else class="sp-player">
+-                        <iframe
+-                            :src="playerSrc"
+-                            allowfullscreen
+-                            sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+-                            allow="autoplay; fullscreen"
+-                        ></iframe>
+-                    </div>
++                    <StreamViewer v-else :src="playerSrc" />
++                    <StreamDiagnostics v-if="detail.mode === 'multi' && (isAuthor || me?.role === 'admin')" :key="detail.id" :stream-id="detail.id" />
+                 </div>
+ 
+                 <!-- Multi-host (co-host) controls — ONLY mode='multi'; the solo path is untouched. -->
+@@ -224,6 +218,7 @@
+                                     : 'Классический эфир: камера телефона или OBS, один ведущий.' }}
+                             </p>
+                         </div>
++                        <StreamQualityField :full-hd-enabled="fullHdEnabled" id="stream-create-quality" v-model="form.video_quality" :solo="form.format === 'solo'" />
+                         <div class="sp-field">
+                             <span>Доступ</span>
+                             <div class="sp-radio-row">
+@@ -432,6 +427,7 @@
+                         <span class="pd-field__lb">Дата и время эфира <span class="sp-optional">(необязательно)</span></span>
+                         <input v-model="editForm.scheduledAt" class="pd-input" type="datetime-local" />
+                     </label>
++                    <StreamQualityField :full-hd-enabled="fullHdEnabled" id="stream-edit-quality" v-model="editForm.video_quality" :live="manageStream.status === 'live'" :solo="manageStream.mode !== 'multi'" />
+                     <p v-if="editError" class="sp-note sp-note-err">{{ editError }}</p>
+                 </div>
+                 <div class="pd-dialog__foot">
+@@ -475,6 +471,10 @@
+ // Fast auth: resolve the uid from the stored session/cookie synchronously (no stall-prone
+ // auth.getSession()), and wait out the session-restore race without flashing "no access".
+ import { readStoredSession, authCookieUser, waitForUid } from '@/_front/chrome/headerAccount.js';
++import StreamQualityField from '@/_front/components/StreamQualityField.vue';
++import StreamViewer from '@/_front/components/StreamViewer.vue';
++import StreamDiagnostics from '@/_front/components/StreamDiagnostics.vue';
++import { videoProfile } from '@/_front/streams/videoQuality.js';
+ import PushToggle from '@/_front/components/PushToggle.vue';
+ import { logClientEvent } from '@/_front/chrome/errorLogger.js';
+ 
+@@ -499,7 +499,7 @@
+ const buyersError = ref({});
+ // manage/edit modal (per stream)
+ const manageStream = ref(null);
+-const editForm = ref({ title: '', description: '', cover_url: '', scheduledAt: '' });
++const editForm = ref({ title: '', description: '', cover_url: '', scheduledAt: '', video_quality: 'hd' });
+ const editBusy = ref(false);
+ const editError = ref('');
+ const editCoverBusy = ref(false);
+@@ -508,10 +508,11 @@
+ const error = ref('');
+ const creds = ref(null);
+ const maskKey = ref(false);
+-const form = ref({ title: '', description: '', scheduledAt: '', kind: 'free', visibility: 'public', price: null, months: 3, format: 'solo', chat: false, recording: false, cover_url: '' });
++const form = ref({ title: '', description: '', scheduledAt: '', kind: 'free', visibility: 'public', video_quality: 'hd', price: null, months: 3, format: 'solo', chat: false, recording: false, cover_url: '' });
+ const shareMsg = ref('');
+ const linkFallback = ref('');
+ const unlistedEnabled = ref(false);
++const fullHdEnabled = ref(false);
+ // cover upload (same bucket/pattern as course/profile covers)
+ const COVER_BUCKET = 'profile';
+ const COVER_STORAGE_URL = 'https://sb.meetgu.ru/storage/v1/object/public/profile//';
+@@ -1036,7 +1037,7 @@
+ // ---------- create / author actions ----------
+ function cancelForm() {
+     showForm.value = false;
+-    form.value = { title: '', description: '', scheduledAt: '', kind: 'free', visibility: 'public', price: null, months: 3, format: 'solo', chat: false, recording: false, cover_url: '' };
++    form.value = { title: '', description: '', scheduledAt: '', kind: 'free', visibility: 'public', video_quality: 'hd', price: null, months: 3, format: 'solo', chat: false, recording: false, cover_url: '' };
+     error.value = '';
+     coverError.value = '';
+ }
+@@ -1070,7 +1071,7 @@
+ }
+ function openManage(s) {
+     manageStream.value = s;
+-    editForm.value = { title: s.title || '', description: s.description || '', cover_url: s.cover_url || '', scheduledAt: toLocalInput(s.scheduled_at) };
++    editForm.value = { title: s.title || '', description: s.description || '', cover_url: s.cover_url || '', scheduledAt: toLocalInput(s.scheduled_at), video_quality: videoProfile(s.video_quality).id };
+     editError.value = ''; editCoverError.value = ''; confirmDeleteId.value = null;
+ }
+ function closeManage() { manageStream.value = null; }
+@@ -1095,6 +1096,7 @@
+     try {
+         const patch = {
+             title,
++            video_quality: videoProfile(editForm.value.video_quality).id,
+             description: (editForm.value.description || '').trim(),
+             cover_url: editForm.value.cover_url || null,
+             scheduled_at: editForm.value.scheduledAt ? new Date(editForm.value.scheduledAt).toISOString() : null,
+@@ -1133,6 +1135,7 @@
+         const row = await createStream(supa(), {
+             author: me.value.id,
+             visibility: form.value.visibility,
++            video_quality: videoProfile(form.value.video_quality).id,
+             title: form.value.title,
+             description: form.value.description,
+             price,
+@@ -1230,6 +1233,7 @@
+ }
+ 
+ onMounted(() => {
++    supa().rpc('stream_video_quality_capabilities').then(({ data, error }) => { fullHdEnabled.value = !error && data?.version === 1 && data.full_hd_enabled === true; }).catch(() => {});
+     visibilityCapabilities(supa()).then(c => { unlistedEnabled.value = c.unlisted_enabled === true; }).catch(() => {});
+     // Open the detail + chat immediately; don't block them behind the stream-list load.
+     if (activeStreamId.value) loadDetail(activeStreamId.value);
+--- a/src/_front/views/StreamCallPage.vue
++++ b/src/_front/views/StreamCallPage.vue
+@@ -20,6 +20,7 @@
+         <template v-else>
+             <div v-if="reconnecting" class="lkc-banner">Переподключение…</div>
+ 
++            <StreamDiagnostics :room="room" :profile="captureQuality" :stream-id="streamId" />
+             <!-- Screen share present → spotlight (big screen + small camera strip); else camera grid -->
+             <div v-if="screenShares.length" class="lkc-stage">
+                 <div class="lkc-spotlight">
+@@ -220,6 +221,8 @@
+ import { listCohosts } from '@/_front/streams/cohosts.js';
+ import { readStoredSession, authCookieUser } from '@/_front/chrome/headerAccount.js';
+ import StreamTile from './StreamTile.vue';
++import StreamDiagnostics from '@/_front/components/StreamDiagnostics.vue';
++import { videoProfile, roomVideoOptions, enableProfileCamera } from '@/_front/streams/videoQuality.js';
+ 
+ const supa = () => window.wwLib?.wwPlugins?.supabase?.instance;
+ 
+@@ -227,6 +230,7 @@
+ const router = useRouter();
+ const streamId = String(route.query.stream || '');
+ 
++const captureQuality = ref('hd');
+ const room = shallowRef(null); // LiveKit Room — NOT deeply reactive
+ const phase = ref('loading'); // loading | connecting | connected | reconnecting | error
+ const errorMsg = ref(null);
+@@ -474,7 +478,7 @@
+     const r = room.value;
+     if (!r) return;
+     if (document.visibilityState === 'visible') {
+-        if (userWantsCamera.value) r.localParticipant.setCameraEnabled(true).catch(() => {});
++        if (userWantsCamera.value) enableProfileCamera(r.localParticipant, captureQuality.value).catch(() => {});
+         acquireWakeLock(); // the browser releases the wake lock on hide → re-take it on return
+     } else if (isCoarsePointer) {
+         // Phone/tablet hidden: the OS suspends capture anyway → drop the camera, keep the mic (audio
+@@ -510,7 +514,9 @@
+         const grant = await getLiveToken(supa(), streamId);
+         role.value = grant.role;
+ 
+-        const r = new Room({ adaptiveStream: true, dynacast: true });
++        // Server returns the immutable active run profile, not an editable future preference.
++        captureQuality.value = videoProfile(grant.video_quality).id;
++        const r = new Room(roomVideoOptions(captureQuality.value));
+         REBUILD_ON.forEach((ev) => r.on(ev, syncParticipants));
+         r.on(RoomEvent.TrackSubscribed, handleTrackSubscribed);
+         r.on(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
+@@ -519,7 +525,7 @@
+         r.on(RoomEvent.Disconnected, onRoomDisconnected);
+ 
+         await r.connect(grant.url, grant.token); // the "Войти" click gave the user-gesture for audio autoplay
+-        await r.localParticipant.setCameraEnabled(true);
++        await enableProfileCamera(r.localParticipant, captureQuality.value);
+         await r.localParticipant.setMicrophoneEnabled(true);
+ 
+         room.value = r;
+@@ -627,7 +633,8 @@
+ function toggleCam() {
+     const next = !camOn.value;
+     userWantsCamera.value = next;
+-    room.value?.localParticipant.setCameraEnabled(next).catch(() => {});
++    const participant = room.value?.localParticipant;
++    if (participant) (next ? enableProfileCamera(participant, captureQuality.value) : participant.setCameraEnabled(false)).catch(() => {});
+ }
+ function onPickCam(e) {
+     const id = e.target.value;
+@@ -646,7 +653,8 @@
+         // Video only (no screen audio in v1). getDisplayMedia shows the browser's native picker;
+         // if the user cancels or denies it rejects → no-op. Stopping via the browser's own "Stop
+         // sharing" bar fires LocalTrackUnpublished → syncParticipants resets screenSharing.
+-        await r.localParticipant.setScreenShareEnabled(!screenSharing.value);
++        const p = videoProfile(captureQuality.value);
++        await r.localParticipant.setScreenShareEnabled(!screenSharing.value, { resolution: { width: p.width, height: p.height, frameRate: p.fps } });
+     } catch {
+         /* picker cancelled / permission denied */
+     }
+--- a/src/_front/streams/streamsApi.js
++++ b/src/_front/streams/streamsApi.js
+@@ -1,5 +1,6 @@
+ // Supabase data helpers for the "Трансляции" (live streams) feature.
+ // Requires pending_stream_visibility.sql for unlisted access; never falls back to broad reads.
++import { videoProfile } from './videoQuality.js';
+ import { STREAM_VIEW_FIELDS, validateVisibility, requireUnlistedSupport } from './visibility.js';
+ 
+ // Roles allowed to create a broadcast (same set as the subscriptions feature).
+@@ -28,7 +29,8 @@
+ 
+ /** Insert a stream metadata row. `peertube_video_id` = the live video uuid. price 0 = free.
+  *  `scheduled_at` = planned start (ISO) or null. */
+-export async function createStream(supabase, { author, title, description = '', price = 0, peertube_video_id = null, access_months = null, backing_course_id = null, scheduled_at = null, mode = 'solo', chat_enabled = false, recording_course_enabled = false, cover_url = null, visibility = 'public' }) {
++export async function createStream(supabase, { author, title, description = '', price = 0, peertube_video_id = null, access_months = null, backing_course_id = null, scheduled_at = null, mode = 'solo', chat_enabled = false, recording_course_enabled = false, cover_url = null, visibility = 'public', video_quality = 'hd' }) {
++    videoProfile(video_quality);
+     validateVisibility({ visibility, price, backing_course_id, chat_enabled, recording_course_enabled });
+     await requireUnlistedSupport(supabase, visibility);
+     // chat_enabled=true → the BEFORE INSERT trigger tg_stream_create_chat auto-creates a group chat
+@@ -41,7 +43,7 @@
+     // it appears in /all_course as «Запись семинара» and in «Мои курсы» of everyone who bought.
+     const { data, error } = await supabase
+         .from('streams')
+-        .insert({ author, title, description, price, peertube_video_id, access_months, backing_course_id, scheduled_at, mode, chat_enabled, recording_course_enabled, cover_url, visibility })
++        .insert({ author, title, description, price, peertube_video_id, access_months, backing_course_id, scheduled_at, mode, chat_enabled, recording_course_enabled, cover_url, visibility, video_quality })
+         .select(STREAM_VIEW_FIELDS)
+         .limit(1);
+     if (error) throw new Error(`Не удалось сохранить эфир: ${error.message}`);
+@@ -52,7 +54,8 @@
+  *  price/backing_course/mode/peertube. `cover_url`/`scheduled_at`/`title`/`description` only. */
+ export async function updateStream(supabase, streamId, fields) {
+     const patch = {};
+-    for (const k of ['title', 'description', 'cover_url', 'scheduled_at']) {
++    if ('video_quality' in fields) videoProfile(fields.video_quality);
++    for (const k of ['title', 'description', 'cover_url', 'scheduled_at', 'video_quality']) {
+         if (k in fields) patch[k] = fields[k];
+     }
+     const { error } = await supabase.from('streams').update(patch).eq('id', streamId);
+--- a/src/_front/streams/visibility.js
++++ b/src/_front/streams/visibility.js
+@@ -1,5 +1,5 @@
+ // Display/transport contract only. PostgreSQL enforces visibility and ownership independently.
+-export const STREAM_VIEW_FIELDS = 'id,created_at,author,title,description,peertube_video_id,price,status,scheduled_at,cover_url,backing_course_id,access_months,hidden,mode,chat,chat_enabled,recording_course,recording_course_enabled,visibility';
++export const STREAM_VIEW_FIELDS = 'id,created_at,author,title,description,peertube_video_id,price,status,scheduled_at,cover_url,backing_course_id,access_months,hidden,mode,chat,chat_enabled,recording_course,recording_course_enabled,visibility,video_quality';
+ export function validateVisibility({ visibility = 'public', price = 0, backing_course_id = null, chat_enabled = false, recording_course_enabled = false }) {
+     if (!['public', 'unlisted'].includes(visibility)) throw new Error('Выберите доступность эфира.');
+     if (visibility === 'unlisted' && (Number(price) !== 0 || backing_course_id || chat_enabled || recording_course_enabled)) {
+--- a/src/_front/streams/liveApi.js
++++ b/src/_front/streams/liveApi.js
+@@ -27,6 +27,12 @@
+     bad_email: 'Введите корректный email.',
+     user_not_found: 'Пользователь с таким email не найден.',
+     rate_limited: 'Слишком много запросов. Подождите немного.',
++    full_hd_capacity: 'Все места Full HD заняты. Выберите HD или попробуйте позже.',
++    full_hd_not_enabled: 'Full HD пока не включён администратором. Выберите HD.',
++    stream_settings_changed: 'Настройки эфира изменились. Обновите страницу перед запуском.',
++    stream_start_in_progress: 'Эфир уже запускается. Подождите.',
++    video_reservation_expired: 'Запуск занял слишком много времени. Обновите страницу и попробуйте снова.',
++    video_start_reconciliation_required: 'Результат запуска неизвестен. Нужна проверка администратора; не запускайте эфир повторно.',
+     internal: 'Ошибка сервера. Попробуйте позже.',
+ };
+ 
+@@ -47,7 +53,7 @@
+     return 'internal';
+ }
+ 
+-async function post(supabase, path, body) {
++async function post(supabase, path, body, signal) {
+     const { data } = await supabase.auth.getSession();
+     const token = data?.session?.access_token;
+     if (!token) throw new LiveApiError('invalid_token', 401);
+@@ -58,6 +64,7 @@
+             method: 'POST',
+             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+             body: JSON.stringify(body),
++            signal,
+         });
+     } catch {
+         // fetch rejects only on network failure, never on HTTP status.
+@@ -80,6 +87,13 @@
+     return post(supabase, '/live/token', { stream_id: streamId });
+ }
+ 
++export async function getLiveQuality(supabase, streamId) {
++    const controller = new AbortController();
++    const timer = setTimeout(() => controller.abort(), 10000);
++    try { return await post(supabase, '/live/quality', { stream_id: streamId }, controller.signal); }
++    finally { clearTimeout(timer); }
++}
++
+ /** Owner-only: create the PeerTube live + start the composite egress. 409 if already live. */
+ export function startLive(supabase, streamId) {
+     return post(supabase, '/live/start', { stream_id: streamId });
+--- a/tests/stream-visibility.unit.mjs
++++ b/tests/stream-visibility.unit.mjs
+@@ -2,10 +2,12 @@
+ import assert from 'node:assert/strict';
+ import { readFile } from 'node:fs/promises';
+ import { validateVisibility, isPublicStream, streamLinkKey, streamShareUrl, visibilityCapabilities, requireUnlistedSupport } from '../src/_front/streams/visibility.js';
++import { videoProfile } from '../src/_front/streams/videoQuality.js';
+ 
+ // Import the real data helpers with ONLY the destructive PeerTube delete dependency stubbed.
+ // No browser, auth service, SDK or network is started.
+ let source = await readFile(new URL('../src/_front/streams/streamsApi.js', import.meta.url), 'utf8');
++source = source.replace("from './videoQuality.js'", `from '${new URL('../src/_front/streams/videoQuality.js', import.meta.url).href}'`);
+ source = source.replace("from './visibility.js'", `from '${new URL('../src/_front/streams/visibility.js', import.meta.url).href}'`)
+     .replace("import { deleteLive } from '@/_front/streams/peertubeLive.js';", 'const deleteLive = async () => { throw new Error("network forbidden"); };');
+ const api = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
+@@ -97,7 +99,7 @@
+         n.type === 'FunctionDeclaration' ? names.has(n.id.name) :
+         n.type === 'VariableDeclaration' && n.declarations.some(d => names.has(d.id.name)))
+         .map(n => descriptor.scriptSetup.content.slice(n.start, n.end)).join('\n');
+-    const env = { ref, computed, validateVisibility, requireUnlistedSupport, isPublicStream, streamLinkKey, streamShareUrl,
++    const env = { ref, computed, validateVisibility, requireUnlistedSupport, isPublicStream, streamLinkKey, streamShareUrl, videoProfile,
+         unlistedEnabled: ref(true), creating: ref(false), error: ref(''), showForm: ref(true), coverError: ref(''),
+         isAuthor: ref(false), me: ref({ id: 'owner' }), myStreams: ref([]), listItems: ref([]), creds: ref(null), maskKey: ref(true),
+         activeStreamId: ref(null), route: { hash: '' }, window: { location: { origin: 'https://example.invalid' } },
+--- a/tests/stream-visibility.paid-access.mjs
++++ b/tests/stream-visibility.paid-access.mjs
+@@ -4,6 +4,7 @@
+ let input='';for await(const c of process.stdin)input+=c;const config=JSON.parse(input);
+ const base=new URL(config.base);assert.equal(base.hostname,'127.0.0.1');assert.equal(base.protocol,'http:');
+ let source=fs.readFileSync(new URL('../src/_front/streams/streamsApi.js',import.meta.url),'utf8');
++source = source.replace("from './videoQuality.js'", `from '${new URL('../src/_front/streams/videoQuality.js', import.meta.url).href}'`);
+ source=source.replace("from './visibility.js'",`from '${new URL('../src/_front/streams/visibility.js',import.meta.url).href}'`).replace("import { deleteLive } from '@/_front/streams/peertubeLive.js';",'const deleteLive=async()=>{throw Error("network forbidden")};');
+ const {hasBoughtStream,accessExpiry}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+ const {descriptor}=parse(fs.readFileSync(new URL('../src/_front/views/StreamsPage.vue',import.meta.url),'utf8'));
+--- /dev/null
++++ b/src/_front/streams/videoQuality.js
+@@ -0,0 +1,48 @@
++// Shared, dependency-free profile contract. Capture is a request, never a measured result.
++export const VIDEO_QUALITY_PROFILES = Object.freeze({
++    hd: Object.freeze({ id: 'hd', label: 'HD (720p)', width: 1280, height: 720, fps: 30, cameraBitrate: 1_700_000, egressBitrate: 3_000_000, egressPreset: 'H264_720P_30' }),
++    full_hd: Object.freeze({ id: 'full_hd', label: 'Full HD (1080p)', width: 1920, height: 1080, fps: 30, cameraBitrate: 4_500_000, egressBitrate: 4_500_000, egressPreset: 'H264_1080P_30' }),
++});
++export function videoProfile(value) {
++    if (value == null) return VIDEO_QUALITY_PROFILES.hd;
++    if (!Object.hasOwn(VIDEO_QUALITY_PROFILES, value)) throw new Error('Неизвестный профиль качества эфира.');
++    return VIDEO_QUALITY_PROFILES[value];
++}
++export function roomVideoOptions(value) {
++    const p = videoProfile(value);
++    return {
++        adaptiveStream: true, dynacast: true,
++        videoCaptureDefaults: { resolution: { width: p.width, height: p.height, frameRate: p.fps } },
++        publishDefaults: {
++            videoCodec: 'vp8', simulcast: true,
++            videoEncoding: { maxBitrate: p.cameraBitrate, maxFramerate: p.fps },
++            videoSimulcastLayers: [
++                { width: 320, height: 180, encoding: { maxBitrate: 160_000, maxFramerate: 20 } },
++                { width: p.width / 2, height: p.height / 2, encoding: { maxBitrate: p.id === 'hd' ? 450_000 : 800_000, maxFramerate: p.id === 'hd' ? 20 : 25 } },
++            ],
++            screenShareEncoding: { maxBitrate: p.egressBitrate, maxFramerate: 30 },
++        },
++    };
++}
++export async function enableProfileCamera(participant, value) {
++    const p = videoProfile(value);
++    try {
++        return await participant.setCameraEnabled(true, { resolution: { width: p.width, height: p.height, frameRate: p.fps } });
++    } catch (error) {
++        // Do not retry permission/device-in-use errors, only unsupported constraints.
++        if (!['OverconstrainedError', 'ConstraintNotSatisfiedError'].includes(error?.name)) throw error;
++        return participant.setCameraEnabled(true, { resolution: { width: 640, height: 360, frameRate: 30 } });
++    }
++}
++export function captureWarning(settings, value) {
++    const p = videoProfile(value);
++    if (!Number.isFinite(settings?.width) || !Number.isFinite(settings?.height)) return 'Фактическое разрешение камеры недоступно.';
++    return settings.width < p.width || settings.height < p.height
++        ? `Камера передаёт ${settings.width}×${settings.height}, ниже выбранного ${p.label}. Эфир продолжает работать.` : '';
++}
++export function availableResolutions(rows) {
++    if (!Array.isArray(rows)) return [];
++    const seen = new Set();
++    return rows.filter(r => Number.isInteger(r.id) && (r.id === -1 || [480, 720, 1080].includes(Number(r.height))) && !seen.has(r.id) && seen.add(r.id))
++        .map(r => ({ id: r.id, label: r.id === -1 ? 'Авто' : `${Number(r.height)}p`, active: r.active === true }));
++}
+--- /dev/null
++++ b/src/_front/streams/videoStats.js
+@@ -0,0 +1,29 @@
++// Only explicitly allowlisted numeric WebRTC values leave this reducer. No SDP/ICE/IP/token.
++const finite = x => typeof x === 'number' && Number.isFinite(x) ? x : null;
++export function summarizeVideoStats(report, previous = new Map()) {
++    const next = new Map(); const layers = []; let rttMs = null;
++    for (const s of report?.values?.() || []) {
++        if (s.type === 'remote-inbound-rtp' && (s.kind === 'video' || s.mediaType === 'video')) {
++            if (finite(s.roundTripTime) !== null) rttMs = s.roundTripTime * 1000;
++        }
++    }
++    for (const s of report?.values?.() || []) {
++        if (s.type !== 'outbound-rtp' || (s.kind !== 'video' && s.mediaType !== 'video') || s.isRemote) continue;
++        const old = previous.get(s.id); const dt = old ? s.timestamp - old.timestamp : 0;
++        const bytes = finite(s.bytesSent); const sent = finite(s.packetsSent);
++        let bitrate = null;
++        if (dt > 0 && bytes !== null && finite(old?.bytesSent) !== null && bytes >= old.bytesSent) bitrate = (bytes - old.bytesSent) * 8000 / dt;
++        let lossPercent = null; let jitterMs = null;
++        const remote = report.get?.(s.remoteId);
++        const lost = finite(remote?.packetsLost);
++        if (dt > 0 && lost !== null && old?.lost !== null && old?.lost !== undefined && sent !== null && finite(old?.sent) !== null) {
++            const dl = lost - old.lost, ds = sent - old.sent;
++            if (dl >= 0 && ds > 0) lossPercent = Math.min(100, dl * 100 / ds);
++        }
++        if (finite(remote?.jitter) !== null) jitterMs = remote.jitter * 1000;
++        next.set(s.id, { timestamp: s.timestamp, bytesSent: bytes, sent, lost });
++        layers.push({ width: finite(s.frameWidth), height: finite(s.frameHeight), fps: finite(s.framesPerSecond), bitrate, lossPercent, jitterMs,
++            limitation: ['none', 'cpu', 'bandwidth', 'other'].includes(s.qualityLimitationReason) ? s.qualityLimitationReason : null });
++    }
++    return { layers, rttMs, previous: next };
++}
+--- /dev/null
++++ b/src/_front/streams/peerTubeQuality.js
+@@ -0,0 +1,46 @@
++// Narrow jschannel-compatible Embed API client. Protocol: PeerTube 7 embed-api (scope::method).
++// No iframe DOM access, no wildcard targetOrigin, bounded handshake/calls; no viewer telemetry sent.
++export function connectPeerTubeQuality(iframe, { window: host = window, timeout = 6000, onResolutions = () => {}, onPlayback = () => {} } = {}) {
++    const url = new URL(iframe.src); const origin = url.origin;
++    const scope = url.searchParams.get('scope') || 'peertube'; const target = iframe.contentWindow;
++    let id = 0; let disposed = false; const pending = new Map();
++    const send = message => target?.postMessage(JSON.stringify(message), origin);
++    const call = (method, params) => new Promise((resolve, reject) => {
++        if (disposed) { reject(new Error('Player closed')); return; }
++        const key = ++id; const timer = setTimeout(() => { pending.delete(key); reject(new Error('Embed API unavailable')); }, timeout);
++        pending.set(key, { resolve, reject, timer }); send({ id: key, method: `${scope}::${method}`, ...(params === undefined ? {} : { params }) });
++    });
++    function receive(event) {
++        if (disposed || event.source !== target || event.origin !== origin) return;
++        let message; try { message = typeof event.data === 'string' ? JSON.parse(event.data) : event.data; } catch { return; }
++        if (!message || typeof message !== 'object') return;
++        if (message.method === `${scope}::__ready`) {
++            if (message.params === 'ping') send({ method: `${scope}::__ready`, params: 'pong' });
++            return;
++        }
++        if (message.method === `${scope}::resolutionUpdate`) { onResolutions(); return; }
++        if (message.method === `${scope}::playbackStatusUpdate` || message.method === `${scope}::playbackStatusChange`) {
++            const state = message.params?.playbackState;
++            onPlayback(['playing', 'paused', 'ended', 'unstarted'].includes(state) ? state : null); return;
++        }
++        const p = pending.get(message.id);
++        if (p) { clearTimeout(p.timer); pending.delete(message.id); message.error ? p.reject(new Error('Embed API error')) : p.resolve(message.result); }
++    }
++    host.addEventListener('message', receive);
++    let pingTimer, rejectReady;
++    const ready = new Promise((resolve, reject) => {
++        rejectReady = reject;
++        const deadline = Date.now() + timeout;
++        const ping = async () => {
++            if (disposed) { reject(new Error('Player closed')); return; }
++            send({ method: `${scope}::__ready`, params: 'ping' });
++            try { if (await call('isReady')) { resolve(); return; } } catch { /* graceful fallback */ }
++            if (Date.now() >= deadline) { reject(new Error('Embed API unavailable')); return; }
++            pingTimer = setTimeout(ping, 300);
++        };
++        ping();
++    });
++    return { ready, getResolutions: () => call('getResolutions'), setResolution: value => call('setResolution', value),
++        dispose() { disposed = true; clearTimeout(pingTimer); rejectReady(new Error('Player closed')); host.removeEventListener('message', receive); for (const p of pending.values()) { clearTimeout(p.timer); p.reject(new Error('Player closed')); } pending.clear(); },
++    };
++}
+--- /dev/null
++++ b/src/_front/components/StreamQualityField.vue
+@@ -0,0 +1,23 @@
++<template>
++    <div class="sp-field">
++        <label :for="id">Качество видеотрансляции</label>
++        <select :id="id" :value="modelValue || 'hd'" @change="$emit('update:modelValue', $event.target.value)">
++            <option value="hd">HD (720p)</option>
++            <option value="full_hd" :disabled="!fullHdEnabled">Full HD (1080p)</option>
++        </select>
++        <p class="sp-note">{{ modelValue === 'full_hd' ? 'Для стабильного интернета, качественных камер и демонстрации мелких деталей.' : 'Для нестабильного интернета и устройств с ограниченной производительностью.' }}</p>
++        <p v-if="solo" class="sp-note">Для OBS настройте такое же разрешение в программе. Внешний источник MeetGuru автоматически не перенастраивает.</p>
++        <p v-if="!fullHdEnabled" class="sp-note">Full HD будет доступен после проверки серверной мощности и включения администратором.</p>
++        <p v-if="live" class="sp-note" role="status">Изменение применится при следующем запуске. Текущий эфир продолжится с прежним качеством.</p>
++    </div>
++</template>
++<script setup>
++defineProps({ modelValue: String, id: { type: String, required: true }, live: Boolean, solo: Boolean, fullHdEnabled: Boolean });
++defineEmits(['update:modelValue']);
++</script>
++<style scoped>
++.sp-field { display: flex; flex-direction: column; gap: 6px; color: #374151; font-size: 14px; }
++label { font-weight: 600; }
++select { min-height: 42px; padding: 8px 12px; border: 1px solid #b8c2d3; border-radius: 8px; background: #fff; color: #17233e; }
++.sp-note { margin: 0; font-size: 13px; line-height: 1.5; color: #4b5563; }
++</style>
+--- /dev/null
++++ b/src/_front/components/StreamViewer.vue
+@@ -0,0 +1,61 @@
++<template>
++    <div>
++        <div class="sp-player"><iframe ref="iframe" :src="apiSrc" allowfullscreen sandbox="allow-same-origin allow-scripts allow-popups allow-forms" allow="autoplay; fullscreen" title="Видеотрансляция" @load="attach"></iframe></div>
++        <div class="sq-viewer">
++            <label v-if="options.length" :for="id">Качество
++                <select :id="id" :value="selected" :disabled="changing" @change="select($event.target.value)">
++                    <option v-for="q in options" :key="q.id" :value="q.id">{{ q.label }}</option>
++                </select>
++            </label>
++            <p role="status">{{ apiError || (current ? `Текущее качество: ${current}` : 'Текущее качество: недоступно') }}</p>
++            <details><summary>Диагностика воспроизведения</summary><p>Состояние: {{ playback || 'Недоступно' }}. Буферизация: недоступно. Пропущенные кадры: недоступно.</p><p>Профиль из списка плеера; размеры декодированного кадра Embed API не предоставляет.</p></details>
++        </div>
++    </div>
++</template>
++<script setup>
++import { computed, ref, watch, onBeforeUnmount } from 'vue';
++import { connectPeerTubeQuality } from '../streams/peerTubeQuality.js';
++import { availableResolutions } from '../streams/videoQuality.js';
++const props = defineProps({ src: { type: String, required: true }, id: { type: String, default: 'stream-viewer-quality' } });
++const iframe = ref(null), options = ref([]), selected = ref(null), current = ref(null), apiError = ref(''), playback = ref(null), changing = ref(false);
++let client = null, generation = 0, poll = null;
++const apiSrc = computed(() => { if (!props.src) return ''; const u = new URL(props.src, location.origin); u.searchParams.set('api', '1'); return u.href; });
++function cleanup() { generation++; clearInterval(poll); poll = null; client?.dispose(); client = null; options.value = []; selected.value = null; current.value = null; playback.value = null; changing.value = false; }
++async function refresh(local, version) {
++    const rows = await local.getResolutions(); if (version !== generation) return;
++    options.value = availableResolutions(rows);
++    const active = Array.isArray(rows) ? rows.find(r => r.active && r.id !== -1) : null;
++    current.value = active && Number.isFinite(Number(active.height)) ? `${Number(active.height)}p` : null;
++    const selectedRow = Array.isArray(rows) ? rows.find(r => r.active) : null;
++    if (selectedRow && options.value.some(q => q.id === selectedRow.id)) selected.value = selectedRow.id;
++}
++async function attach() {
++    cleanup(); apiError.value = ''; if (!iframe.value || !props.src) return;
++    const version = generation;
++    const local = connectPeerTubeQuality(iframe.value, { onResolutions: () => refresh(local, version).catch(() => {}), onPlayback: state => { if (version === generation) playback.value = state; } });
++    client = local;
++    try {
++        await local.ready; await refresh(local, version); if (version !== generation) return;
++        if (options.value.some(q => q.id === -1)) { await local.setResolution(-1); selected.value = -1; }
++        if (version !== generation) return;
++        poll = setInterval(() => refresh(local, version).catch(() => {}), 5000);
++    } catch { if (version === generation) { apiError.value = 'Управление качеством недоступно. Используйте настройки самого плеера.'; options.value = []; local.dispose(); } }
++}
++async function select(value) {
++    const n = Number(value), local = client, version = generation;
++    if (!local || !options.value.some(q => q.id === n)) return;
++    changing.value = true;
++    try { await local.setResolution(n); if (version === generation) { selected.value = n; apiError.value = ''; await refresh(local, version); } }
++    catch { if (version === generation) apiError.value = 'Не удалось переключить качество. Используйте настройки плеера.'; }
++    finally { if (version === generation) changing.value = false; }
++}
++watch(() => props.src, cleanup, { flush: 'sync' });
++onBeforeUnmount(cleanup);
++</script>
++<style scoped>
++.sq-viewer { padding: 10px 0; font-size: 14px; }
++.sq-viewer select { margin-left: 8px; padding: 6px; }
++.sq-viewer p { margin: 6px 0; }
++.sp-player { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #0d0f12; border-radius: 12px; overflow: hidden; }
++.sp-player iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
++</style>
+--- /dev/null
++++ b/src/_front/components/StreamDiagnostics.vue
+@@ -0,0 +1,74 @@
++<template>
++    <div class="sq-diag">
++        <p v-if="room">Камера: {{ cameraLabel || 'Недоступно' }} · Захват: {{ size(capture.width, capture.height) }} · {{ capture.frameRate == null ? 'FPS недоступен' : `${Math.round(capture.frameRate)} FPS` }}</p>
++        <p v-if="warning" role="status">{{ warning }}</p>
++        <details @toggle="toggle">
++            <summary>Диагностика качества трансляции</summary>
++            <p v-if="room">Запрошено: {{ requested.label }} / {{ requested.fps }} FPS. Соединение: {{ connection || 'Недоступно' }}.</p>
++            <p v-if="room">RTT: {{ format(rtt, 'мс') }}. Статистика отправки по слоям:</p>
++            <ul v-if="layers.length"><li v-for="(layer, i) in layers" :key="i">{{ layer.source }}: {{ size(layer.width, layer.height) }} · {{ format(layer.fps, 'FPS') }} · {{ format(layer.bitrate == null ? null : layer.bitrate / 1000000, 'Мбит/с', 2) }} · потери {{ format(layer.lossPercent, '%', 1) }} · jitter {{ format(layer.jitterMs, 'мс') }} · ограничение {{ layer.limitation || 'Недоступно' }}</li></ul>
++            <p v-else-if="room">Параметры отправки: недоступно.</p>
++            <p>Активный профиль Egress: {{ egress?.profile?.label || 'Недоступно' }}. Состояние: {{ egress?.state || 'Недоступно' }}.</p>
++            <p>Заданный выход: {{ egress?.profile ? `${egress.profile.width}×${egress.profile.height} / ${egress.profile.fps} FPS` : 'Недоступно' }}; целевой битрейт {{ format(egress?.profile ? egress.profile.egressBitrate / 1000000 : null, 'Мбит/с', 1) }}.</p>
++            <p>Измеренный битрейт Egress: недоступно. CPU/RAM Egress: недоступно.</p>
++            <p v-if="egress?.error">Ошибка Egress: {{ egress.error }}</p>
++            <p v-if="egressError" role="status">Диагностика сервера недоступна.</p>
++            <p>Настроенный профиль не является измерением фактического разрешения.</p>
++        </details>
++    </div>
++</template>
++<script setup>
++import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
++import { Track } from 'livekit-client';
++import { videoProfile, captureWarning } from '../streams/videoQuality.js';
++import { summarizeVideoStats } from '../streams/videoStats.js';
++import { getLiveQuality } from '../streams/liveApi.js';
++const props = defineProps({ room: Object, profile: { type: String, default: 'hd' }, streamId: String });
++const capture = ref({}), cameraLabel = ref(''), connection = ref(null), layers = ref([]), rtt = ref(null), egress = ref(null), egressError = ref(false);
++const requested = computed(() => videoProfile(props.profile));
++const warning = computed(() => props.room?.localParticipant.isCameraEnabled ? captureWarning(capture.value, props.profile) : '');
++let timer, opened = false, busy = false, disposed = false, previous = new Map(), lastTrack = null;
++const format = (v, unit, digits = 0) => typeof v === 'number' && Number.isFinite(v) ? `${v.toFixed(digits)} ${unit}` : 'Недоступно';
++const size = (w, h) => Number.isFinite(w) && Number.isFinite(h) ? `${w}×${h}` : 'Недоступно';
++async function sample() {
++    if (busy || disposed) return; busy = true;
++    try {
++        const track = props.room?.localParticipant.getTrackPublication(Track.Source.Camera)?.track;
++        connection.value = props.room?.state || null;
++        if (track !== lastTrack) { previous = new Map(); layers.value = []; rtt.value = null; lastTrack = track; }
++        capture.value = track?.mediaStreamTrack?.getSettings?.() || {};
++        cameraLabel.value = track?.mediaStreamTrack?.label || '';
++        if (opened && props.room) {
++            const sources = [['Камера', track], ['Экран/PDF', props.room.localParticipant.getTrackPublication(Track.Source.ScreenShare)?.track]].filter(([, value]) => value);
++            const alive = new Set(sources.map(([, value]) => value));
++            for (const key of previous.keys()) if (!alive.has(key)) previous.delete(key);
++            const collected = []; let roundTrip = null;
++            for (const [source, value] of sources) {
++                if (!value.getRTCStatsReport) continue;
++                const stats = summarizeVideoStats(await value.getRTCStatsReport(), previous.get(value));
++                if (disposed) return;
++                previous.set(value, stats.previous); collected.push(...stats.layers.map(layer => ({ ...layer, source })));
++                if (stats.rttMs !== null) roundTrip = stats.rttMs;
++            }
++            layers.value = collected; rtt.value = roundTrip;
++        }
++        if (opened && props.streamId) {
++            try {
++                const result = await getLiveQuality(window.wwLib?.wwPlugins?.supabase?.instance, props.streamId);
++                if (!disposed) { egress.value = result; egressError.value = false; }
++            } catch { if (!disposed) egressError.value = true; }
++        }
++    } catch { if (!disposed) { layers.value = []; rtt.value = null; } }
++    finally { busy = false; }
++}
++function toggle(event) { opened = event.target.open; previous = new Map(); if (opened) sample(); }
++onMounted(() => { sample(); timer = setInterval(sample, 3000); });
++onBeforeUnmount(() => { disposed = true; clearInterval(timer); });
++</script>
++<style scoped>
++.sq-diag { padding: 8px 16px; font-size: 14px; line-height: 1.5; background: #fff; color: #17233e; }
++.sq-diag p { margin: 4px 0; }
++.sq-diag details { max-height: 240px; overflow: auto; }
++.sq-diag summary { cursor: pointer; }
++.sq-diag ul { padding-left: 20px; }
++</style>
+--- /dev/null
++++ b/supabase/migrations/pending_stream_video_quality.sql
+@@ -0,0 +1,122 @@
++-- Local proposal only. Additive; existing streams remain HD. Do not apply automatically.
++begin;
++set local lock_timeout='3s';
++alter table public.streams add column video_quality text not null default 'hd'
++  check (video_quality in ('hd','full_hd'));
++create table public.stream_video_quality_settings (
++  singleton boolean primary key default true check(singleton),
++  full_hd_enabled boolean not null default false,
++  max_full_hd_live integer not null default 1 check(max_full_hd_live between 1 and 20)
++);
++insert into public.stream_video_quality_settings(singleton) values(true);
++alter table public.stream_video_quality_settings enable row level security;
++revoke all on public.stream_video_quality_settings from public,anon,authenticated;
++grant select,update on public.stream_video_quality_settings to service_role;
++create table public.stream_video_runs (
++  egress_id text primary key,
++  stream_id uuid not null references public.streams(id) on delete cascade,
++  profile text not null check(profile in ('hd','full_hd')),
++  started_at timestamptz not null default now(),
++  ended_at timestamptz
++);
++alter table public.stream_video_runs enable row level security;
++revoke all on public.stream_video_runs from public,anon,authenticated;
++grant select,insert,update on public.stream_video_runs to service_role;
++create table public.stream_video_start_reservations (
++ stream_id uuid primary key references public.streams(id) on delete cascade,
++ token uuid not null unique default gen_random_uuid(),
++ profile text not null check(profile in ('hd','full_hd')),
++ expires_at timestamptz not null default (now()+interval '2 minutes')
++);
++alter table public.stream_video_start_reservations enable row level security;
++revoke all on public.stream_video_start_reservations from public,anon,authenticated;
++grant select,delete on public.stream_video_start_reservations to service_role;
++create function public.reserve_stream_video_start(p_stream_id uuid,p_expected_quality text,p_expected_egress_id text)
++returns uuid language plpgsql security definer set search_path=pg_catalog as $$
++declare s public.streams%rowtype; cfg public.stream_video_quality_settings%rowtype; reservation uuid;
++begin
++ perform pg_advisory_xact_lock(78403191);
++ select * into s from public.streams where id=p_stream_id for update;
++ if not found then raise exception 'stream_not_found'; end if;
++ if s.video_quality is distinct from p_expected_quality or s.livekit_egress_id is distinct from p_expected_egress_id then raise exception 'stream_settings_changed'; end if;
++ delete from public.stream_video_start_reservations where expires_at<now();
++ if exists(select 1 from public.stream_video_start_reservations where stream_id=p_stream_id) then raise exception 'stream_start_in_progress'; end if;
++ select * into cfg from public.stream_video_quality_settings where singleton;
++ if p_expected_quality='full_hd' then
++  if not coalesce(cfg.full_hd_enabled,false) then raise exception 'full_hd_not_enabled'; end if;
++  if (select count(*) from public.stream_video_runs r join public.streams t on t.id=r.stream_id and t.livekit_egress_id=r.egress_id
++      where t.status='live' and r.ended_at is null and r.profile='full_hd')
++     +(select count(*) from public.stream_video_start_reservations where profile='full_hd')>=cfg.max_full_hd_live then raise exception 'full_hd_capacity'; end if;
++ end if;
++ insert into public.stream_video_start_reservations(stream_id,profile) values(p_stream_id,p_expected_quality) returning token into reservation;
++ return reservation;
++end $$;
++revoke all on function public.reserve_stream_video_start(uuid,text,text) from public,anon,authenticated;
++grant execute on function public.reserve_stream_video_start(uuid,text,text) to service_role;
++-- Hold capacity before a potentially indeterminate external create request.
++-- No automatic expiry once media creation may have begun; reconcile explicitly on API failure.
++create function public.hold_stream_video_start(p_token uuid) returns void
++language plpgsql security definer set search_path=pg_catalog as $$
++begin
++ update public.stream_video_start_reservations set expires_at='infinity'::timestamptz
++ where token=p_token and expires_at>now();
++ if not found then raise exception 'video_reservation_expired'; end if;
++end $$;
++revoke all on function public.hold_stream_video_start(uuid) from public,anon,authenticated;
++grant execute on function public.hold_stream_video_start(uuid) to service_role;
++create function public.stream_video_quality_capabilities() returns jsonb
++language sql stable security definer set search_path=pg_catalog as $$
++ select jsonb_build_object('version',1,'full_hd_enabled',s.full_hd_enabled)
++ from public.stream_video_quality_settings s where singleton
++$$;
++revoke all on function public.stream_video_quality_capabilities() from public;
++grant execute on function public.stream_video_quality_capabilities() to anon,authenticated,service_role;
++create function public.guard_stream_video_quality() returns trigger
++language plpgsql security definer set search_path=pg_catalog as $$
++begin
++ if new.video_quality='full_hd' and not coalesce((select full_hd_enabled from public.stream_video_quality_settings where singleton),false) then
++  -- Permit unrelated edits of an existing Full HD stream after feature rollback.
++  if tg_op='INSERT' then raise exception 'full_hd_not_enabled'; end if;
++  if old.video_quality is distinct from new.video_quality then raise exception 'full_hd_not_enabled'; end if;
++ end if;
++ return new;
++end $$;
++create trigger guard_stream_video_quality before insert or update of video_quality on public.streams
++for each row execute function public.guard_stream_video_quality();
++create function public.mark_stream_video_started(p_stream_id uuid,p_expected_quality text,p_expected_egress_id text,p_egress_id text,p_video_id uuid,p_reservation uuid)
++returns void language plpgsql security definer set search_path=pg_catalog as $$
++declare s public.streams%rowtype; cfg public.stream_video_quality_settings%rowtype;
++begin
++ if p_expected_quality not in ('hd','full_hd') or p_expected_quality is null or nullif(p_egress_id,'') is null or p_video_id is null then raise exception 'bad_video_run'; end if;
++ -- Serialize admission, not active media. Never reconfigure/stop a running egress here.
++ perform pg_advisory_xact_lock(78403191);
++ select * into s from public.streams where id=p_stream_id for update;
++ if not found then raise exception 'stream_not_found'; end if;
++ if s.video_quality is distinct from p_expected_quality or s.livekit_egress_id is distinct from p_expected_egress_id then raise exception 'stream_settings_changed'; end if;
++ if not exists(select 1 from public.stream_video_start_reservations where stream_id=p_stream_id and token=p_reservation and profile=p_expected_quality and expires_at>now()) then raise exception 'video_reservation_expired'; end if;
++ select * into cfg from public.stream_video_quality_settings where singleton;
++ if p_expected_quality='full_hd' then
++  if not coalesce(cfg.full_hd_enabled,false) then raise exception 'full_hd_not_enabled'; end if;
++  if (select count(*) from public.stream_video_runs r join public.streams t on t.id=r.stream_id and t.livekit_egress_id=r.egress_id
++      where t.status='live' and r.ended_at is null and r.profile='full_hd')>=cfg.max_full_hd_live then raise exception 'full_hd_capacity'; end if;
++ end if;
++ insert into public.stream_video_runs(egress_id,stream_id,profile) values(p_egress_id,p_stream_id,p_expected_quality);
++ update public.streams set livekit_egress_id=p_egress_id,peertube_video_id=p_video_id,mode='multi',status='live',livekit_room=p_stream_id::text where id=p_stream_id;
++ delete from public.stream_video_start_reservations where token=p_reservation;
++end $$;
++revoke all on function public.mark_stream_video_started(uuid,text,text,text,uuid,uuid) from public,anon,authenticated;
++grant execute on function public.mark_stream_video_started(uuid,text,text,text,uuid,uuid) to service_role;
++-- A stale orchestrator must not mark a Full HD stream live using its hard-coded HD preset.
++create function public.guard_stream_video_run() returns trigger
++language plpgsql security definer set search_path=pg_catalog as $$
++begin
++ if new.mode='multi' and new.video_quality='full_hd' and new.livekit_egress_id is not null
++    and new.livekit_egress_id is distinct from old.livekit_egress_id
++    and not exists(select 1 from public.stream_video_runs r where r.stream_id=new.id and r.egress_id=new.livekit_egress_id and r.profile=new.video_quality) then
++  raise exception 'video_profile_contract_required';
++ end if;
++ return new;
++end $$;
++create trigger guard_stream_video_run before update of livekit_egress_id on public.streams
++for each row execute function public.guard_stream_video_run();
++commit;
+--- /dev/null
++++ b/supabase/migrations/pending_stream_video_quality_rollback.sql
+@@ -0,0 +1,6 @@
++-- Operational rollback: leaves data/history intact and never touches live egress.
++-- Deploy previous frontend/orchestrator in a separately approved idle window if needed.
++begin;
++update public.stream_video_quality_settings set full_hd_enabled=false where singleton;
++-- Existing active runs retain their recorded profiles; no reset, deletion or media restart.
++commit;
+--- /dev/null
++++ b/tests/stream-video-quality.unit.mjs
+@@ -0,0 +1,74 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import fs from 'node:fs';
++import { videoProfile, roomVideoOptions, enableProfileCamera, captureWarning, availableResolutions } from '../src/_front/streams/videoQuality.js';
++import { summarizeVideoStats } from '../src/_front/streams/videoStats.js';
++import { connectPeerTubeQuality } from '../src/_front/streams/peerTubeQuality.js';
++
++test('legacy defaults to HD, unknown saved/requested profiles fail closed', () => {
++    assert.equal(videoProfile(null).id,'hd'); assert.equal(videoProfile(undefined).height,720);
++    for(const bad of ['4k','1080p','__proto__','',0]) assert.throws(()=>videoProfile(bad));
++});
++test('capture, primary encoding and Egress profile agree; VP8 and adaptation retained', () => {
++    for(const id of ['hd','full_hd']) {
++        const p=videoProfile(id),r=roomVideoOptions(id);
++        assert.equal(r.videoCaptureDefaults.resolution.height,p.height);
++        assert.equal(r.publishDefaults.videoEncoding.maxFramerate,30);
++        assert.equal(r.publishDefaults.videoEncoding.maxBitrate,p.cameraBitrate);
++        assert.equal(r.publishDefaults.videoCodec,'vp8');assert(r.adaptiveStream&&r.dynacast&&r.publishDefaults.simulcast);
++        const layers=r.publishDefaults.videoSimulcastLayers;
++        assert(layers[0].height<layers[1].height&&layers[1].height<p.height);
++    }
++    assert.equal(videoProfile('full_hd').egressPreset,'H264_1080P_30');
++    assert.equal(videoProfile('full_hd').egressBitrate,4500000);
++});
++test('unsupported camera resolution falls back without re-requesting denied permissions', async () => {
++    const calls=[];const participant={async setCameraEnabled(enabled,options){calls.push(options);if(calls.length===1)throw Object.assign(new Error(),{name:'OverconstrainedError'});return 'working';}};
++    assert.equal(await enableProfileCamera(participant,'full_hd'),'working');assert.equal(calls[1].resolution.height,360);
++    await assert.rejects(enableProfileCamera({setCameraEnabled:async()=>{throw Object.assign(new Error(),{name:'NotAllowedError'});}},'full_hd'),{name:'NotAllowedError'});
++    assert.match(captureWarning({width:1280,height:720},'full_hd'),/ниже/);
++    assert.equal(captureWarning({width:1920,height:1080},'full_hd'),'');
++});
++test('actual available resolutions only, including conditional Auto; no fictional 1080p', () => {
++    assert.deepEqual(availableResolutions([{id:-1},{id:3,height:'720',active:true},{id:4,height:360},{id:3,height:720}]),[{id:-1,label:'Авто',active:false},{id:3,label:'720p',active:true}]);
++    assert.deepEqual(availableResolutions(null),[]);
++});
++const report=(time,bytes,packets=100,lost=2)=>new Map([
++    ['video',{id:'video',type:'outbound-rtp',kind:'video',timestamp:time,bytesSent:bytes,packetsSent:packets,frameWidth:1920,frameHeight:1080,framesPerSecond:29,remoteId:'remote',qualityLimitationReason:'bandwidth',address:'PRIVATE-IP',token:'PRIVATE-TOKEN'}],
++    ['remote',{type:'remote-inbound-rtp',kind:'video',packetsLost:lost,roundTripTime:.08,jitter:.004}],
++]);
++test('bitrate needs two monotonic samples; RTT, losses and unavailable metrics stay distinct', () => {
++    const a=summarizeVideoStats(report(1000,1000));assert.equal(a.layers[0].bitrate,null);assert.equal(a.layers[0].lossPercent,null);
++    const b=summarizeVideoStats(report(3000,1001000,200,4),a.previous);assert.equal(b.layers[0].bitrate,4000000);assert.equal(b.layers[0].lossPercent,2);assert.equal(b.rttMs,80);assert.equal(b.layers[0].jitterMs,4);
++    assert.equal(summarizeVideoStats(report(100,10),b.previous).layers[0].bitrate,null);
++    assert(!JSON.stringify(b.layers).includes('PRIVATE'));assert.equal(summarizeVideoStats(null).layers.length,0);
++});
++function fakeEmbed({reply=true,rows=[{id:-1},{id:1080,height:1080}]}={}) {
++    const listeners=new Set(),calls=[]; const host={addEventListener:(_,fn)=>listeners.add(fn),removeEventListener:(_,fn)=>listeners.delete(fn)};
++    let origin='https://player.invalid';
++    const target={postMessage(raw,destination){const m=JSON.parse(raw);calls.push(m);assert.equal(destination,origin);
++        if(reply&&m.id)queueMicrotask(()=>{for(const fn of listeners)fn({origin,source:target,data:JSON.stringify({id:m.id,result:m.method.endsWith('isReady')?true:m.method.endsWith('getResolutions')?rows:null})});});}};
++    return {host,calls,listeners,target,iframe:{src:origin+'/videos/embed/synthetic?api=1',contentWindow:target}};
++}
++test('Embed protocol handshake, available qualities and switching work without media requests', async () => {
++    const e=fakeEmbed();const client=connectPeerTubeQuality(e.iframe,{window:e.host,timeout:50});
++    await client.ready;assert.equal((await client.getResolutions()).length,2);await client.setResolution(-1);
++    assert(e.calls.some(m=>m.method==='peertube::setResolution'&&m.params===-1));client.dispose();assert.equal(e.listeners.size,0);
++});
++test('wrong origin/source responses cannot satisfy requests; unsupported API times out', async () => {
++    const e=fakeEmbed({reply:false});const client=connectPeerTubeQuality(e.iframe,{window:e.host,timeout:10});
++    for(const fn of e.listeners)fn({origin:'https://evil.invalid',source:e.target,data:JSON.stringify({id:1,result:true})});
++    for(const fn of e.listeners)fn({origin:'https://player.invalid',source:{},data:JSON.stringify({id:1,result:true})});
++    await assert.rejects(client.ready,/unavailable/);client.dispose();assert.equal(e.listeners.size,0);
++});
++test('disposing a loading iframe cancels timers and pending readiness', async () => {
++    const e=fakeEmbed({reply:false});const client=connectPeerTubeQuality(e.iframe,{window:e.host,timeout:20});
++    const result=assert.rejects(client.ready,/closed|unavailable/);client.dispose();await result;assert.equal(e.listeners.size,0);
++});
++test('backend profile contract is exactly the same module; admission precedes resource allocation', () => {
++    const root=new URL('../reviews/2026-11-09-stream-quality/orchestrator/src/',import.meta.url);
++    assert.equal(fs.readFileSync(new URL('videoQuality.mjs',root),'utf8'),fs.readFileSync(new URL('../src/_front/streams/videoQuality.js',import.meta.url),'utf8'));
++    const s=fs.readFileSync(new URL('server.mjs',root),'utf8');
++    assert(s.indexOf('const reservation = await reserveVideoStart')<s.indexOf('live = await createLive'));
++    assert.match(s,/stream\.livekit_egress_id \? \(await getVideoRun\(stream\)\)\?\.profile \|\| 'hd'/);
++});
+--- /dev/null
++++ b/tests/stream-video-quality.orchestrator.mjs
+@@ -0,0 +1,68 @@
++// Actual candidate route/SDK adapter code, isolated VM modules; no sockets, credentials or DB.
++import vm from 'node:vm';
++import fs from 'node:fs';
++import assert from 'node:assert/strict';
++const root=new URL('../reviews/2026-11-09-stream-quality/orchestrator/src/',import.meta.url);
++const routes=new Map(),middleware=new Map(),calls=[];
++let stream={id:'20000000-0000-4000-8000-000000000001',author:'owner',video_quality:'full_hd',livekit_room:null,livekit_egress_id:null};
++let member=null,role=null,run=null,reservationError=null,startError=false;
++const functions={
++    getStream:async()=>stream,getVideoRun:async()=>run,getMembership:async()=>member,getUserRole:async()=>role,
++    getUserName:async()=>null,markJoined:async()=>{},ensureOwnerMembership:async()=>{},
++    reserveVideoStart:async()=>{calls.push('reserve');if(reservationError)throw Error(reservationError);return 'synthetic-reservation';},releaseVideoStart:async()=>{calls.push('release');},
++    holdVideoStart:async()=>{calls.push('hold');},
++    setStreamLive:async(s,args)=>{calls.push(['persist',args.profile]);},setStreamEnded:async()=>{},resolveUserByEmail:async()=>null,inviteCohost:async()=>{},removeCohost:async()=>{},
++};
++const lk={mintPublishToken:async()=>({token:'synthetic-token',expiresAt:'synthetic-time'}),ensureRoom:async()=>{calls.push('room');},
++    startEgress:async args=>{calls.push(['egress',args.profile]);if(startError)throw Error('timeout');return 'synthetic-egress';},stopEgress:async()=>{},stopUncommittedEgress:async()=>{calls.push('stop-new');},isEgressActive:async()=>false,kickParticipant:async()=>{},readEgressState:async()=>({state:'active',error:null})};
++const app={set(){},use(){},get(){},post(path,...handlers){routes.set(path,handlers.at(-1));middleware.set(path,handlers.slice(0,-1));},listen(){}};
++function express(){return app;}express.json=()=>()=>{};
++const context=vm.createContext({console:{log(){},warn(){},error(){}},Buffer,Date});
++const modules=new Map();
++function synthetic(name,exports){const m=new vm.SyntheticModule(Object.keys(exports),function(){for(const [key,value]of Object.entries(exports))this.setExport(key,value);},{context,identifier:name});modules.set(name,m);return m;}
++synthetic('express',{default:express});synthetic('cors',{default:()=>()=>{}});synthetic('express-rate-limit',{default:()=>()=>{}});
++synthetic('./config.mjs',{config:{allowedOrigins:[],livekitUrl:'wss://synthetic.invalid',port:0}});
++synthetic('./auth.mjs',{requireAuth:()=>{}});synthetic('./db.mjs',functions);synthetic('./livekit.mjs',lk);
++synthetic('./peertube.mjs',{createLive:async()=>{calls.push('peertube');return {video:{uuid:stream.id},streamKey:'synthetic-key'};},deleteLive:async()=>{}});
++const profiles=new vm.SourceTextModule(fs.readFileSync(new URL('videoQuality.mjs',root),'utf8'),{context});modules.set('./videoQuality.mjs',profiles);
++const server=new vm.SourceTextModule(fs.readFileSync(new URL('server.mjs',root),'utf8'),{context});
++await server.link(name=>{assert(modules.has(name),'unexpected module '+name);return modules.get(name);});await server.evaluate();
++async function request(path,user='owner'){
++    let code=200,payload;
++    await routes.get(path)({user:{sub:user},body:{stream_id:stream.id}},{status(n){code=n;return this;},json(value){payload=value;return this;}});
++    return {code,payload};
++}
++const results=[];
++async function check(name,fn){await fn();results.push({name,status:'PASS'});console.log('PASS '+name);}
++await check('diagnostic polling has an independent limiter and cannot exhaust token minting',()=>{assert.notEqual(middleware.get('/live/token')[0],middleware.get('/live/quality')[0]);});
++await check('owner start carries saved Full HD through admission, egress and persistence',async()=>{
++    const response=await request('/live/start');assert.equal(response.code,200);assert.equal(response.payload.video_quality,'full_hd');
++    assert(calls.indexOf('reserve')<calls.indexOf('peertube'));assert(calls.some(c=>Array.isArray(c)&&c[0]==='egress'&&c[1]==='full_hd'));
++});
++await check('non-owner cannot allocate resources',async()=>{calls.length=0;assert.equal((await request('/live/start','viewer')).code,403);assert.equal(calls.length,0);});
++await check('server admission denial causes no PeerTube or Egress start',async()=>{calls.length=0;reservationError='full_hd_capacity';assert.equal((await request('/live/start')).code,409);assert.deepEqual(calls,['reserve']);reservationError=null;});
++await check('indeterminate Egress start keeps capacity held and requires reconciliation',async()=>{calls.length=0;startError=true;const result=await request('/live/start');assert.equal(result.code,409);assert.equal(result.payload.error,'video_start_reconciliation_required');assert(calls.includes('hold'));assert(!calls.includes('release'));startError=false;});
++await check('active old HD stream stays HD after preference edited to Full HD',async()=>{
++    stream={...stream,livekit_egress_id:'old-run'};member={role:'owner',status:'joined'};run=null;
++    assert.equal((await request('/live/token')).payload.video_quality,'hd');
++    run={profile:'hd'};assert.equal((await request('/live/token')).payload.video_quality,'hd');
++});
++await check('diagnostics permit members/admin and deny other viewers',async()=>{
++    member=null;role=null;assert.equal((await request('/live/quality','viewer')).code,403);
++    role='admin';const response=await request('/live/quality','administrator');assert.equal(response.code,200);assert.equal(response.payload.profile.id,'hd');
++    const serialized=JSON.stringify(response.payload);assert(!/synthetic-key|synthetic-token|streamKey|rtmp|token/.test(serialized));assert.equal(response.payload.cpuPercent,null);
++});
++await check('unknown stored profile cannot silently choose another encoding',async()=>{stream={...stream,video_quality:'4k',livekit_egress_id:null};calls.length=0;assert.equal((await request('/live/start')).code,500);assert.equal(calls.length,0);});
++// Execute the real LiveKit adapter with a fake SDK, assert actual enum passed (0 or 2).
++let encoding;
++class Client {async startRoomCompositeEgress(room,output,options){encoding=options.encodingOptions;return {egressId:'synthetic-egress'};}}
++const sdk=synthetic('livekit-server-sdk',{AccessToken:class{},EgressClient:Client,RoomServiceClient:class{},StreamOutput:class{constructor(value){Object.assign(this,value);}},StreamProtocol:{RTMP:0},EncodingOptionsPreset:{H264_720P_30:0,H264_1080P_30:2}});
++const adapter=new vm.SourceTextModule(fs.readFileSync(new URL('livekit.mjs',root),'utf8'),{context});
++await adapter.link(name=>name==='livekit-server-sdk'?sdk:modules.get(name));await adapter.evaluate();
++// config mock contains no production URLs or keys.
++modules.get('./config.mjs').namespace.config.peertubeRtmpBase='rtmp://127.0.0.1/mock';
++await check('SDK adapter chooses HD and Full HD enums without changing RTMP credentials',async()=>{
++    await adapter.namespace.startEgress({room:'synthetic',streamKey:'synthetic-key',profile:'hd'});assert.equal(encoding,0);
++    await adapter.namespace.startEgress({room:'synthetic',streamKey:'synthetic-key',profile:'full_hd'});assert.equal(encoding,2);
++});
++console.log(JSON.stringify({pass:results.length,fail:0}));
+--- /dev/null
++++ b/tests/stream-video-quality.integration.py
+@@ -0,0 +1,108 @@
++#!/usr/bin/env python3
++"""Disposable local PG15 checks. Existing launcher, loopback only; no production clients."""
++import pathlib,importlib.util,json,concurrent.futures
++ROOT=pathlib.Path(__file__).resolve().parents[1]
++spec=importlib.util.spec_from_file_location('stand',ROOT/'tests/stream-visibility.integration.py')
++launcher=importlib.util.module_from_spec(spec);spec.loader.exec_module(launcher)
++stand=launcher.Stand()
++A='10000000-0000-4000-8000-000000000001'
++B='10000000-0000-4000-8000-000000000002'
++def sid(i):return '20000000-0000-4000-8000-'+str(i).zfill(12)
++def expect_error(sql):
++    try:stand.sql(sql)
++    except RuntimeError:return
++    raise AssertionError('expected denial')
++def add(i,quality='hd'):
++    stand.sql("insert into public.streams(id,author,video_quality) values('%s','%s','%s')"%(sid(i),A,quality))
++def reserve(i,q='hd',previous='null'):
++    return stand.sql("set role service_role;select public.reserve_stream_video_start('%s','%s',%s);"%(sid(i),q,previous)).splitlines()[-1]
++def mark(i,token,q='hd',egress=None,previous='null'):
++    egress=egress or 'synthetic-egress-'+str(i)
++    stand.sql("set role service_role;select public.mark_stream_video_started('%s','%s',%s,'%s','%s','%s');"%(sid(i),q,previous,egress,sid(999),token))
++try:
++    stand.start()
++    stand.sql("""create role anon;create role authenticated;create role service_role bypassrls;
++    create schema auth;create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
++    create table public.streams(id uuid primary key,author uuid,title text,status text default 'scheduled',mode text default 'multi',livekit_room text,livekit_egress_id text,peertube_video_id uuid);
++    alter table public.streams enable row level security;
++    grant usage on schema public,auth to anon,authenticated,service_role;
++    grant select,insert,update on public.streams to authenticated;
++    grant all on public.streams to service_role;
++    create policy owner_only on public.streams to authenticated using(author=auth.uid()) with check(author=auth.uid());
++    insert into public.streams(id,author) values('%s','%s');"""%(sid(1),A))
++    stand.cmd([launcher.PG/'psql','-X','--no-password','-v','ON_ERROR_STOP=1','-f',ROOT/'supabase/migrations/pending_stream_video_quality.sql'])
++    def old_hd():assert stand.sql("select video_quality from public.streams where id='%s'"%sid(1))=='hd'
++    stand.check('existing streams default to HD without affecting lifecycle',old_hd)
++    def disabled():expect_error("insert into public.streams(id,author,video_quality) values('%s','%s','full_hd')"%(sid(2),A))
++    stand.check('Full HD disabled until explicit server activation',disabled)
++    def hd():
++        token=reserve(1);mark(1,token)
++        assert stand.sql("select profile from public.stream_video_runs where stream_id='%s'"%sid(1))=='hd'
++        assert stand.sql("select status from public.streams where id='%s'"%sid(1))=='live'
++    stand.check('HD reservation and atomic run snapshot + live state',hd)
++    stand.sql('update public.stream_video_quality_settings set full_hd_enabled=true')
++    def owner_edit():
++        stand.sql("set role authenticated;set request.jwt.claim.sub='%s';update public.streams set video_quality='full_hd' where id='%s';"%(A,sid(1)))
++        assert stand.sql("select profile from public.stream_video_runs where stream_id='%s'"%sid(1))=='hd'
++        assert stand.sql("select video_quality from public.streams where id='%s'"%sid(1))=='full_hd'
++    stand.check('editing preference does not change the active HD run',owner_edit)
++    def forbidden():
++        for role in ['anon','authenticated']:
++            expect_error("set role %s;select public.reserve_stream_video_start('%s','hd',null)"%(role,sid(1)))
++            expect_error("set role %s;select public.mark_stream_video_started('%s','hd',null,'x','%s','%s')"%(role,sid(1),sid(999),sid(999)))
++            expect_error('set role '+role+';select * from public.stream_video_runs')
++    stand.check('guests/viewers cannot reserve, commit runs or enumerate internal diagnostics',forbidden)
++    def other_owner():
++        stand.sql("set role authenticated;set request.jwt.claim.sub='%s';update public.streams set video_quality='hd' where id='%s';"%(B,sid(1)))
++        assert stand.sql("select video_quality from public.streams where id='%s'"%sid(1))=='full_hd'
++    stand.check('existing owner RLS preserved for settings',other_owner)
++    add(2,'full_hd');add(3,'full_hd')
++    stand.check('stale orchestrator cannot mark Full HD live without a matching run snapshot',lambda:expect_error("update public.streams set livekit_egress_id='old-hd-writer',status='live' where id='%s'"%sid(2)))
++    def concurrent_capacity():
++        def attempt(i):
++            try:return reserve(i,'full_hd')
++            except RuntimeError:return None
++        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:results=list(pool.map(attempt,[2,3]))
++        assert sum(r is not None for r in results)==1
++        winner=2 if results[0] else 3;token=next(r for r in results if r)
++        mark(winner,token,'full_hd')
++        assert stand.sql("select count(*) from public.stream_video_runs where profile='full_hd'")=='1'
++    stand.check('parallel Full HD starts: one slot reserved BEFORE external work',concurrent_capacity)
++    def second_start():expect_error("select public.reserve_stream_video_start('%s','full_hd',null)"%sid(2))
++    stand.check('no additional Full HD run above configured capacity',second_start)
++    add(4)
++    def drift():
++        token=reserve(4);stand.sql("update public.streams set video_quality='full_hd' where id='%s'"%sid(4))
++        expect_error("select public.mark_stream_video_started('%s','hd',null,'drift','%s','%s')"%(sid(4),sid(999),token))
++        assert stand.sql("select count(*) from public.stream_video_runs where stream_id='%s'"%sid(4))=='0'
++        assert stand.sql("select status from public.streams where id='%s'"%sid(4))=='scheduled'
++    stand.check('settings changed mid-start: no mismatched profile persisted',drift)
++    add(5)
++    def expired():
++        token=reserve(5);stand.sql("update public.stream_video_start_reservations set expires_at=now()-interval '1 second' where stream_id='%s'"%sid(5))
++        expect_error("select public.mark_stream_video_started('%s','hd',null,'expired','%s','%s')"%(sid(5),sid(999),token))
++    stand.check('expired start cannot commit an outdated profile',expired)
++    add(6)
++    def held():
++        token=reserve(6)
++        stand.sql("set role service_role;select public.hold_stream_video_start('%s');"%token)
++        assert stand.sql("select expires_at='infinity'::timestamptz from public.stream_video_start_reservations where stream_id='%s'"%sid(6))=='t'
++        expect_error("set role anon;select public.hold_stream_video_start('%s')"%token)
++    stand.check('external-start capacity hold survives timeout and is service-only',held)
++    def rollback():
++        before=stand.sql('select count(*) from public.stream_video_runs')
++        stand.cmd([launcher.PG/'psql','-X','--no-password','-v','ON_ERROR_STOP=1','-f',ROOT/'supabase/migrations/pending_stream_video_quality_rollback.sql'])
++        assert stand.sql('select full_hd_enabled from public.stream_video_quality_settings')=='f'
++        assert stand.sql('select count(*) from public.stream_video_runs')==before
++        assert stand.sql("select count(*) from public.stream_video_runs where profile='full_hd'")=='1'
++        expect_error("select public.reserve_stream_video_start('%s','full_hd',null)"%sid(4))
++    stand.check('operational rollback preserves active runs/history and blocks new Full HD',rollback)
++    def delete_ended():
++        stand.sql("update public.streams set status='ended',livekit_egress_id=null where id='%s';delete from public.streams where id='%s'"%(sid(1),sid(1)))
++        assert stand.sql("select count(*) from public.stream_video_runs where stream_id='%s'"%sid(1))=='0'
++    stand.check('new foreign keys do not break existing explicit deletion of an ended stream',delete_ended)
++finally:
++    stand.check('temporary PostgreSQL stopped, ports closed',stand.stop)
++    result=stand.tmp/'stream-video-quality-results.json';result.write_text(json.dumps(stand.results,indent=2)+'\n')
++    print(json.dumps({'pass':sum(r['status']=='PASS' for r in stand.results),'fail':sum(r['status']=='FAIL' for r in stand.results),'results':str(result)}))
++if any(r['status']=='FAIL' for r in stand.results):raise SystemExit(1)
+--- /dev/null
++++ b/tests/stream-video-quality.browser.mjs
+@@ -0,0 +1,84 @@
++// Real Vue components, synthetic local Embed API only. No real cameras, API, room or payment.
++import fs from 'node:fs';
++import path from 'node:path';
++import os from 'node:os';
++import http from 'node:http';
++import { spawn } from 'node:child_process';
++import { fileURLToPath } from 'node:url';
++import assert from 'node:assert/strict';
++import { build } from 'vite';
++import vue from '@vitejs/plugin-vue';
++const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
++const work=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'meetguru-quality-ui-')));
++fs.symlinkSync(path.join(root,'node_modules'),path.join(work,'node_modules'),'dir');
++fs.writeFileSync(path.join(work,'index.html'),'<html><meta name="viewport" content="width=device-width,initial-scale=1"><div id="app"></div><script type="module" src="/main.js"></script></html>');
++fs.writeFileSync(path.join(work,'main.js'),`import {createApp,ref} from 'vue';
++import Field from ${JSON.stringify(path.join(root,'src/_front/components/StreamQualityField.vue'))};
++import Viewer from ${JSON.stringify(path.join(root,'src/_front/components/StreamViewer.vue'))};
++import Diag from ${JSON.stringify(path.join(root,'src/_front/components/StreamDiagnostics.vue'))};
++createApp({components:{Field,Viewer,Diag},setup(){const q=ref('hd'),supported=ref(true);return {q,supported,room:{state:'connected',localParticipant:{isCameraEnabled:true,getTrackPublication(){return {track:{mediaStreamTrack:{label:'Synthetic camera',getSettings(){return {width:1280,height:720,frameRate:30}}},getRTCStatsReport:async()=>new Map()}}}}}}},template:${JSON.stringify(`<main style="max-width:900px;margin:auto;font-family:Arial"><Field id="quality" v-model="q" full-hd-enabled live/><p id="selected">{{q}}</p><button id="unsupported" @click="supported=false">Unsupported API</button><Viewer :key="supported" :src="supported?'/frame':'/frame?unsupported=1'"/><Diag :room="room" :profile="q"/></main>`)}}).mount('#app');`);
++await build({root:work,configFile:false,plugins:[vue()],logLevel:'error',build:{outDir:'dist'},resolve:{alias:{'@':path.join(root,'src'),'vue':path.join(root,'node_modules/vue/dist/vue.esm-bundler.js')}}});
++const results=[];let browser,ws;
++const layoutSource=fs.readFileSync(path.join(root,'reviews/2026-11-09-stream-quality/template/grid.html'),'utf8');
++const layoutStyle=layoutSource.match(/<style>([\s\S]*?)<\/style>/)[1];
++const layoutCode=layoutSource.slice(layoutSource.indexOf("        const grid = document.getElementById('grid');"),layoutSource.indexOf('        (async () =>'));
++const frame=`<html><body style="background:#15233e;color:white">Synthetic stream<script>
++let current=-1;const rows=()=>[{id:-1,height:0,active:current===-1},{id:7,height:1080,active:current===7},{id:4,height:720,active:current===4}];
++window.addEventListener('message',e=>{if(location.search.includes('unsupported'))return;let m;try{m=JSON.parse(e.data)}catch{return}const send=x=>parent.postMessage(JSON.stringify(x),location.origin);
++if(m.method==='peertube::__ready'){if(m.params==='ping')send({method:'peertube::__ready',params:'pong'});return;}
++if(!m.id)return;let result;if(m.method==='peertube::isReady')result=true;if(m.method==='peertube::getResolutions')result=rows();if(m.method==='peertube::setResolution'){current=m.params;result=null;}send({id:m.id,result});});</script></body></html>`;
++const server=http.createServer((req,res)=>{
++    res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-src 'self'; img-src 'self' data:");
++    if(req.url==='/layout'){res.setHeader('Content-Type','text/html');res.end('<html><style>'+layoutStyle+'</style><div id="grid"></div><script>'+layoutCode+'</script></html>');return;}
++    if(req.url.startsWith('/frame')){res.setHeader('Content-Type','text/html');res.end(frame);return;}
++    const name=path.join(work,'dist',req.url==='/'?'index.html':req.url.split('?')[0]);
++    if(!name.startsWith(path.join(work,'dist')+path.sep)||!fs.existsSync(name)){res.writeHead(404).end();return;}
++    res.setHeader('Content-Type',name.endsWith('.js')?'application/javascript':name.endsWith('.css')?'text/css':'text/html');res.end(fs.readFileSync(name));
++});
++await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const origin='http://127.0.0.1:'+server.address().port;
++try{
++    browser=spawn('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',['--headless=new','--disable-gpu','--no-first-run','--no-default-browser-check','--disable-background-networking','--disable-component-update','--disable-sync','--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1','--remote-debugging-port=0','--user-data-dir='+path.join(work,'profile'),'about:blank'],{stdio:['ignore','ignore','pipe']});
++    const address=await new Promise((resolve,reject)=>{let log='';const timer=setTimeout(()=>reject(Error('Chrome timeout')),15000);browser.stderr.on('data',b=>{log+=b;const m=log.match(/DevTools listening on (ws:\/\/[^\s]+)/);if(m){clearTimeout(timer);resolve(m[1]);}});browser.on('exit',()=>reject(Error('Chrome unavailable')));});
++    ws=new WebSocket(address);await new Promise(resolve=>ws.addEventListener('open',resolve,{once:true}));
++    let id=0;const pending=new Map();ws.addEventListener('message',e=>{const m=JSON.parse(e.data);if(m.id){const p=pending.get(m.id);pending.delete(m.id);m.error?p.reject(Error(m.error.message)):p.resolve(m.result);}if(m.method==='Runtime.exceptionThrown')console.log('FIXTURE EXCEPTION',m.params.exceptionDetails.exception?.description||m.params.exceptionDetails.text);if(m.method==='Runtime.consoleAPICalled'&&m.params.type==='error')console.log('FIXTURE ERROR',m.params.args.map(x=>x.value).join(' '));});
++    const send=(method,params={},sessionId)=>new Promise((resolve,reject)=>{const next=++id;pending.set(next,{resolve,reject});ws.send(JSON.stringify({id:next,method,params,...(sessionId?{sessionId}:{})}));});
++    const {targetId}=await send('Target.createTarget',{url:'about:blank'});const {sessionId}=await send('Target.attachToTarget',{targetId,flatten:true});
++    const evaluate=async expression=>{const r=await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true},sessionId);if(r.exceptionDetails)throw Error(r.exceptionDetails.text);return r.result.value;};
++    await send('Page.enable',{},sessionId);await send('Network.enable',{},sessionId);await send('Runtime.enable',{},sessionId);
++    // CSP blocks every external connect/frame; resolver blocks external hostnames; fresh profile has no SW.
++    await send('Network.setBlockedURLs',{urls:['https://*','wss://*','ws://*']},sessionId);
++    await send('Page.navigate',{url:origin},sessionId);
++    const until=async expression=>{for(let i=0;i<100;i++){if(await evaluate(expression))return;await new Promise(resolve=>setTimeout(resolve,100));}throw Error('Fixture condition timeout');};
++    try { await until('document.querySelectorAll(".sq-viewer option").length===3'); }
++    catch(error){console.log('FIXTURE STATE',await evaluate('JSON.stringify({body:document.body.textContent,src:document.querySelector("iframe")?.src})'));throw error;}
++    assert.equal(await evaluate('document.querySelector("#selected").textContent'),'hd');
++    results.push({name:'HD default and only advertised viewer resolutions',status:'PASS'});
++    await evaluate('document.querySelector("#quality").value="full_hd";document.querySelector("#quality").dispatchEvent(new Event("change",{bubbles:true}))');
++    await until('document.querySelector("#selected").textContent==="full_hd"');
++    assert(await evaluate('document.body.textContent.includes("ниже выбранного")'));assert(await evaluate('document.body.textContent.includes("следующем запуске")'));
++    results.push({name:'Full HD selection, unsupported camera warning, next-start notice',status:'PASS'});
++    await evaluate('const s=document.querySelector(".sq-viewer select");s.value="4";s.dispatchEvent(new Event("change",{bubbles:true}));');
++    await until('document.querySelector(".sq-viewer").textContent.includes("Текущее качество: 720p")');
++    results.push({name:'viewer switches through Embed API to actual 720p ID',status:'PASS'});
++    for(const width of [390,1366]){
++        await send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width===390},sessionId);
++        assert(await evaluate('document.documentElement.scrollWidth<=innerWidth'));
++        const shot=await send('Page.captureScreenshot',{format:'png'},sessionId);fs.writeFileSync(path.join(work,'quality-'+width+'.png'),Buffer.from(shot.data,'base64'));
++        results.push({name:'responsive controls width '+width,status:'PASS'});
++    }
++    await evaluate('document.getElementById("unsupported").click()');
++    await until('document.body.textContent.includes("Управление качеством недоступно")');
++    assert(await evaluate('!!document.querySelector("iframe")'));results.push({name:'unsupported Embed API keeps original iframe functional',status:'PASS'});
++    await send('Page.navigate',{url:origin+'/layout'},sessionId);await until('typeof tileFor==="function"');
++    for(const [width,height]of [[1280,720],[1920,1080]]){
++        await send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false},sessionId);
++        await evaluate("for(const k of [...tiles.keys()])removeTile(k);for(let i=0;i<4;i++)tileFor('p'+i+':camera','Synthetic',false);");
++        assert.equal(await evaluate('document.querySelectorAll("#grid.gridmode .tile").length'),4);
++        await evaluate("tileFor('p0:screen','Synthetic screen',true).appendChild(document.createElement('video'));");
++        assert(await evaluate('document.querySelector("#spot").getBoundingClientRect().width>innerWidth*.9'));
++        assert.equal(await evaluate('getComputedStyle(document.querySelector(".tile.screen video")).objectFit'),'contain');
++        assert.equal(await evaluate('document.querySelectorAll("#strip .tile").length'),4);
++        results.push({name:'production-derived Egress grid and screen spotlight '+width+'x'+height,status:'PASS'});
++    }
++    console.log(JSON.stringify({results,artifacts:work}));
++}finally{ws?.close();browser?.kill();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}

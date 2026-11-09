@@ -1,0 +1,146 @@
+<!--
+  Custom egress layout template + DIAGNOSTIC LOGGING.
+  Egress's headless Chrome loads this as:  <CUSTOM_TEMPLATE_URL>?url=<ws>&token=<jwt>&layout=grid
+  We connect to the room, render a grid, and — crucially — emit `console.log('START_RECORDING')`
+  once connected (egress detects that via its CDP console monitor to begin recording).
+  DIAGNOSTIC: every step, plus window.onerror / unhandledrejection / the room.connect result and
+  any Disconnected reason, is POSTed to /log on the SAME origin (our tiny server.mjs), so we can
+  READ what actually happens inside the template — bypassing the buggy chrome.log file in egress 1.14.1.
+-->
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <style>
+        html, body { margin: 0; height: 100%; background: #091747; overflow: hidden; }
+        #grid { width: 100vw; height: 100vh; padding: 8px; box-sizing: border-box; }
+        #grid.gridmode { display: grid; gap: 8px; }
+        #grid.stage { display: block; position: relative; }
+        #spot { position: absolute; inset: 8px; display: flex; }
+        #spot .tile { width: 100%; height: 100%; }
+        #strip { position: absolute; right: 16px; bottom: 16px; display: flex; flex-direction: column;
+                 gap: 10px; align-items: flex-end; max-height: calc(100% - 32px); z-index: 2; }
+        #strip .tile { width: 24vw; max-width: 380px; aspect-ratio: 16 / 9;
+                       border: 2px solid rgba(255,255,255,.18); box-shadow: 0 6px 22px rgba(0,0,0,.5); }
+        .tile { position: relative; background: #0d1f57; border-radius: 12px; overflow: hidden; }
+        .tile video { width: 100%; height: 100%; object-fit: cover; }
+        .tile.screen video { object-fit: contain; background: #000; }
+        .name { position: absolute; left: 8px; bottom: 8px; padding: 2px 8px; border-radius: 6px;
+                background: rgba(0,0,0,.5); color: #fff; font: 600 14px system-ui, sans-serif; }
+    </style>
+    <script>
+        window.__post = function (m) {
+            try { fetch('/log', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: String(m) }); } catch (e) {}
+            try { console.log('[tmpl]', m); } catch (e) {}
+        };
+        window.onerror = function (msg, src, line, col, err) {
+            __post('window.onerror: ' + msg + ' @ ' + src + ':' + line + ':' + col + (err && err.stack ? '\n' + err.stack : ''));
+        };
+        window.addEventListener('unhandledrejection', function (e) {
+            __post('unhandledrejection: ' + ((e.reason && (e.reason.stack || e.reason.message)) || e.reason));
+        });
+        __post('template HTML parsed');
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/livekit-client@2.22.3/dist/livekit-client.umd.min.js"
+            onload="__post('livekit-client CDN loaded')"
+            onerror="__post('ERROR: livekit-client CDN FAILED to load (no internet from egress container?)')"></script>
+</head>
+<body>
+    <div id="grid"></div>
+    <script>
+        const p = new URLSearchParams(location.search);
+        const url = p.get('url');
+        const token = p.get('token');
+        __post('params → url=' + url + '  tokenLen=' + (token ? token.length : 0) + '  layout=' + p.get('layout'));
+
+        const grid = document.getElementById('grid');
+        const spot = document.createElement('div'); spot.id = 'spot';
+        const strip = document.createElement('div'); strip.id = 'strip';
+        const tiles = new Map();
+
+        function relayout() {
+            const all = [...tiles.values()];
+            const screens = all.filter((v) => v.isScreen);
+            const cams = all.filter((v) => !v.isScreen);
+            if (screens.length) {
+                grid.className = 'stage';
+                spot.innerHTML = ''; strip.innerHTML = '';
+                spot.appendChild(screens[0].el);
+                screens.slice(1).forEach((v) => strip.appendChild(v.el));
+                cams.forEach((v) => strip.appendChild(v.el));
+                grid.appendChild(spot);
+                if (strip.childElementCount) grid.appendChild(strip);
+                else if (strip.parentNode) grid.removeChild(strip);
+            } else {
+                grid.className = 'gridmode';
+                if (spot.parentNode) grid.removeChild(spot);
+                if (strip.parentNode) grid.removeChild(strip);
+                const n = Math.max(cams.length, 1);
+                const cols = Math.ceil(Math.sqrt(n));
+                grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+                grid.style.gridTemplateRows = `repeat(${Math.ceil(n / cols)}, 1fr)`;
+                cams.forEach((v) => grid.appendChild(v.el));
+            }
+        }
+        function tileFor(key, name, isScreen) {
+            let entry = tiles.get(key);
+            if (!entry) {
+                const el = document.createElement('div'); el.className = 'tile' + (isScreen ? ' screen' : '');
+                const label = document.createElement('div'); label.className = 'name';
+                label.textContent = (name || key) + (isScreen ? ' — экран' : '');
+                el.appendChild(label);
+                entry = { el, isScreen };
+                tiles.set(key, entry); relayout();
+            }
+            return entry.el;
+        }
+        function removeTile(key) { const e = tiles.get(key); if (e) { e.el.remove(); tiles.delete(key); relayout(); } }
+        function removeParticipantTiles(sid) {
+            let changed = false;
+            for (const key of [...tiles.keys()]) {
+                if (key.indexOf(sid + ':') === 0) { tiles.get(key).el.remove(); tiles.delete(key); changed = true; }
+            }
+            if (changed) relayout();
+        }
+
+        (async () => {
+            try {
+                if (typeof LivekitClient === 'undefined') { __post('FATAL: LivekitClient undefined — CDN did not load'); return; }
+                if (!url || !token) { __post('FATAL: missing url/token query params'); return; }
+                const LK = LivekitClient;
+                const room = new LK.Room({ adaptiveStream: false, dynacast: false });
+                room.on(LK.RoomEvent.TrackSubscribed, (track, pub, participant) => {
+                    __post('TrackSubscribed: ' + participant.identity + ' kind=' + track.kind + ' source=' + pub.source);
+                    if (track.kind === 'video') {
+                        const isScreen = pub.source === LK.Track.Source.ScreenShare;
+                        const el = tileFor(participant.sid + ':' + pub.source, participant.identity, isScreen);
+                        el.insertBefore(track.attach(), el.firstChild);
+                    } else if (track.kind === 'audio') {
+                        document.body.appendChild(track.attach());
+                    }
+                });
+                room.on(LK.RoomEvent.TrackUnsubscribed, (track, pub, participant) => {
+                    __post('TrackUnsubscribed: ' + participant.identity + ' kind=' + track.kind + ' source=' + pub.source);
+                    track.detach().forEach((el) => el.remove());
+                    if (track.kind === 'video') removeTile(participant.sid + ':' + pub.source);
+                });
+                room.on(LK.RoomEvent.ParticipantConnected, (pt) => __post('ParticipantConnected: ' + pt.identity));
+                room.on(LK.RoomEvent.ParticipantDisconnected, (pt) => { __post('ParticipantDisconnected: ' + pt.identity); removeParticipantTiles(pt.sid); });
+                room.on(LK.RoomEvent.Disconnected, (reason) => __post('room DISCONNECTED — reason=' + reason));
+                room.on(LK.RoomEvent.ConnectionStateChanged, (s) => __post('connectionState=' + s));
+
+                __post('calling room.connect(' + url + ') …');
+                await room.connect(url, token, { autoSubscribe: true });
+                __post('room.connect RESOLVED ✓ local=' + (room.localParticipant && room.localParticipant.identity) +
+                       ' remoteParticipants=' + (room.remoteParticipants ? room.remoteParticipants.size : '?'));
+
+                console.log('START_RECORDING');
+                __post('emitted START_RECORDING');
+                window.addEventListener('beforeunload', () => { console.log('END_RECORDING'); __post('emitted END_RECORDING (beforeunload)'); });
+            } catch (e) {
+                __post('room.connect FAILED ✗ : ' + (e && (e.message || e)) + (e && e.stack ? '\n' + e.stack : ''));
+            }
+        })();
+    </script>
+</body>
+</html>

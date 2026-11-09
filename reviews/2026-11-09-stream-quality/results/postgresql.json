@@ -1,0 +1,62 @@
+[
+  {
+    "name": "existing streams default to HD without affecting lifecycle",
+    "status": "PASS"
+  },
+  {
+    "name": "Full HD disabled until explicit server activation",
+    "status": "PASS"
+  },
+  {
+    "name": "HD reservation and atomic run snapshot + live state",
+    "status": "PASS"
+  },
+  {
+    "name": "editing preference does not change the active HD run",
+    "status": "PASS"
+  },
+  {
+    "name": "guests/viewers cannot reserve, commit runs or enumerate internal diagnostics",
+    "status": "PASS"
+  },
+  {
+    "name": "existing owner RLS preserved for settings",
+    "status": "PASS"
+  },
+  {
+    "name": "stale orchestrator cannot mark Full HD live without a matching run snapshot",
+    "status": "PASS"
+  },
+  {
+    "name": "parallel Full HD starts: one slot reserved BEFORE external work",
+    "status": "PASS"
+  },
+  {
+    "name": "no additional Full HD run above configured capacity",
+    "status": "PASS"
+  },
+  {
+    "name": "settings changed mid-start: no mismatched profile persisted",
+    "status": "PASS"
+  },
+  {
+    "name": "expired start cannot commit an outdated profile",
+    "status": "PASS"
+  },
+  {
+    "name": "external-start capacity hold survives timeout and is service-only",
+    "status": "PASS"
+  },
+  {
+    "name": "operational rollback preserves active runs/history and blocks new Full HD",
+    "status": "PASS"
+  },
+  {
+    "name": "new foreign keys do not break existing explicit deletion of an ended stream",
+    "status": "PASS"
+  },
+  {
+    "name": "temporary PostgreSQL stopped, ports closed",
+    "status": "PASS"
+  }
+]

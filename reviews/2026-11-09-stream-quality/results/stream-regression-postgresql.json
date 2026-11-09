@@ -1,0 +1,237 @@
+{
+  "versions": {
+    "postgres": "postgres (PostgreSQL) 15.19 (Homebrew)",
+    "postgrest": "PostgREST 16.3"
+  },
+  "temporaryDirectory": "/private/tmp/mg-stream-pg-xfsqh480",
+  "results": [
+    {
+      "name": "SQL migration + access assertions + operational rollback",
+      "status": "PASS"
+    },
+    {
+      "name": "only 127.0.0.1 listeners; no foreign/network DB extensions",
+      "status": "PASS"
+    },
+    {
+      "name": "REST anonymous public + legacy paid rows, no unlisted",
+      "status": "PASS"
+    },
+    {
+      "name": "REST authenticated viewer cannot enumerate unlisted",
+      "status": "PASS"
+    },
+    {
+      "name": "REST unlisted filter and exact count do not bypass RLS",
+      "status": "PASS"
+    },
+    {
+      "name": "REST known hidden UUID without key returns no row",
+      "status": "PASS"
+    },
+    {
+      "name": "REST creator sees own hidden row",
+      "status": "PASS"
+    },
+    {
+      "name": "REST invited cohost retains assigned hidden access",
+      "status": "PASS"
+    },
+    {
+      "name": "RPC guest capability view has no private DTO fields",
+      "status": "PASS"
+    },
+    {
+      "name": "RPC authenticated viewer capability view",
+      "status": "PASS"
+    },
+    {
+      "name": "RPC wrong capability returns no row",
+      "status": "PASS"
+    },
+    {
+      "name": "RPC key lookup denied to guest",
+      "status": "PASS"
+    },
+    {
+      "name": "RPC other viewer cannot retrieve key",
+      "status": "PASS"
+    },
+    {
+      "name": "RPC creator key lookup succeeds",
+      "status": "PASS"
+    },
+    {
+      "name": "REST private stream_access_keys denied",
+      "status": "PASS"
+    },
+    {
+      "name": "REST private stream_visibility_settings denied",
+      "status": "PASS"
+    },
+    {
+      "name": "REST private schema cannot be selected",
+      "status": "PASS"
+    },
+    {
+      "name": "RPC anon worker filters hidden push_targets_live_started",
+      "status": "PASS"
+    },
+    {
+      "name": "RPC authenticated original ACL push_targets_live_started",
+      "status": "PASS"
+    },
+    {
+      "name": "RPC anon worker filters hidden push_targets_stream_scheduled",
+      "status": "PASS"
+    },
+    {
+      "name": "RPC authenticated original ACL push_targets_stream_scheduled",
+      "status": "PASS"
+    },
+    {
+      "name": "RPC anon worker filters hidden push_targets_stream_chat",
+      "status": "PASS"
+    },
+    {
+      "name": "RPC authenticated original ACL push_targets_stream_chat",
+      "status": "PASS"
+    },
+    {
+      "name": "RPC anon worker filters hidden push_targets_stream_invite",
+      "status": "PASS"
+    },
+    {
+      "name": "RPC authenticated original ACL push_targets_stream_invite",
+      "status": "PASS"
+    },
+    {
+      "name": "RPC trusted native resolver suppresses hidden",
+      "status": "PASS"
+    },
+    {
+      "name": "RPC anon native resolver preserves public",
+      "status": "PASS"
+    },
+    {
+      "name": "RPC anon scheduled resolver preserves public",
+      "status": "PASS"
+    },
+    {
+      "name": "RPC trusted native resolver preserves public",
+      "status": "PASS"
+    },
+    {
+      "name": "REST guest cannot enumerate hidden chat",
+      "status": "PASS"
+    },
+    {
+      "name": "REST link viewer has no permanent chat table grant",
+      "status": "PASS"
+    },
+    {
+      "name": "RPC guest can read linked chat without identity leakage",
+      "status": "PASS"
+    },
+    {
+      "name": "RPC viewer can read linked chat",
+      "status": "PASS"
+    },
+    {
+      "name": "RPC wrong-key chat read empty",
+      "status": "PASS"
+    },
+    {
+      "name": "RPC guest cannot post even with key",
+      "status": "PASS"
+    },
+    {
+      "name": "RPC viewer wrong-key post denied",
+      "status": "PASS"
+    },
+    {
+      "name": "RPC viewer posts as JWT identity with own moderation",
+      "status": "PASS"
+    },
+    {
+      "name": "REST viewer cannot post directly to hidden chat",
+      "status": "PASS"
+    },
+    {
+      "name": "RPC viewer cannot delete creator message",
+      "status": "PASS"
+    },
+    {
+      "name": "RPC viewer deletes own linked message",
+      "status": "PASS"
+    },
+    {
+      "name": "REST metadata author spoof rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "REST invalid creator role rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "REST paid unlisted rejected by CHECK",
+      "status": "PASS"
+    },
+    {
+      "name": "REST creator INSERT RETURNING unlisted succeeds",
+      "status": "PASS"
+    },
+    {
+      "name": "REST creator public creation succeeds",
+      "status": "PASS"
+    },
+    {
+      "name": "REST legacy insert defaults public",
+      "status": "PASS"
+    },
+    {
+      "name": "REST hidden cannot be changed to paid",
+      "status": "PASS"
+    },
+    {
+      "name": "REST visibility cannot be switched to public",
+      "status": "PASS"
+    },
+    {
+      "name": "REST owner lifecycle scheduled/live/ended; other viewer cannot edit",
+      "status": "PASS"
+    },
+    {
+      "name": "REST service-role lifecycle retains visibility under new RLS",
+      "status": "PASS"
+    },
+    {
+      "name": "REST embedded relation cannot reveal hidden stream/chat",
+      "status": "PASS"
+    },
+    {
+      "name": "SQL SECURITY DEFINER fixed search_path resists temp shadowing",
+      "status": "PASS"
+    },
+    {
+      "name": "actual paid-access code: buyer/nonbuyer/guest/owner/expiry/spoofing (8 assertions)",
+      "status": "PASS"
+    },
+    {
+      "name": "REST authenticator cannot SET ROLE to database owner",
+      "status": "PASS"
+    },
+    {
+      "name": "REST invalid JWT signature cannot gain authenticated access",
+      "status": "PASS"
+    },
+    {
+      "name": "HTTP rollback blocks new hidden, preserves links/chat/public and RPC protection",
+      "status": "PASS"
+    },
+    {
+      "name": "temporary processes stopped; ports closed",
+      "status": "PASS"
+    }
+  ]
+}

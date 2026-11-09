@@ -1,0 +1,11 @@
+--- a/template/grid.html
++++ b/template/grid.html
+@@ -41,7 +41,7 @@
+         });
+         __post('template HTML parsed');
+     </script>
+-    <script src="https://cdn.jsdelivr.net/npm/livekit-client@2/dist/livekit-client.umd.min.js"
++    <script src="https://cdn.jsdelivr.net/npm/livekit-client@2.22.3/dist/livekit-client.umd.min.js"
+             onload="__post('livekit-client CDN loaded')"
+             onerror="__post('ERROR: livekit-client CDN FAILED to load (no internet from egress container?)')"></script>
+ </head>

@@ -1,0 +1,31 @@
+{
+  "date": "2026-11-09",
+  "PeerTube": {
+    "version": "7.0.1",
+    "live": {
+      "enabled": true,
+      "transcoding": true,
+      "enabledResolutions": [],
+      "maxInstanceLives": 20,
+      "maxUserLives": 3
+    },
+    "vod": {
+      "hls": true,
+      "enabledResolutions": [
+        360,
+        720
+      ]
+    }
+  },
+  "LiveKit_host_snapshot": {
+    "cpu_count": 8,
+    "ram_available_MiB": 42940,
+    "swap_used_MiB": 974,
+    "swap_total_MiB": 974,
+    "disk_available_GiB": 56,
+    "disk_usage_percent": 40,
+    "load_test_performed": false
+  },
+  "production_egress_preset": "H264_720P_30",
+  "production_template_hash": "63774a2bcd1e4a4ead89f341f55e0078c27fb37f6102bbc76a6e6160d862699a"
+}
