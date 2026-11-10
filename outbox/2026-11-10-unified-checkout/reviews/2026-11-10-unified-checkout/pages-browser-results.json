@@ -1,0 +1,19 @@
+{
+  "pass": 12,
+  "fail": 0,
+  "results": [
+    "real CoursePage add stays on page, label changes, checkout/cart not opened",
+    "real event with capacity=0 adds to same cart without navigation or automatic dropdown",
+    "real StreamsPage add stays on page; mixed three products retained across SPA routes",
+    "second click on In cart manually opens existing cart without adding duplicate",
+    "remove a mixed line using existing cart",
+    "reopening event restores In cart; manual cart opens without renewed agreement or duplicate",
+    "reopening stream restores server cart state",
+    "paid event registration is not offered for repurchase",
+    "existing stream purchase preserves access gate",
+    "free event registers without payment or cart",
+    "guest event keeps existing login gate",
+    "free stream needs no checkout"
+  ],
+  "artifacts": "Local screenshots retained by the developer; not published."
+}

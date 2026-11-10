@@ -1,0 +1,114 @@
+[
+  {
+    "name": "migration compiles against production-shaped text[] orders and captured legacy financial RPC",
+    "status": "PASS"
+  },
+  {
+    "name": "each product alone uses the same order/receipt/financial pipeline",
+    "status": "PASS"
+  },
+  {
+    "name": "mixed order: all three products settle atomically, exact commission, repeat is a no-op",
+    "status": "PASS"
+  },
+  {
+    "name": "credit failure rolls back every access/sale/registration; retry completes once",
+    "status": "PASS"
+  },
+  {
+    "name": "direct client money/paid/access/foreign-price mutations cannot bypass server checkout",
+    "status": "PASS"
+  },
+  {
+    "name": "nominal capacity=0 never blocks sales; no reservation/refund tables or booking expiry exist",
+    "status": "PASS"
+  },
+  {
+    "name": "unpaid cancellation has no access/sales effects; verified payment still settles atomically",
+    "status": "PASS"
+  },
+  {
+    "name": "repeat checkout and lost intent reuse one order; changed payload with same key is rejected",
+    "status": "PASS"
+  },
+  {
+    "name": "parallel callbacks produce one receipt, three sales, one registration",
+    "status": "PASS"
+  },
+  {
+    "name": "mixed promo discounts only eligible lines, no stacking; deposit amount/remaining preserved",
+    "status": "PASS"
+  },
+  {
+    "name": "one-kopeck fixed discount across three products has exact line/order sums",
+    "status": "PASS"
+  },
+  {
+    "name": "course-scoped promo does not discount another product",
+    "status": "PASS"
+  },
+  {
+    "name": "100% promo completes on server without fabricated payment/audit; repeat is idempotent",
+    "status": "PASS"
+  },
+  {
+    "name": "failed/unverified payment cannot grant access or credit",
+    "status": "PASS"
+  },
+  {
+    "name": "free event/course: atomic idempotent registration, no payment order, library arrays preserved",
+    "status": "PASS"
+  },
+  {
+    "name": "explicit renewal uses DurationPrice and preserves remaining paid time",
+    "status": "PASS"
+  },
+  {
+    "name": "existing lifetime entitlement remains lifetime",
+    "status": "PASS"
+  },
+  {
+    "name": "stream before/during/after live uses backing access; expired access window rejects purchase",
+    "status": "PASS"
+  },
+  {
+    "name": "opt-in stream recording and chat access survive shared checkout",
+    "status": "PASS"
+  },
+  {
+    "name": "legacy unpaid course order remains compatible; historical paid order is not reprocessed",
+    "status": "PASS"
+  },
+  {
+    "name": "buy=false placeholder is not a discounted renewal or a purchased product",
+    "status": "PASS"
+  },
+  {
+    "name": "mixed products by three authors credit each author separately with unchanged commission",
+    "status": "PASS"
+  },
+  {
+    "name": "legacy untyped cart row is resolved and repriced from canonical product, not shop price",
+    "status": "PASS"
+  },
+  {
+    "name": "payment-link single-flight/reuse, actor binding and old payment-link resumption",
+    "status": "PASS"
+  },
+  {
+    "name": "actual PostgREST: owner cart, foreign-row isolation, protected writes/service RPCs/private schema",
+    "status": "PASS"
+  },
+  {
+    "name": "editing nominal capacity cannot invalidate checkout or block confirmed payment",
+    "status": "PASS"
+  },
+  {
+    "name": "verify SQL passes; non-destructive rollback blocks new orders but preserves pending fulfillment",
+    "status": "PASS"
+  },
+  {
+    "name": "temporary services stopped; loopback ports closed",
+    "status": "PASS"
+  }
+]

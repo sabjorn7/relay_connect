@@ -1,0 +1,20 @@
+{
+  "pass": 13,
+  "fail": 0,
+  "results": [
+    "three product types in the existing shared header cart",
+    "one mixed total",
+    "inapplicable promo does not change checkout",
+    "server promo quote applied once to mixed cart",
+    "single shared checkout, terms required, no client price/buyer",
+    "retry after failed link uses the same intent",
+    "remove uses server RPC and invalidates stale promo",
+    "free course enrollment never invokes checkout",
+    "pending order resumes existing payment instead of a second cart",
+    "cancel pending order without booking timer",
+    "responsive shared cart 390",
+    "responsive shared cart 1366",
+    "cart failure has no unsafe legacy checkout fallback"
+  ],
+  "artifacts": "Local screenshots retained by the developer; not published."
+}

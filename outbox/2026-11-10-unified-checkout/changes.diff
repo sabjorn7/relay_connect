@@ -1,0 +1,2505 @@
+diff --git a/src/_front/chrome/AppHeader.vue b/src/_front/chrome/AppHeader.vue
+index fe21b56..6678abc 100644
+--- a/src/_front/chrome/AppHeader.vue
++++ b/src/_front/chrome/AppHeader.vue
+@@ -34,7 +34,7 @@
+                         <template v-if="cart.length">
+                             <ul class="mgh__cart-list">
+                                 <li v-for="item in cart" :key="item.id">
+-                                    <span class="mgh__cart-name">{{ item.course_name || 'Курс' }}</span>
++                                    <span class="mgh__cart-name">{{ item.course_name }}<small>{{ PRODUCT_LABELS[item.product_type] || 'Товар' }}{{ item.payment_type === 'deposit' ? ' · предоплата' : '' }}</small><small v-if="item.available === false">Товар сейчас недоступен — удалите из корзины</small></span>
+                                     <span class="mgh__cart-price">{{ money(item.price) }} ₽</span>
+                                     <button class="mgh__cart-x" type="button" aria-label="Убрать" @click="remove(item.id)">×</button>
+                                 </li>
+@@ -66,12 +66,14 @@
+                                     <a href="/politica" target="_blank" rel="noopener">Политикой обработки персональных данных</a>.
+                                 </span>
+                             </label>
+-                            <button class="mgh__btn mgh__btn--block" type="button" :disabled="busy || !agreedCart" @click="doCheckout">
++                            <button class="mgh__btn mgh__btn--block" type="button" :disabled="busy || !agreedCart || cart.some(i => i.available === false)" @click="doCheckout">
+                                 {{ busy ? 'Переход к оплате…' : 'Оформить заказ' }}
+                             </button>
+                             <p v-if="err" class="mgh__err">{{ err }}</p>
+                         </template>
+                         <p v-else class="mgh__empty">Корзина пуста</p>
++                        <p v-if="err && !cart.length" class="mgh__err" role="alert">{{ err }}</p>
++                        <CheckoutOrders v-if="user" :key="user.id" :supabase="sb" :user-id="user.id" @changed="reloadCart" />
+                     </div>
+                 </div>
+ 
+@@ -128,6 +130,8 @@ import {
+     getSupabase, loadUser, waitForUid, avatarUrl, initials, loadCart, removeCartItem, cartTotal, signOutUser, checkoutCart,
+ } from './headerAccount.js';
+ import { hasUnread, initUnread, resetUnread } from './unread.js';
++import { quoteCart, PRODUCT_LABELS } from '@/_front/checkout/cartApi.js';
++import CheckoutOrders from '@/_front/checkout/CheckoutOrders.vue';
+ 
+ const props = defineProps({
+     ctaLabel: { type: String, default: '' },
+@@ -184,7 +188,10 @@ const burgerItems = computed(() => {
+ 
+ const sb = getSupabase();
+ 
+-function toggle(which) { open.value = open.value === which ? null : which; }
++function toggle(which) {
++    open.value = open.value === which ? null : which;
++    if (open.value === 'cart') reloadCart();
++}
+ function go(path) { open.value = null; menuOpen.value = false; router.push(path); }
+ // Auth transitions (login / register / logout) need a FULL page load: WeWeb keeps its own auth
+ // state and its per-page bindings that a client-side router.push leaves stale (the app still
+@@ -200,7 +207,8 @@ async function refreshUser() {
+     if (user.value) reloadCart(); else cart.value = [];
+ }
+ async function reloadCart() {
+-    if (user.value?.id) cart.value = await loadCart(sb, user.value.id);
++    try { if (user.value?.id) cart.value = await loadCart(sb, user.value.id); }
++    catch { cart.value = []; err.value = 'Не удалось загрузить корзину. Обновите страницу.'; }
+     // the cart changed → any applied promo is now stale; make the user re-apply against the new set
+     promo.applied = null; promo.error = '';
+ }
+@@ -222,8 +230,7 @@ async function applyPromo() {
+     promo.checking = true; promo.error = '';
+     try {
+         const shopIds = cart.value.map((r) => r.id);
+-        const { data, error } = await sb.rpc('preview_promo', { p_code: code, p_shop_ids: shopIds });
+-        if (error) throw error;
++        const data = await quoteCart(sb, shopIds, code);
+         if (data?.valid) { promo.applied = data; }
+         else { promo.applied = null; promo.error = PROMO_REASONS[data?.reason] || 'Промокод недействителен.'; }
+     } catch (e) { promo.error = 'Не удалось проверить промокод.'; }
+@@ -363,6 +370,7 @@ function ensureFont() {
+ .mgh__cart-list { list-style: none; margin: 0 0 8px; padding: 0; max-height: 260px; overflow-y: auto; }
+ .mgh__cart-list li { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 10px; padding: 9px 6px; border-bottom: 1px solid var(--line); }
+ .mgh__cart-name { font-size: 14px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
++.mgh__cart-name small { display: block; color: var(--ink-2); font-size: 12px; white-space: normal; }
+ .mgh__cart-price { font-weight: 700; font-size: 14px; }
+ .mgh__cart-x { border: none; background: none; color: var(--ink-2); font-size: 18px; line-height: 1; cursor: pointer; padding: 0 2px; }
+ .mgh__cart-x:hover { color: #c2410c; }
+diff --git a/src/_front/chrome/headerAccount.js b/src/_front/chrome/headerAccount.js
+index b40a5f4..ca353af 100644
+--- a/src/_front/chrome/headerAccount.js
++++ b/src/_front/chrome/headerAccount.js
+@@ -1,13 +1,9 @@
++import { getCart, removeProduct, payCart } from '@/_front/checkout/cartApi.js';
+ // Account + cart data for the shared AppHeader. Uses the same global Supabase client as the rest
+ // of the app (window.wwLib.wwPlugins.supabase.instance) — the same one used for auth elsewhere.
+ //
+-// Mirrors the WeWeb header exactly:
+-//   - cart      = `shop` rows where owner == currentUser.id AND status == 'cart'
+-//   - total     = plain sum of the `price` column over those rows
+-//   - live      = `shop` is realtime-enabled; the header subscribes and reloads on change
+-//   - checkout  = a verbatim port of the site's course-purchase flow (see
+-//                 src/_front/streams/streamsApi.js purchaseStream): create an `order` from the
+-//                 cart, get a Prodamus payment link, redirect. This is the ONLY money-adjacent code.
++// The existing shop cart is read through owner-bound RPCs. Checkout delegates to the
++// shared server-priced endpoint; BuyCourse remains the payment callback.
+ 
+ const SUPABASE_URL = 'https://sb.meetgu.ru';
+ const AVATAR_BUCKET = 'profile';
+@@ -116,16 +112,12 @@ export function initials(user) {
+ // Cart = shop rows for this owner with status 'cart'. Newest first (matches the WeWeb collection sort).
+ export async function loadCart(sb, ownerId) {
+     if (!sb || !ownerId) return [];
+-    const { data } = await sb.from('shop')
+-        .select('id, price, quantity, course_name, course_id, status, position')
+-        .eq('owner', ownerId).eq('status', 'cart')
+-        .order('created_at', { ascending: false });
+-    return data || [];
++    return getCart(sb);
+ }
+ 
+ export async function removeCartItem(sb, id) {
+     if (!sb || !id) return;
+-    await sb.from('shop').delete().eq('id', id);
++    return removeProduct(sb, id);
+ }
+ 
+ export function cartTotal(cart) {
+@@ -215,59 +207,11 @@ export async function signOutUser(sb) {
+     try { sb?.auth?.signOut(); } catch (e) { /* ignore */ }
+ }
+ 
+-// MONEY (reviewed before deploy): verbatim port of the site's cart checkout, same flow the WeWeb
+-// "Оформить заказ" runs and the same as streamsApi.purchaseStream — create an `order` from the cart,
+-// fetch a Prodamus payment link (do=link), persist it, then redirect the buyer to Prodamus. It does
+-// NOT move funds itself; the buyer completes payment on Prodamus (n8n BuyCourse finalizes via callback).
++// One server-priced checkout for course, event and stream positions.
+ export async function checkoutCart(sb, { user, cart, promoCode = null }) {
+-    if (window.__mgGuestAuth) throw new Error('Нет связи с аккаунтом. Обновите страницу.'); // (a') guard
++    if (window.__mgGuestAuth) throw new Error('Нет связи с аккаунтом. Обновите страницу.');
+     if (!sb || !user?.id || !cart?.length) return;
+-
+-    // Promo (optional). Re-validate server-side at checkout so the discount is authoritative and
+-    // reflects the CURRENT cart (not a stale "applied" snapshot). preview_promo returns per-line
+-    // new prices; we persist them to shop.price so n8n BuyCourse bills the author's commission on the
+-    // discounted price (the invariant order.summ == Σ shop.price == amount charged stays intact).
+-    const priceById = {};
+-    let promoId = null, promoDiscount = 0;
+-    if (promoCode) {
+-        const { data: pv, error: pErr } = await sb.rpc('preview_promo', {
+-            p_code: promoCode, p_shop_ids: cart.map((r) => r.id),
+-        });
+-        if (pErr) throw new Error(`Промокод: ${pErr.message}`);
+-        if (!pv?.valid) throw new Error('Промокод больше не действует — обновите корзину.');
+-        promoId = pv.promo_id;
+-        promoDiscount = Number(pv.discount) || 0;
+-        for (const l of (pv.lines || [])) {
+-            priceById[l.shop_id] = Number(l.new_price);
+-            await sb.from('shop').update({ price: Number(l.new_price) }).eq('id', l.shop_id);
+-        }
+-    }
+-    const priceOf = (r) => (priceById[r.id] !== undefined ? priceById[r.id] : Number(r.price || 0));
+-    const summ = cart.reduce((s, r) => s + priceOf(r), 0);
+-
+-    const { data: orderRows, error } = await sb.from('order')
+-        .insert({ summ, owner: user.id, course_positions: cart.map((r) => r.id),
+-                  promo_code_id: promoId, promo_discount: promoId ? promoDiscount : null })
+-        .select('id');
+-    if (error) throw new Error(`Заказ: ${error.message}`);
+-    const orderId = orderRows?.[0]?.id;
+-
+-    const base = 'https://meetguru.payform.ru/?do=link&sys=meetguru';
+-    // Return to the home dashboard ("Ваши курсы") — a paid cart can hold several courses, so there is
+-    // no single ?course=<id> to deep-link, and bare /my_courses now shows "Курс не найден".
+-    const urlSuccess = 'https://app.meetgu.ru/';
+-    const products = cart.map((r, i) =>
+-        `products[${i}][price]=${encodeURIComponent(priceOf(r))}` +
+-        `&products[${i}][quantity]=${encodeURIComponent(r.quantity || 1)}` +
+-        `&products[${i}][name]=${encodeURIComponent(r.course_name || 'Курс')}`
+-    ).join('&');
+-    const buildUrl = `${base}&order_id=${encodeURIComponent(orderId)}&${products}&urlSuccess=${encodeURIComponent(urlSuccess)}`;
+-
+-    const res = await fetch(buildUrl);
+-    if (!res.ok) throw new Error(`Prodamus (${res.status})`);
+-    const payLink = (await res.text()).trim();
+-    if (!/^https?:\/\//.test(payLink)) throw new Error('Prodamus вернул не ссылку.');
+-
+-    await sb.from('order').update({ num: orderId, pageUrl: payLink }).eq('id', orderId);
+-    window.location.href = payLink;
++    const result = await payCart(sb, { userId: user.id, ids: cart.map(r => r.id), code: promoCode });
++    if (result.completed) window.location.assign('/?order=' + encodeURIComponent(result.orderId));
++    else window.location.assign(result.payLink);
+ }
+diff --git a/src/_front/course/coursesApi.js b/src/_front/course/coursesApi.js
+index b1be763..191cd02 100644
+--- a/src/_front/course/coursesApi.js
++++ b/src/_front/course/coursesApi.js
+@@ -1,12 +1,8 @@
++import { addProduct, checkoutRpc } from '@/_front/checkout/cartApi.js';
+ // Course purchase / enrollment for the hand-written /course/:slug page (CoursePage.vue).
+ //
+-// MONEY-ADJACENT (reviewed before deploy). This mirrors the WeWeb `course_info` buy workflow 1:1:
+-//   - FREE course → grant access directly (insert user_course + append to the user's arrays), no payment.
+-//   - PAID course → ADD to the cart only (one `shop` row status='cart', clone of WeWeb NewCourse
+-//     insert 90ddb3ae). NO order and NO redirect here — checkout happens later from the header cart
+-//     (headerAccount.checkoutCart), exactly like the old WeWeb "Купить". Settlement (mark paid, grant
+-//     user_course, sales, balance) stays entirely in the UNTOUCHED n8n `BuyCourse` workflow via the
+-//     Prodamus callback — identical to the rest of the site.
++// Course actions share the server-owned cart. Free enrollment is a separate atomic
++// server operation and never creates a payment order. BuyCourse settles paid orders.
+ 
+ // The logged-in buyer's `users` row: id + the two arrays the free grant appends to. Reads the stored
+ // session id (no getSession() — that acquires the Web Locks auth lock and can hang), then fetches the row.
+@@ -22,25 +18,14 @@ export async function getBuyerRow(sb, uid) {
+ export async function ownsCourse(sb, courseId, uid) {
+     if (!sb || !courseId || !uid) return false;
+     const { data } = await sb.from('user_course')
+-        .select('id').eq('course', courseId).eq('user', uid).limit(1);
++        .select('id').eq('course', courseId).eq('user', uid).or('buy.eq.true,Free.eq.true').limit(1);
+     return !!data?.length;
+ }
+ 
+-// FREE grant — verbatim port of the WeWeb free branch (user_course insert 588dd366 + users update
+-// 89156b89): insert the enrollment, then append its id to buied_courses and the course id to
+-// buied_course_orig. No payment, no Prodamus.
+-export async function enrollFree(sb, { buyer, course }) {
++// Server validates the free course and updates both enrollment and library arrays.
++export async function enrollFree(sb, { course }) {
+     if (window.__mgGuestAuth) throw new Error('Нет связи с аккаунтом. Обновите страницу.'); // (a') guard
+-    const { data: ucRows, error } = await sb.from('user_course')
+-        .insert({ user: buyer.id, course: course.id, Free: true })
+-        .select('id').limit(1);
+-    if (error) throw new Error(`Запись: ${error.message}`);
+-    const ucId = ucRows?.[0]?.id;
+-    const buied_courses = [...(buyer.buied_courses || []), ucId];
+-    const buied_course_orig = [...(buyer.buied_course_orig || []), course.id];
+-    await sb.from('users')
+-        .update({ buied_courses, buied_course_orig })
+-        .eq('id', buyer.id);
++    return checkoutRpc(sb, 'checkout_enroll_free_course', { p_course_id: course.id });
+ }
+ 
+ // Whether this course is already sitting in the user's cart (a `shop` row with status='cart') —
+@@ -52,31 +37,9 @@ export async function courseInCart(sb, courseId, uid) {
+     return !!data?.length;
+ }
+ 
+-// PAID → ADD to cart only — clone of the WeWeb NewCourse insert (90ddb3ae): one `shop` row for this
+-// course (owner / status:'cart' / prolong:12 / position / quantity:1 / course_id / course_name).
+-// `renewal` mirrors WeWeb's owner branch: a renewal charges `DurationPrice` and stamps `is_renewal`
+-// (audit-only, does not branch n8n logic); a fresh buy charges `Price` and leaves `is_renewal` at its
+-// DB default (false). NO order and NO redirect — the user reviews the header cart and checks out from
+-// there. Guards against a duplicate row so repeated clicks don't stack the same course. Returns true
+-// if a row was inserted.
++// Server resolves canonical Price/DurationPrice and prevents duplicate cart rows.
+ export async function addToCart(sb, { buyer, course, renewal = false }) {
+-    if (window.__mgGuestAuth) throw new Error('Нет связи с аккаунтом. Обновите страницу.'); // (a') guard
+-    if (await courseInCart(sb, course.id, buyer.id)) return false; // already in cart → header shows it
+-    const { count } = await sb.from('shop')
+-        .select('id', { count: 'exact', head: true })
+-        .eq('owner', buyer.id).eq('status', 'cart');
+-    const row = {
+-        owner: buyer.id,
+-        price: renewal ? course.DurationPrice : course.Price,
+-        status: 'cart',
+-        prolong: 12,
+-        position: (count || 0) + 1,
+-        quantity: 1,
+-        course_id: course.id,
+-        course_name: course.Title,
+-    };
+-    if (renewal) row.is_renewal = true;
+-    const { error } = await sb.from('shop').insert(row);
+-    if (error) throw new Error(`Корзина: ${error.message}`);
+-    return true;
++    if (window.__mgGuestAuth || !buyer?.id) throw new Error('Нет связи с аккаунтом. Обновите страницу.');
++    const result = await addProduct(sb, { type: 'course', id: course.id, renewal });
++    return result.reused !== true;
+ }
+diff --git a/src/_front/streams/eventsApi.js b/src/_front/streams/eventsApi.js
+index 9d18b39..d6b130c 100644
+--- a/src/_front/streams/eventsApi.js
++++ b/src/_front/streams/eventsApi.js
+@@ -1,12 +1,4 @@
+-// Offline-EVENTS data + payment helpers. DI style like streamsApi.js (pass the shared Supabase
+-// client). The paid path is a verbatim clone of the course/stream purchase flow (shop → order →
+-// Prodamus link) — the ONLY money-adjacent code here. Settlement (mark paid, grant, sales, balance)
+-// is handled by the UNTOUCHED n8n BuyCourse via the Prodamus callback; the server-side DB trigger
+-// trg_event_order_paid then flips the registration to 'paid' and adds the buyer to the event chat.
+-//
+-// KEY money-safety marker: order.event_id (nullable, invisible to BuyCourse) tags an order as an
+-// event payment so the trigger fires only for events; course/stream orders are untouched.
+-
++// Events metadata/registrations. All paid purchases use checkout/cartApi.js.
+ import { deleteLive } from '@/_front/streams/peertubeLive.js';
+ 
+ /**
+@@ -215,11 +207,8 @@ export async function listMyEvents(supabase, ownerId) {
+ 
+ /** Count paid registrations for an event (roster size / capacity display / delete guard). */
+ export async function countPaidRegistrations(supabase, eventId) {
+-    const { count } = await supabase
+-        .from('event_registrations')
+-        .select('id', { count: 'exact', head: true })
+-        .eq('event', eventId)
+-        .eq('status', 'paid');
++    const { count, error } = await supabase.from('event_registrations').select('id', { count: 'exact', head: true }).eq('event', eventId).eq('status', 'paid');
++    if (error) throw new Error(error.message);
+     return count || 0;
+ }
+ 
+@@ -258,40 +247,11 @@ export async function publishEvent(supabase, eventId) {
+  * without an .order() (PGRST109).
+  */
+ export async function deleteEvent(supabase, eventId) {
+-    const paidRegs = await countPaidRegistrations(supabase, eventId);
+-    // A paid order also flips a registration to 'paid' via trg_event_order_paid, but check both.
+-    const { count: paidOrders } = await supabase
+-        .from('order')
+-        .select('id', { count: 'exact', head: true })
+-        .eq('event_id', eventId)
+-        .eq('paid', true);
+-    if (paidRegs > 0 || (paidOrders || 0) > 0) {
+-        throw new Error(`Нельзя удалить: у мероприятия есть оплатившие участники (${paidRegs || paidOrders}). Сначала оформите возвраты.`);
+-    }
+-
+-    // best-effort: drop the event's PeerTube videos (teaser + reviews) so they don't orphan
+     const ev = await getEventById(supabase, eventId).catch(() => null);
++    const { error } = await supabase.rpc('checkout_delete_event', { p_event_id: eventId });
++    if (error) throw new Error(error.message);
+     for (const vid of [ev?.video_id, ev?.review_video_id]) {
+-        if (vid) { try { await deleteLive(supabase, vid); } catch (_) { /* already gone */ } }
+-    }
+-
+-    // .neq('status','paid') / .eq('paid', false) are safety belts: a row flipped to paid by a
+-    // callback mid-delete is never touched here.
+-    const r1 = await supabase.from('event_registrations').delete().eq('event', eventId).neq('status', 'paid');
+-    if (r1.error) throw new Error(`Не удалось очистить незавершённые регистрации: ${r1.error.message}`);
+-    const r2 = await supabase.from('order').update({ event_id: null }).eq('event_id', eventId).eq('paid', false);
+-    if (r2.error) throw new Error(`Не удалось отвязать незавершённые заказы: ${r2.error.message}`);
+-    const r3 = await supabase.from('event_contact_requests').update({ event: null }).eq('event', eventId);
+-    if (r3.error) throw new Error(`Не удалось отвязать заявки на звонок: ${r3.error.message}`);
+-
+-    const { error } = await supabase.from('events').delete().eq('id', eventId);
+-    if (error) {
+-        // Everything unpaid was cleared above; a lingering registrations-FK means a paid row
+-        // appeared mid-delete. Match ONLY that constraint — not any "foreign key" text.
+-        if (/event_registrations_event_fkey/i.test(error.message)) {
+-            throw new Error('Нельзя удалить: у мероприятия появились оплатившие участники.');
+-        }
+-        throw new Error(`Не удалось удалить: ${error.message}`);
++        if (vid) { try { await deleteLive(supabase, vid); } catch (_) { /* existing best-effort cleanup */ } }
+     }
+ }
+ 
+@@ -316,123 +276,4 @@ export async function getMyEventRegistration(supabase, eventId, userId) {
+     return data?.[0] || null;
+ }
+ 
+-/**
+- * MONEY: initiate an event registration payment — clone of purchaseStream.
+- * `paymentType` = 'full' | 'deposit'. Returns the Prodamus payment URL (caller redirects).
+- * Gates: already-paid → blocked; a leftover 'pending' registration is reused (unique(event,user));
+- * capacity (if set) → blocked when paid registrations already fill it.
+- */
+-export async function purchaseEvent(supabase, { buyer, event, paymentType, promoCode = null }) {
+-    if (window.__mgGuestAuth) throw new Error('Нет связи с аккаунтом. Обновите страницу.'); // (a') guard
+-    if (!event?.backing_course_id) throw new Error('У мероприятия нет курса-подложки.');
+-    if (paymentType !== 'full' && paymentType !== 'deposit') throw new Error('Неверный тип оплаты.');
+-    const amount = eventAmount(event, paymentType);
+-    if (!(amount > 0)) throw new Error('Некорректная сумма к оплате.');
+-
+-    // Gate 1: existing registration. paid → block; pending/cancelled → reuse the row (unique(event,user)).
+-    const existing = await getMyEventRegistration(supabase, event.id, buyer);
+-    if (existing && existing.status === 'paid') {
+-        throw new Error('Вы уже записаны на это мероприятие.');
+-    }
+-
+-    // Gate 2: capacity (simple, non-locking count of paid registrations).
+-    if (event.capacity != null) {
+-        const { count } = await supabase
+-            .from('event_registrations')
+-            .select('id', { count: 'exact', head: true })
+-            .eq('event', event.id)
+-            .eq('status', 'paid');
+-        if ((count || 0) >= Number(event.capacity)) {
+-            throw new Error('На мероприятии не осталось свободных мест.');
+-        }
+-    }
+-
+-    // 1) shop cart row (price = the chosen amount — full or deposit)
+-    const { count: cartCount } = await supabase
+-        .from('shop')
+-        .select('id', { count: 'exact', head: true })
+-        .eq('owner', buyer)
+-        .eq('status', 'cart');
+-    const { data: shopRows, error: shopErr } = await supabase
+-        .from('shop')
+-        .insert({
+-            owner: buyer,
+-            price: amount,
+-            status: 'cart',
+-            prolong: 12,
+-            position: (cartCount || 0) + 1,
+-            quantity: 1,
+-            course_id: event.backing_course_id,
+-            course_name: event.title,
+-        })
+-        .select('id')
+-        .limit(1);
+-    if (shopErr) throw new Error(`Корзина: ${shopErr.message}`);
+-    const shopId = shopRows?.[0]?.id;
+-
+-    // 1b) optional promo — FULL payment only (variant В). Deposit + promo is disallowed to avoid the
+-    // "discount is tiny / partially lost" ambiguity of discounting a partial payment. Validated
+-    // server-side; the discounted price is persisted to shop so n8n BuyCourse bills commission on it.
+-    let price = amount;
+-    let promoId = null, promoDiscount = 0;
+-    if (promoCode) {
+-        if (paymentType !== 'full') throw new Error('Промокод доступен только при полной оплате.');
+-        const { data: pv, error: pErr } = await supabase.rpc('preview_promo', { p_code: promoCode, p_shop_ids: [shopId] });
+-        if (pErr) throw new Error(`Промокод: ${pErr.message}`);
+-        if (!pv?.valid) throw new Error('Промокод недействителен для этого мероприятия.');
+-        price = Number(pv.new_total);
+-        promoId = pv.promo_id;
+-        promoDiscount = Number(pv.discount) || 0;
+-        await supabase.from('shop').update({ price }).eq('id', shopId);
+-    }
+-
+-    // 2) order — isolated to this event; event_id is the trigger marker (invisible to BuyCourse)
+-    const { data: orderRows, error: orderErr } = await supabase
+-        .from('order')
+-        .insert({ summ: price, owner: buyer, course_positions: [shopId], event_id: event.id,
+-                  promo_code_id: promoId, promo_discount: promoId ? promoDiscount : null })
+-        .select('id')
+-        .limit(1);
+-    if (orderErr) throw new Error(`Заказ: ${orderErr.message}`);
+-    const orderId = orderRows?.[0]?.id;
+-
+-    // 3) registration (pending) linked to the order — the trigger flips it to 'paid' on callback.
+-    //    Reuse a leftover pending row (unique(event,user)) or insert a fresh one.
+-    const regFields = {
+-        payment_type: paymentType,
+-        amount_paid: price,
+-        amount_total: Number(event.price),
+-        order: orderId,
+-        status: 'pending',
+-    };
+-    if (existing) {
+-        const { error: upErr } = await supabase
+-            .from('event_registrations')
+-            .update(regFields)
+-            .eq('id', existing.id);
+-        if (upErr) throw new Error(`Регистрация: ${upErr.message}`);
+-    } else {
+-        const { error: insErr } = await supabase
+-            .from('event_registrations')
+-            .insert({ event: event.id, user: buyer, ...regFields });
+-        if (insErr) throw new Error(`Регистрация: ${insErr.message}`);
+-    }
+-
+-    // 4) build + fetch the Prodamus payment link (same builder as courses/streams)
+-    const base = 'https://meetguru.payform.ru/?do=link&sys=meetguru';
+-    const urlSuccess = `https://app.meetgu.ru/events?event=${event.id}`;
+-    const products =
+-        `products[0][price]=${encodeURIComponent(price)}` +
+-        `&products[0][quantity]=1` +
+-        `&products[0][name]=${encodeURIComponent(event.title)}`;
+-    const buildUrl = `${base}&order_id=${encodeURIComponent(orderId)}&${products}&urlSuccess=${encodeURIComponent(urlSuccess)}`;
+-    const res = await fetch(buildUrl);
+-    if (!res.ok) throw new Error(`Prodamus (${res.status})`);
+-    const payLink = (await res.text()).trim();
+-    if (!/^https?:\/\//.test(payLink)) throw new Error('Prodamus вернул не ссылку.');
+-
+-    // 5) store num + pageUrl on the order
+-    await supabase.from('order').update({ num: orderId, pageUrl: payLink }).eq('id', orderId);
+-
+-    return payLink;
+-}
++// Paid event positions use the shared cart; payment links are never created here.
+diff --git a/src/_front/streams/streamsApi.js b/src/_front/streams/streamsApi.js
+index b5bf881..841d4a9 100644
+--- a/src/_front/streams/streamsApi.js
++++ b/src/_front/streams/streamsApi.js
+@@ -91,50 +91,7 @@ export async function createBackingCourse(supabase, { owner, title, price, month
+     return data?.[0]?.id;
+ }
+ 
+-// Friendly messages for the error codes the stream-pay-link edge function returns.
+-function mapPayError(code) {
+-    return ({
+-        promo_invalid: 'Промокод недействителен для этого эфира.',
+-        no_backing_course: 'У эфира нет курса-подложки.',
+-        stream_not_found: 'Эфир не найден.',
+-        unauthorized: 'Нужно войти в аккаунт.',
+-        link_failed: 'Платёжная система временно недоступна. Попробуйте ещё раз.',
+-    })[code] || '';
+-}
+-
+-/**
+- * MONEY: initiate a paid-stream purchase (variant B — server builds the link).
+- *
+- * The browser no longer touches meetguru.payform.ru: that cross-origin fetch was failing on
+- * mobile / in-app browsers (carrier DPI, WebView) and dead-ending the purchase. Instead we call
+- * our SAME-ORIGIN edge function `stream-pay-link` (via /sb/functions/v1/…), which builds the
+- * shop/order rows and fetches the Prodamus link server-side, and returns the ready payLink.
+- *
+- * Settlement is unchanged: the UNTOUCHED n8n `BuyCourse` workflow marks paid / grants access via
+- * the Prodamus callback. The `buyer` arg is kept for the call signature but the server derives
+- * the real buyer from the auth JWT (not trusted from the client). Returns the payment URL.
+- */
+-export async function purchaseStream(supabase, { buyer, stream, promoCode = null }) {
+-    void buyer; // identity is taken from the JWT server-side; kept for signature compatibility
+-    if (window.__mgGuestAuth) throw new Error('Нет связи с аккаунтом. Обновите страницу.'); // (a') guard
+-    if (!stream?.backing_course_id) throw new Error('У эфира нет курса-подложки.');
+-
+-    const { data, error } = await supabase.functions.invoke('stream-pay-link', {
+-        body: { stream_id: stream.id, promo_code: promoCode || null },
+-    });
+-
+-    if (error) {
+-        // functions.invoke wraps a non-2xx in a FunctionsHttpError; surface the server code if any.
+-        let code = '';
+-        try { code = (await error.context?.json?.())?.error || ''; } catch (e) { /* non-json body */ }
+-        throw new Error(mapPayError(code) || 'Не удалось связаться с платёжной системой. Попробуйте ещё раз.');
+-    }
+-    if (!data?.payLink || !/^https?:\/\//.test(data.payLink)) {
+-        throw new Error('Платёжная система не вернула ссылку. Попробуйте ещё раз.');
+-    }
+-    // caller redirects the browser to payLink (same-origin → external payform page)
+-    return data.payLink;
+-}
++// Paid checkout is owned by the shared cart; there is no stream-specific payment path.
+ 
+ // ---------- access gate (NOT money) ----------
+ 
+@@ -159,6 +116,7 @@ export async function hasBoughtStream(supabase, stream, userId) {
+         .select('id')
+         .eq('course', stream.backing_course_id)
+         .eq('user', userId)
++        .or('buy.eq.true,Free.eq.true')
+         .limit(1);
+     return !!data?.length;
+ }
+diff --git a/src/_front/views/AllCoursesPage.vue b/src/_front/views/AllCoursesPage.vue
+index f7bbd39..1ad7554 100644
+--- a/src/_front/views/AllCoursesPage.vue
++++ b/src/_front/views/AllCoursesPage.vue
+@@ -211,7 +211,7 @@ const qvEmbed = computed(() => (qv.value?.video_id ? embedUrl(qv.value.video_id)
+ const qvBuyLabel = computed(() => {
+     if (buying.value) return 'Секунду…';
+     if (qv.value?.Free) return 'Получить бесплатно';
+-    return qvInCart.value ? 'В корзине — оформить' : 'Купить';
++    return qvInCart.value ? 'В корзине' : 'Добавить в корзину';
+ });
+ 
+ // Russian plural helper (one / few / many).
+@@ -304,7 +304,6 @@ async function buyFromQuickView() {
+         } else {
+             await addToCart(sb, { buyer: buyer.value, course: qv.value });
+             qvInCart.value = true;
+-            openHeaderCart();
+         }
+     } catch (e) {
+         buyError.value = e?.message || 'Не удалось добавить в корзину. Попробуйте ещё раз.';
+diff --git a/src/_front/views/CoursePage.vue b/src/_front/views/CoursePage.vue
+index 6c52b61..84ebe13 100644
+--- a/src/_front/views/CoursePage.vue
++++ b/src/_front/views/CoursePage.vue
+@@ -297,7 +297,7 @@ const teaserEmbed = computed(() => (course.value?.video_id ? embedUrl(course.val
+ const ctaLabel = computed(() => {
+     if (buying.value) return 'Секунду…';
+     if (course.value?.Free) return 'Получить бесплатно';
+-    return inCart.value ? 'В корзине — оформить' : 'Купить';
++    return inCart.value ? 'В корзине' : 'Добавить в корзину';
+ });
+ // Renewal is offered to owners only when the author set a positive DurationPrice (parity with the
+ // WeWeb course_info owner branch; DurationPrice<=0 → no self-serve renewal, just the library link).
+@@ -338,7 +338,6 @@ async function addCourse(renewal) {
+             // ADD to cart only — no order, no redirect. Checkout is done from the header cart.
+             await addToCart(sb, { buyer: buyer.value, course: course.value, renewal });
+             inCart.value = true;
+-            openHeaderCart();
+         }
+     } catch (e) {
+         buyError.value = e?.message || 'Не удалось добавить в корзину. Попробуйте ещё раз.';
+diff --git a/src/_front/views/EventDetailPage.vue b/src/_front/views/EventDetailPage.vue
+index 92f9abe..fbbac39 100644
+--- a/src/_front/views/EventDetailPage.vue
++++ b/src/_front/views/EventDetailPage.vue
+@@ -54,7 +54,7 @@
+                             <!-- pending -->
+                             <template v-else-if="reg && reg.status === 'pending'">
+                                 <p class="pd-buycard__note">Оплата обрабатывается. Если только что оплатили — обновите страницу через минуту.</p>
+-                                <button class="pd-btn pd-btn--lg pd-btn--block" :disabled="busy" @click="pay(reg.payment_type || 'full')">Оплатить снова</button>
++                                <button class="pd-btn pd-btn--lg pd-btn--block" :disabled="busy" @click="openSharedCart">Открыть корзину и заказы</button>
+                             </template>
+                             <!-- new registration -->
+                             <template v-else>
+@@ -68,9 +68,7 @@
+                                         <span class="ed-choice__sub">остаток {{ money(event.price - depositAmount) }} ₽ на месте</span>
+                                     </label>
+                                 </div>
+-                                <!-- promo only for full payment (variant В) -->
+-                                <input v-if="choice === 'full'" v-model="eventPromo" type="text" class="ed-promo-input" placeholder="Промокод (необязательно)" />
+-                                <p v-else class="ed-promo-note">Промокод доступен только при полной оплате.</p>
++                                <p class="ed-promo-note">Промокод применяется в общей корзине. Для предоплаты скидка не действует.</p>
+                                 <label class="ed-agree">
+                                     <input type="checkbox" v-model="agreed" />
+                                     <span>Я ознакомился(ась) и принимаю
+@@ -78,8 +76,8 @@
+                                         включая <a href="/vozvrat" target="_blank" rel="noopener">Правила отмены участия и возврата денежных средств</a>.
+                                     </span>
+                                 </label>
+-                                <button class="pd-btn pd-btn--lg pd-btn--block" :disabled="busy || seatsFull || !agreed" @click="pay(choice)">
+-                                    {{ seatsFull ? 'Мест нет' : (busy ? 'Переход к оплате…' : 'Записаться') }}
++                                <button class="pd-btn pd-btn--lg pd-btn--block" :disabled="busy || (!eventInCart && !agreed)" @click="pay(choice)">
++                                    {{ busy ? 'Сохраняем…' : Number(event.price) === 0 ? 'Записаться бесплатно' : eventInCart ? 'В корзине' : 'Добавить в корзину' }}
+                                 </button>
+                             </template>
+                             <p v-if="payError" class="pd-buyerr">{{ payError }}</p>
+@@ -87,7 +85,6 @@
+                             <ul class="pd-statlist">
+                                 <li v-if="whenText"><svg viewBox="0 0 24 24" class="pd-ic" aria-hidden="true"><path d="M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg><span>{{ whenText }}</span></li>
+                                 <li v-if="event.location"><svg viewBox="0 0 24 24" class="pd-ic" aria-hidden="true"><path d="M12 21s7-6.3 7-11a7 7 0 1 0-14 0c0 4.7 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg><span>{{ event.location }}</span></li>
+-                                <li v-if="event.capacity != null"><svg viewBox="0 0 24 24" class="pd-ic" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg><span>{{ seatsLeft > 0 ? `Осталось мест: ${seatsLeft}` : 'Мест нет' }}</span></li>
+                                 <li><svg viewBox="0 0 24 24" class="pd-ic" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>Чат участников после оплаты</span></li>
+                             </ul>
+                         </div>
+@@ -202,6 +199,7 @@
+ </template>
+ 
+ <script setup>
++import { addProduct, openSharedCart, checkoutRpc } from '@/_front/checkout/cartApi.js';
+ import { ref, computed, onMounted } from 'vue';
+ import { useRoute } from 'vue-router';
+ import { getCurrentUser } from '@/_front/streams/streamsApi.js';
+@@ -212,8 +210,6 @@ import {
+     getEventBySlug,
+     getSpeakerProfile,
+     getMyEventRegistration,
+-    countPaidRegistrations,
+-    purchaseEvent,
+     eventAmount,
+     submitContactRequest,
+ } from '@/_front/streams/eventsApi.js';
+@@ -232,10 +228,9 @@ const teaserEmbed = computed(() => (event.value?.video_id ? embedUrl(event.value
+ const reviewEmbed = computed(() => (event.value?.review_video_id ? embedUrl(event.value.review_video_id, { autoplay: false }) : ''));
+ const me = ref(null);
+ const reg = ref(null);
+-const paidCount = ref(0);
+ const choice = ref('full');
+ const agreed = ref(false); // обязательное согласие с офертой + правилами отмены перед оплатой
+-const eventPromo = ref('');
++const eventInCart = ref(false);
+ const busy = ref(false);
+ const payError = ref('');
+ const contactName = ref('');
+@@ -297,8 +292,6 @@ const whenText = computed(() => {
+ });
+ const hasDeposit = computed(() => event.value?.deposit_percent != null && Number(event.value.deposit_percent) > 0);
+ const depositAmount = computed(() => (hasDeposit.value ? eventAmount(event.value, 'deposit') : 0));
+-const seatsLeft = computed(() => (event.value?.capacity != null ? Math.max(0, Number(event.value.capacity) - paidCount.value) : Infinity));
+-const seatsFull = computed(() => event.value?.capacity != null && seatsLeft.value <= 0);
+ 
+ function money(v) { return (Number(v) || 0).toLocaleString('ru-RU'); }
+ 
+@@ -350,8 +343,11 @@ async function load() {
+         event.value = ev;
+         choice.value = 'full';
+         if (ev.speaker_id) speaker.value = await getSpeakerProfile(sb(), ev.speaker_id).catch(() => null);
+-        if (ev.capacity != null) paidCount.value = await countPaidRegistrations(sb(), ev.id).catch(() => 0);
+         await loadReg();
++        if (me.value && Number(ev.price) > 0) {
++            const cart = await checkoutRpc(sb(), 'cart_get').catch(() => []);
++            eventInCart.value = cart.some(i => i.product_type === 'event' && i.product_id === ev.id);
++        }
+     } catch {
+         notFound.value = true;
+     } finally {
+@@ -361,12 +357,19 @@ async function load() {
+ 
+ async function pay(paymentType) {
+     if (busy.value || !event.value || !me.value) return;
++    if (eventInCart.value) { openSharedCart(); return; }
+     busy.value = true; payError.value = '';
+     try {
+-        const payLink = await purchaseEvent(sb(), { buyer: me.value.id, event: event.value, paymentType, promoCode: paymentType === 'full' ? (eventPromo.value.trim() || null) : null });
+-        window.location.href = payLink;
++        if (Number(event.value.price) === 0) {
++            await checkoutRpc(sb(), 'checkout_register_free_event', { p_event_id: event.value.id, p_agreed: agreed.value });
++            await loadReg();
++        } else {
++            await addProduct(sb(), { type: 'event', id: event.value.id, paymentType, agreed: agreed.value });
++            eventInCart.value = true;
++        }
++        busy.value = false;
+     } catch (e) {
+-        payError.value = e.message || 'Не удалось перейти к оплате.';
++        payError.value = e.message || 'Не удалось добавить товар в корзину.';
+         busy.value = false;
+     }
+ }
+diff --git a/src/_front/views/StreamsPage.vue b/src/_front/views/StreamsPage.vue
+index c52eacc..933ddc7 100644
+--- a/src/_front/views/StreamsPage.vue
++++ b/src/_front/views/StreamsPage.vue
+@@ -40,9 +40,8 @@
+                         <div v-if="canBuy">
+                             <div class="sp-msg-title">Платный эфир — {{ priceLabel(detail) }}</div>
+                             <div class="sp-muted">Доступ к эфиру и записи на {{ detail.access_months }} мес. с даты эфира.</div>
+-                            <input v-model="streamPromo" type="text" class="sp-promo-input" placeholder="Промокод (необязательно)" />
+                             <button class="sp-btn sp-btn-primary sp-buy-btn" :disabled="buying" @click="buyStream">
+-                                {{ buying ? 'Переход к оплате…' : 'Купить за ' + priceLabel(detail) }}
++                                {{ buying ? 'Добавляем…' : streamInCart ? 'В корзине' : 'Добавить в корзину' }}
+                             </button>
+                             <p v-if="error" class="sp-error sp-buy-error">{{ error }}</p>
+                             <button v-if="error && !buying" class="sp-btn sp-btn-secondary sp-retry-btn" @click="buyStream">↻ Повторить</button>
+@@ -451,6 +450,7 @@
+ </template>
+ 
+ <script setup>
++import { addProduct, openSharedCart, getCart } from '@/_front/checkout/cartApi.js';
+ import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
+ import { useRoute, useRouter } from 'vue-router';
+ import { validateVisibility, isPublicStream, streamLinkKey, streamShareUrl, visibilityCapabilities, requireUnlistedSupport } from '@/_front/streams/visibility.js';
+@@ -460,7 +460,6 @@ import {
+     createStream,
+     getStreamLinkKey,
+     createBackingCourse,
+-    purchaseStream,
+     hasBoughtStream,
+     accessExpiry,
+     listMyStreams,
+@@ -557,7 +556,7 @@ const boughtResolved = ref(false); // true once the paid-access (hasBoughtStream
+ const myId = ref(null);            // fast uid from the stored session/cookie (no getSession stall)
+ const meResolved = ref(false);     // true once auth is determined (session restored or confirmed guest)
+ const buying = ref(false);
+-const streamPromo = ref('');
++const streamInCart = ref(false);
+ let pollTimer = null;
+ 
+ // multi-host (co-host) detail state — only used when detail.mode === 'multi'
+@@ -808,6 +807,10 @@ async function loadDetail(id) {
+             try {
+                 if (detail.value && Number(detail.value.price) > 0 && detail.value.backing_course_id && myId.value) {
+                     bought.value = await hasBoughtStream(supa(), detail.value, myId.value);
++                    // Cart lookup must never delay resolving the existing paid-access gate.
++                    getCart(supa()).then(cart => {
++                        if (detail.value?.id === id) streamInCart.value = cart.some(i => i.product_type === 'stream' && i.product_id === id);
++                    }).catch(() => {});
+                 }
+             } catch (_) { /* access stays false */ }
+             boughtResolved.value = true;
+@@ -917,15 +920,15 @@ async function buyStream() {
+     if (buying.value || !detail.value) return;
+     // Guest → login prompt popup (matches the /course buy flow) instead of a tiny inline error.
+     if (!me.value) { showAuthModal.value = true; return; }
++    if (streamInCart.value) { openSharedCart(); return; }
+     buying.value = true;
+     error.value = '';
+     try {
+-        const payLink = await purchaseStream(supa(), { buyer: me.value.id, stream: detail.value, promoCode: streamPromo.value.trim() || null });
+-        window.location.href = payLink; // same-origin edge fn returned the link → go to Prodamus
++        await addProduct(supa(), { type: 'stream', id: detail.value.id });
++        streamInCart.value = true;
++        buying.value = false;
+     } catch (e) {
+         error.value = e.message || 'Не удалось перейти к оплате. Попробуйте ещё раз.';
+-        // Record the failure (UA + user_id added by the logger) so "не открывается оплата" leaves data.
+-        try { logClientEvent('payment_link_error', `stream=${detail.value?.id} ${e.message || e}`); } catch (_) { /* logging must not break */ }
+         buying.value = false;
+     }
+ }
+@@ -1274,6 +1277,8 @@ async function removeStream(s) {
+     }
+ }
+ 
++watch(activeStreamId, () => { streamInCart.value = false; });
++
+ onMounted(() => {
+     fullHdAvailable(supa()).then(enabled => { fullHdEnabled.value = enabled; });
+     visibilityCapabilities(supa()).then(c => { unlistedEnabled.value = c.unlisted_enabled === true; }).catch(() => {});
+diff --git a/scripts/generate-unified-fulfillment.mjs b/scripts/generate-unified-fulfillment.mjs
+new file mode 100644
+index 0000000..2627d73
+--- /dev/null
++++ b/scripts/generate-unified-fulfillment.mjs
+@@ -0,0 +1,38 @@
++// Local source generator, no env/network. Preserve the deployed financial/access algorithm verbatim.
++import fs from 'node:fs';
++const root=new URL('../',import.meta.url);
++const baseline=fs.readFileSync(new URL('tests/fixtures/checkout-legacy-fulfillment.sql',root),'utf8');
++let code=baseline.slice(baseline.indexOf('CREATE OR REPLACE FUNCTION'));
++code=code.replace('    v_credits jsonb', '    v_zero boolean := false;\n    v_credits jsonb');
++const lock='    select * into v_order from public."order" where id=p_order_id for update;';
++if(!code.includes(lock))throw Error('baseline changed');
++code=code.replace(lock,'    perform checkout_private.lock_all();\n'+lock);
++const receipt='    select * into v_receipt from public.order_access_fulfillments where order_id=p_order_id;';
++code=code.replace(receipt,`    v_zero := p_proof_id is null and p_payment_id='zero:'||p_order_id::text and exists(
++      select 1 from checkout_private.orders where order_id=p_order_id and total=0);
++    if v_order.checkout_version=1 and not v_zero then
++      perform 1 from public.payment_audit a where a.id=p_proof_id and a.order_id=p_order_id and a.event='ok'
++       and a.detail->>'sig_valid'='true' and a.detail->>'payment_status'='success' and a.detail->'verify'->>'ok'='true' for share;
++      if not found then raise exception 'verified_success_required' using errcode='42501';end if;
++    end if;
++`+receipt);
++const proof=/    perform 1 from public\.payment_audit a\n[\s\S]*?    if not found then raise exception 'verified_success_required' using errcode='42501'; end if;/;
++if(!proof.test(code))throw Error('proof baseline changed');
++code=code.replace(proof,m=>'    if not v_zero then\n'+m+'\n    end if;');
++const authors='    -- Lock all credited authors in a stable order.';
++code=code.replace(authors,`    perform checkout_private.validate_snapshot(p_order_id,p_access_plan);
++`+authors);
++const paid='    update public."order" set paid=true,payment_id=p_payment_id where id=p_order_id;';
++code=code.replace(paid,'    perform checkout_private.finish_products(p_order_id);\n'+paid);
++const ret="    return jsonb_build_object('status','fulfilled'";
++code=code.replace(ret,`    update public.order_access_fulfillments set result=result||jsonb_build_object('checkout_kind',case when v_zero then 'zero' else 'paid' end) where order_id=p_order_id;
++`+ret);
++// Assert EXACT legacy loop, date math and commission credit algorithm. No new rounding formula.
++const financial=s=>s.slice(s.indexOf('    -- Lock all credited authors'),s.indexOf(paid)).replace('    perform checkout_private.finish_products(p_order_id);\n','');
++if(financial(code)!==financial(baseline))throw Error('financial algorithm changed');
++const target=new URL('supabase/migrations/pending_unified_checkout.sql',root);
++const marker='-- GENERATED FULFILLMENT: scripts/generate-unified-fulfillment.mjs';
++const sql=fs.readFileSync(target,'utf8');
++if(sql.includes(marker))throw Error('already generated; edit the reviewed migration explicitly');
++fs.appendFileSync(target,'\n'+marker+'\n'+code+'\n');
++console.log('Generated compatible fulfillment; financial section byte-identical to production baseline');
+diff --git a/src/_front/checkout/cartApi.js b/src/_front/checkout/cartApi.js
+new file mode 100644
+index 0000000..cec9de9
+--- /dev/null
++++ b/src/_front/checkout/cartApi.js
+@@ -0,0 +1,52 @@
++// One server-owned cart, backed by the existing shop table. Never fall back to client pricing.
++export const PRODUCT_LABELS = Object.freeze({ course: 'Курс', event: 'Мероприятие', stream: 'Трансляция' });
++const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
++const ERRORS = {
++    already_owned: 'Этот продукт уже приобретён.', already_registered: 'Вы уже записаны на мероприятие.',
++    product_not_available: 'Продукт сейчас недоступен для покупки.', terms_required: 'Подтвердите согласие с условиями участия.',
++    product_already_in_pending_order: 'Этот продукт уже есть в ожидающем оплаты заказе. Откройте заказы в корзине.',
++    stream_access_ended: 'Срок доступа к этому эфиру завершён.', checkout_disabled: 'Оформление временно недоступно.',
++};
++export async function checkoutRpc(sb, name, args = {}) {
++    if (!sb) throw new Error('Нет связи с аккаунтом. Обновите страницу.');
++    const { data, error } = await sb.rpc(name, args);
++    if (error) throw new Error(ERRORS[error.message] || 'Не удалось обновить корзину. Повторите попытку.');
++    return data;
++}
++export async function addProduct(sb, { type, id, paymentType = 'full', renewal = false, agreed = false }) {
++    if (!Object.hasOwn(PRODUCT_LABELS, type) || !UUID.test(id || '')) throw new Error('Некорректный товар.');
++    if (!['full', 'deposit'].includes(paymentType) || (paymentType === 'deposit' && type !== 'event')) throw new Error('Некорректный вариант оплаты.');
++    return checkoutRpc(sb, 'cart_add_product', {
++        p_type: type, p_product_id: id, p_payment_type: paymentType,
++        p_renewal: renewal === true, p_agreed: agreed === true,
++    });
++}
++export const getCart = sb => checkoutRpc(sb, 'cart_get');
++export const removeProduct = (sb, id) => checkoutRpc(sb, 'cart_remove', { p_shop_id: id });
++export const quoteCart = (sb, ids, code = null) => checkoutRpc(sb, 'cart_quote', { p_shop_ids: ids, p_code: code });
++export const cancelCheckout = (sb, id) => checkoutRpc(sb, 'checkout_cancel', { p_order_id: id });
++export function openSharedCart() {
++    setTimeout(() => window.dispatchEvent(new CustomEvent('mg-open-cart')), 0);
++}
++export function checkoutIntent(storage, userId, ids, code, randomUUID = () => crypto.randomUUID()) {
++    const key = 'mg.checkout.intent:' + userId + ':' + JSON.stringify([...ids].sort()) + ':' + (code || '').trim().toUpperCase();
++    try {
++        const old = storage?.getItem(key);
++        if (UUID.test(old || '')) return old;
++        const id = randomUUID(); storage?.setItem(key, id); return id;
++    } catch { return randomUUID(); }
++}
++export async function payCart(sb, { userId, ids, code = null, orderId = null, storage = globalThis.sessionStorage }) {
++    if (!UUID.test(userId || '') || (!orderId && !ids?.length)) throw new Error('Войдите в аккаунт и добавьте товары.');
++    const body = orderId ? { order_id: orderId } : {
++        request_id: checkoutIntent(storage, userId, ids, code), shop_ids: ids, promo_code: code,
++    };
++    const { data, error } = await sb.functions.invoke('checkout-pay-link', { body });
++    let problem = data;
++    if (error?.context?.json) { try { problem = await error.context.json(); } catch { /* no raw response logging */ } }
++    if (error || problem?.error) throw new Error(ERRORS[problem?.error] || problem?.message || 'Не удалось открыть оплату. Повторите попытку — заказ будет использован повторно.');
++    if (data?.completed === true) return { completed: true, orderId: data.order_id };
++    let url; try { url = new URL(data?.payLink); } catch { throw new Error('Сервис оплаты не вернул ссылку.'); }
++    if (url.protocol !== 'https:' || url.username || url.password || !['meetguru.payform.ru'].includes(url.hostname)) throw new Error('Сервис оплаты вернул неподтверждённую ссылку.');
++    return { payLink: url.href, orderId: data.order_id };
++}
+diff --git a/src/_front/checkout/CheckoutOrders.vue b/src/_front/checkout/CheckoutOrders.vue
+new file mode 100644
+index 0000000..fb480fd
+--- /dev/null
++++ b/src/_front/checkout/CheckoutOrders.vue
+@@ -0,0 +1,52 @@
++<template>
++    <section v-if="orders.length || error" class="checkout-orders" aria-label="Незавершённые заказы">
++        <h3>Заказы</h3>
++        <article v-for="order in orders" :key="order.order_id">
++            <p>{{ (order.items || []).map(i => i.name).join(', ') }}</p>
++            <p>{{ money(order.total) }} ₽ · {{ labels[order.status] || order.status }}</p>
++            <div v-if="['pending','legacy_pending'].includes(order.status)">
++                <button type="button" :disabled="busy" @click="resume(order)">Продолжить оплату</button>
++                <button v-if="order.status !== 'legacy_pending'" type="button" :disabled="busy" @click="cancel(order)">Отменить заказ</button>
++            </div>
++        </article>
++        <p v-if="error" role="alert">{{ error }}</p>
++    </section>
++</template>
++<script setup>
++import { ref, onMounted, onBeforeUnmount } from 'vue';
++import { checkoutRpc, cancelCheckout, payCart } from './cartApi.js';
++const props = defineProps({ supabase: Object, userId: String });
++const emit = defineEmits(['changed']);
++const orders = ref([]), busy = ref(false), error = ref('');
++const labels = { pending: 'Ожидает оплаты', cancelled: 'Отменён', fulfilled: 'Выполнен', legacy_pending: 'Ранее созданный заказ' };
++const money = v => Number(v).toLocaleString('ru-RU');
++let timer, stopped = false;
++async function load() {
++    try { const rows = await checkoutRpc(props.supabase, 'checkout_my_orders'); if (!stopped) orders.value = rows; }
++    catch { if (!stopped) error.value = 'Не удалось проверить состояние заказов.'; }
++}
++async function resume(order) {
++    busy.value = true; error.value = '';
++    try {
++        const result = await payCart(props.supabase, { userId: props.userId, orderId: order.order_id });
++        if (result.completed) { await load(); emit('changed'); }
++        else window.location.assign(result.payLink);
++    } catch (e) { error.value = e.message; }
++    finally { busy.value = false; }
++}
++async function cancel(order) {
++    busy.value = true; error.value = '';
++    try { await cancelCheckout(props.supabase, order.order_id); await load(); emit('changed'); }
++    catch { error.value = 'Не удалось отменить заказ. Проверьте состояние перед повтором.'; }
++    finally { busy.value = false; }
++}
++onMounted(() => { load(); timer = setInterval(() => { if (!document.hidden) load(); }, 15000); });
++onBeforeUnmount(() => { stopped = true; clearInterval(timer); });
++</script>
++<style scoped>
++.checkout-orders { border-top: 1px solid #dfe5ed; margin-top: 16px; padding-top: 12px; font-size: 14px; }
++h3 { margin: 0 0 8px; } article { border-bottom: 1px solid #dfe5ed; padding: 8px 0; overflow-wrap: anywhere; }
++p { margin: 6px 0; } article div { display: flex; flex-wrap: wrap; gap: 8px; }
++button { padding: 8px; border: 1px solid #c4d2e6; border-radius: 8px; background: white; color: #173b70; cursor: pointer; font: inherit; }
++button:disabled { opacity: .6; cursor: wait; }
++</style>
+diff --git a/supabase/functions/checkout-pay-link/index.ts b/supabase/functions/checkout-pay-link/index.ts
+new file mode 100644
+index 0000000..8cd9857
+--- /dev/null
++++ b/supabase/functions/checkout-pay-link/index.ts
+@@ -0,0 +1,7 @@
++import { createCheckoutHandler } from './handler.mjs';
++Deno.serve(createCheckoutHandler({ fetch, env: {
++    SUPABASE_URL: Deno.env.get('SUPABASE_URL'),
++    SUPABASE_ANON_KEY: Deno.env.get('SUPABASE_ANON_KEY'),
++    SUPABASE_SERVICE_ROLE_KEY: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),
++    SITE_ORIGIN: Deno.env.get('SITE_ORIGIN'),
++} }));
+diff --git a/supabase/functions/checkout-pay-link/handler.mjs b/supabase/functions/checkout-pay-link/handler.mjs
+new file mode 100644
+index 0000000..2b99d55
+--- /dev/null
++++ b/supabase/functions/checkout-pay-link/handler.mjs
+@@ -0,0 +1,78 @@
++// Testable server bridge to the EXISTING Prodamus merchant and BuyCourse callback.
++export function createCheckoutHandler({ fetch: request, env, uuid = () => crypto.randomUUID() }) {
++    const origin = env.SITE_ORIGIN || 'https://app.meetgu.ru';
++    const supabase = (env.SUPABASE_URL || '').replace(/\/$/, '');
++    const merchant = 'https://meetguru.payform.ru/';
++    const cors = { 'access-control-allow-origin': origin, 'access-control-allow-headers': 'authorization,apikey,content-type,x-client-info', 'access-control-allow-methods': 'POST,OPTIONS', vary: 'Origin' };
++    const json = (value, status = 200) => new Response(JSON.stringify(value), { status, headers: { ...cors, 'content-type': 'application/json', 'cache-control': 'no-store' } });
++    const rpc = async (name, args, authorization, key) => {
++        const r = await request(`${supabase}/rest/v1/rpc/${name}`, {
++            method: 'POST', headers: { apikey: key, Authorization: authorization, 'Content-Type': 'application/json' },
++            body: JSON.stringify(args), signal: AbortSignal.timeout(12000),
++        });
++        if (!r.ok) {
++            const body = await r.json().catch(() => null);
++            const known = ['already_owned','already_registered','product_not_available','checkout_disabled','payment_link_in_progress','checkout_cancelled'];
++            const e = new Error('checkout_rpc_failed');
++            if (known.includes(body?.message)) e.safeCode = body.message;
++            throw e;
++        }
++        return r.status === 204 ? null : r.json();
++    };
++    return async req => {
++        if (req.headers.get('Origin') && req.headers.get('Origin') !== origin) return json({ error: 'origin_not_allowed' }, 403);
++        if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
++        if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
++        if (!supabase || !env.SUPABASE_ANON_KEY || !env.SUPABASE_SERVICE_ROLE_KEY) return json({ error: 'checkout_not_configured' }, 503);
++        const auth = req.headers.get('Authorization') || '';
++        if (!/^Bearer\s+\S+$/.test(auth)) return json({ error: 'unauthorized' }, 401);
++        let payload;
++        try { payload = await req.json(); } catch { return json({ error: 'bad_json' }, 400); }
++        let order;
++        try {
++            const who = await request(`${supabase}/auth/v1/user`, { headers: { apikey: env.SUPABASE_ANON_KEY, Authorization: auth }, signal: AbortSignal.timeout(12000) });
++            if (!who.ok) return json({ error: 'unauthorized' }, 401);
++            const actor = (await who.json())?.id;
++            if (!actor) return json({ error: 'unauthorized' }, 401);
++            const userRpc = (name, body) => rpc(name, body, auth, env.SUPABASE_ANON_KEY);
++            const serviceRpc = (name, body) => rpc(name, body, 'Bearer ' + env.SUPABASE_SERVICE_ROLE_KEY, env.SUPABASE_SERVICE_ROLE_KEY);
++            order = payload.order_id;
++            if (!order) {
++                const prepared = await userRpc('checkout_prepare', { p_request_id: payload.request_id, p_shop_ids: payload.shop_ids, p_code: payload.promo_code || null });
++                order = prepared.order_id;
++            }
++            const lease = uuid();
++            const claim = await serviceRpc('checkout_acquire_link', { p_order_id: order, p_actor_id: actor, p_lease: lease });
++            if (claim.completed) return json({ completed: true, order_id: order });
++            if (claim.zero) {
++                const r = await serviceRpc('checkout_complete_zero', { p_order_id: order, p_actor_id: actor });
++                if (!['fulfilled', 'already_completed'].includes(r.status)) return json({ error: r.status, order_id: order }, 409);
++                return json({ completed: true, order_id: order });
++            }
++            let link = claim.payLink;
++            if (!link) {
++                const url = new URL(merchant);
++                url.searchParams.set('do', 'link'); url.searchParams.set('sys', 'meetguru');
++                url.searchParams.set('order_id', order); url.searchParams.set('urlSuccess', origin + '/');
++                for (const [i, line] of claim.lines.entries()) {
++                    url.searchParams.set(`products[${i}][name]`, line.name);
++                    url.searchParams.set(`products[${i}][price]`, String(line.price));
++                    url.searchParams.set(`products[${i}][quantity]`, '1');
++                }
++                // No browser amount/products, no client success URL, no provider call on a replay.
++                const response = await request(url.href, { signal: AbortSignal.timeout(12000), redirect: 'error' });
++                if (!response.ok) throw new Error('provider_unavailable');
++                link = (await response.text()).trim();
++                let parsed; try { parsed = new URL(link); } catch { throw new Error('invalid_payment_link'); }
++                if (parsed.protocol !== 'https:' || parsed.hostname !== 'meetguru.payform.ru' || parsed.port || parsed.username || parsed.password) throw new Error('invalid_payment_link');
++                link = parsed.href;
++                await serviceRpc('checkout_store_link', { p_order_id: order, p_actor_id: actor, p_lease: lease, p_link: link });
++            }
++            return json({ order_id: order, payLink: link });
++        } catch (e) {
++            // Do not log headers, raw DB errors, customer payloads or provider URLs.
++            // Keep the immutable order; retry uses the same intent/order. Never replay a payment.
++            return json({ error: e.safeCode || 'checkout_unavailable', message: order ? 'Не удалось открыть оплату. Повторите попытку: заказ сохранён.' : 'Не удалось оформить заказ. Проверьте товары и повторите попытку.' }, e.safeCode ? 409 : 503);
++        }
++    };
++}
+diff --git a/supabase/migrations/pending_unified_checkout.sql b/supabase/migrations/pending_unified_checkout.sql
+new file mode 100644
+index 0000000..d838889
+--- /dev/null
++++ b/supabase/migrations/pending_unified_checkout.sql
+@@ -0,0 +1,631 @@
++-- OWNER MANUAL ONLY. Apply with the coordinated API/frontend cutover, never via deploy/MCP.
++-- Existing shop/order are the only cart/payment order. New tables are immutable order ledger only; no seat-capacity or booking system.
++begin;
++set local lock_timeout='3s';
++set local statement_timeout='30s';
++do $$begin
++ if md5(pg_get_functiondef('public.fulfill_paid_course_order(uuid,text,uuid,jsonb)'::regprocedure))<> '92ce4015709920ea22fa7fcff27aba80' then raise exception 'fulfillment_baseline_changed_review_required';end if;
++end$$;
++create schema checkout_private;
++revoke all on schema checkout_private from public,anon,authenticated,service_role;
++alter table public.shop add column product_type text check(product_type in ('course','event','stream'));
++alter table public.shop add column product_id uuid;
++alter table public.shop add column payment_type text check(payment_type in ('full','deposit'));
++alter table public.shop add column terms_accepted boolean not null default false;
++alter table public."order" add column checkout_version integer;
++alter table public.order_access_fulfillments alter column proof_id drop not null;
++create table checkout_private.orders (
++ order_id uuid primary key references public."order"(id), owner_id uuid not null references public.users(id),
++ request_id uuid not null, created_at timestamptz not null,
++ status text not null default 'pending' check(status in ('pending','cancelled','fulfilled')),
++ promo_id uuid, promo_code text, discount numeric not null, total numeric not null check(total>=0),
++ lease_id uuid, lease_until timestamptz, pay_link text,
++ unique(owner_id,request_id)
++);
++create table checkout_private.items (
++ order_id uuid not null references checkout_private.orders(order_id), shop_id uuid not null references public.shop(id),
++ product_type text not null check(product_type in ('course','event','stream')),product_id uuid not null,
++ course_id uuid not null references public.course(id),name text not null,payment_type text not null,
++ base_price numeric not null,price numeric not null check(price>=0),amount_total numeric not null,
++ is_renewal boolean not null,primary key(order_id,shop_id),unique(shop_id)
++);
++alter table checkout_private.orders enable row level security;
++alter table checkout_private.items enable row level security;
++revoke all on all tables in schema checkout_private from public,anon,authenticated,service_role;
++
++create function checkout_private.lock_all() returns void language sql volatile as $$
++ select pg_advisory_xact_lock(hashtextextended('meetguru-unified-checkout-v1',0))
++$$;
++create function checkout_private.is_admin() returns boolean language sql stable security definer set search_path=pg_catalog as $$
++ select exists(select 1 from public.users where id=auth.uid() and (role='admin' or superadmin is true))
++$$;
++create function checkout_private.product(p_type text,p_id uuid,p_payment text,p_renewal boolean,p_uid uuid,p_check_owned boolean default true)
++returns jsonb language plpgsql volatile security definer set search_path=pg_catalog as $$
++declare c public.course%rowtype;e public.events%rowtype;s public.streams%rowtype;v_course uuid;
++ v_name text;v_price numeric;v_total numeric;v_at timestamp;v_end timestamptz;
++begin
++ if p_uid is null then raise exception 'auth_required' using errcode='42501';end if;
++ if p_type not in ('course','event','stream') or p_type is null or p_payment not in ('full','deposit') or p_payment is null then raise exception 'bad_product';end if;
++ if p_type<>'event' and p_payment<>'full' then raise exception 'bad_payment_type';end if;
++ if p_type<>'course' and p_renewal then raise exception 'bad_renewal';end if;
++ if p_type='course' then
++  select * into c from public.course where id=p_id for share;
++  if not found or c."ModStatus" is distinct from 'Опубликовано' or c."Free" is true or c."Buy" is not true
++     or exists(select 1 from public.events where backing_course_id=p_id)
++     or exists(select 1 from public.streams where backing_course_id=p_id) then raise exception 'product_not_available';end if;
++  if p_renewal then
++   if not exists(select 1 from public.user_course where "user"=p_uid and course=p_id and (buy is true or "Free" is true)) then raise exception 'not_owned';end if;
++   v_price:=c."DurationPrice";
++  else
++   if p_check_owned and exists(select 1 from public.user_course where "user"=p_uid and course=p_id and (buy is true or "Free" is true)) then raise exception 'already_owned';end if;
++   v_price:=c."Price";
++  end if;
++  v_course:=c.id;v_name:=c."Title";v_total:=v_price;
++ elsif p_type='event' then
++  select * into e from public.events where id=p_id for share;
++  if not found or e.status<>'published' or e.backing_course_id is null then raise exception 'product_not_available';end if;
++  if p_check_owned and exists(select 1 from public.event_registrations where event=p_id and "user"=p_uid and status='paid') then raise exception 'already_registered';end if;
++  v_price:=e.price;v_total:=e.price;v_course:=e.backing_course_id;v_name:=e.title;
++  if p_payment='deposit' then
++   if e.deposit_percent is null or e.deposit_percent<=0 or e.deposit_percent>100 then raise exception 'deposit_unavailable';end if;
++   v_price:=round(e.price*e.deposit_percent/100);
++  end if;
++ else
++  select * into s from public.streams where id=p_id for share;
++  if not found or s.hidden is true or s.visibility<>'public' or s.backing_course_id is null then raise exception 'product_not_available';end if;
++  if s.access_months is not null and s.access_months>0 then
++   v_at:=coalesce(s.scheduled_at,s.created_at) at time zone 'UTC';
++   v_end:=(date_trunc('month',v_at)+make_interval(months=>s.access_months)+(extract(day from v_at)::integer-1)*interval '1 day'+(v_at-date_trunc('day',v_at))) at time zone 'UTC';
++   if v_end<=clock_timestamp() then raise exception 'stream_access_ended';end if;
++  end if;
++  if p_check_owned and exists(select 1 from public.user_course where "user"=p_uid and course=s.backing_course_id and (buy is true or "Free" is true)) then raise exception 'already_owned';end if;
++  v_price:=s.price;v_total:=s.price;v_course:=s.backing_course_id;v_name:=s.title;
++ end if;
++ if v_price is null or v_price<=0 or v_price<>round(v_price,2) then raise exception 'not_a_paid_product';end if;
++ if not exists(select 1 from public.course where id=v_course and owner is not null) then raise exception 'no_backing_author';end if;
++ return jsonb_build_object('product_type',p_type,'product_id',p_id,'course_id',v_course,'course_name',v_name,
++  'payment_type',p_payment,'base_price',v_price,'price',v_price,'amount_total',v_total,'is_renewal',p_renewal,'quantity',1);
++end$$;
++create function public.checkout_prepare(p_request_id uuid,p_shop_ids uuid[],p_code text default null) returns jsonb
++language plpgsql security definer set search_path=pg_catalog as $$
++declare u uuid:=auth.uid();o checkout_private.orders%rowtype;q jsonb;j jsonb;ts timestamptz;oid uuid;s public.shop%rowtype;
++begin
++ if u is null then raise exception 'auth_required' using errcode='42501';end if;
++ if p_request_id is null then raise exception 'request_id_required';end if;
++ perform checkout_private.lock_all();
++ select * into o from checkout_private.orders where owner_id=u and request_id=p_request_id for update;
++ if found then
++  if (select array_agg(i.shop_id order by i.shop_id) from checkout_private.items i where i.order_id=o.order_id) is distinct from (select array_agg(v order by v) from unnest(p_shop_ids) v)
++    or coalesce(o.promo_code,'')<>upper(btrim(coalesce(p_code,''))) then raise exception 'request_payload_changed';end if;
++  return jsonb_build_object('order_id',o.order_id,'total',o.total,'status',o.status,'reused',true);
++ end if;
++ -- Also deduplicate a lost browser intent: the same exact positions cannot acquire a second order.
++ select x.* into o from checkout_private.orders x where x.owner_id=u and
++  (select array_agg(i.shop_id order by i.shop_id) from checkout_private.items i where i.order_id=x.order_id)=(select array_agg(v order by v) from unnest(p_shop_ids) v)
++  and coalesce(x.promo_code,'')=upper(btrim(coalesce(p_code,''))) order by x.created_at desc limit 1;
++ if found then return jsonb_build_object('order_id',o.order_id,'total',o.total,'status',o.status,'reused',true);end if;
++ perform 1 from public.shop where owner=u and id=any(p_shop_ids) order by id for update;
++ q:=public.cart_quote(p_shop_ids,p_code);
++ if q->>'valid'<>'true' then raise exception 'promo_%',q->>'reason';end if;
++ if (q->>'promo_id') is not null then perform 1 from public.promo_codes where id=(q->>'promo_id')::uuid for update;end if;
++ for j in select value from jsonb_array_elements(q->'lines') order by value->>'product_id' loop
++  if j->>'product_type'='event' then
++   select * into s from public.shop where id=(j->>'id')::uuid;
++   if not s.terms_accepted then raise exception 'terms_required';end if;
++  end if;
++ end loop;
++ ts:=clock_timestamp();oid:=gen_random_uuid();
++ -- order.course_positions is text[] in production. Backing courses keep BuyCourse compatible.
++ insert into public."order"(id,created_at,owner,summ,course_positions,num,checkout_version,promo_code_id,promo_discount)
++ values(oid,ts,u,(q->>'new_total')::numeric,p_shop_ids::text[],oid::text,1,(q->>'promo_id')::uuid,(q->>'discount')::numeric);
++ insert into checkout_private.orders(order_id,owner_id,request_id,created_at,total,discount,promo_id,promo_code)
++ values(oid,u,p_request_id,ts,(q->>'new_total')::numeric,(q->>'discount')::numeric,(q->>'promo_id')::uuid,q->>'code');
++ for j in select value from jsonb_array_elements(q->'lines') loop
++  insert into checkout_private.items(order_id,shop_id,product_type,product_id,course_id,name,payment_type,base_price,price,amount_total,is_renewal)
++  values(oid,(j->>'id')::uuid,j->>'product_type',(j->>'product_id')::uuid,(j->>'course_id')::uuid,j->>'course_name',j->>'payment_type',(j->>'base_price')::numeric,(j->>'price')::numeric,(j->>'amount_total')::numeric,(j->>'is_renewal')::boolean);
++  update public.shop set price=(j->>'price')::numeric,course_id=(j->>'course_id')::uuid,course_name=j->>'course_name',
++   product_type=j->>'product_type',product_id=(j->>'product_id')::uuid,payment_type=j->>'payment_type',"order"=oid,status='order',quantity=1 where id=(j->>'id')::uuid;
++ end loop;
++ return jsonb_build_object('order_id',oid,'total',(q->>'new_total')::numeric,'status','pending','reused',false);
++end$$;
++create function public.checkout_cancel(p_order_id uuid) returns void language plpgsql security definer set search_path=pg_catalog as $$
++begin
++ perform checkout_private.lock_all();
++ if auth.uid() is null or not exists(select 1 from checkout_private.orders where order_id=p_order_id and owner_id=auth.uid()) then raise exception 'not_owner' using errcode='42501';end if;
++ update checkout_private.orders set status='cancelled' where order_id=p_order_id and status='pending';
++ -- Does not reverse a provider payment. A later verified success still settles the entire order.
++end$$;
++create function public.checkout_my_orders() returns jsonb language sql security definer set search_path=pg_catalog as $$
++ select coalesce(jsonb_agg(to_jsonb(x) order by x.created_at desc),'[]') from
++ (select o.order_id,o.created_at,o.total,o.status,
++  (select jsonb_agg(jsonb_build_object('name',i.name,'product_type',i.product_type,'price',i.price)) from checkout_private.items i where i.order_id=o.order_id) items
++  from checkout_private.orders o where o.owner_id=auth.uid()
++  union all
++  select old.id,old.created_at,old.summ,'legacy_pending',
++   (select jsonb_agg(jsonb_build_object('name',sh.course_name,'product_type','legacy','price',sh.price)) from public.shop sh where sh.id::text=any(old.course_positions))
++   from public."order" old where old.owner=auth.uid() and old.paid is not true and old."pageUrl" is not null
++    and not exists(select 1 from checkout_private.orders x where x.order_id=old.id)
++  order by created_at desc limit 20) x
++$$;
++-- Service-only bridge for the ONE existing provider. No lease/order/price token goes to a browser.
++create function public.checkout_acquire_link(p_order_id uuid,p_actor_id uuid,p_lease uuid) returns jsonb
++language plpgsql security definer set search_path=pg_catalog as $$
++declare o checkout_private.orders%rowtype;legacy public."order"%rowtype;
++begin
++ select * into o from checkout_private.orders where order_id=p_order_id for update;
++ if not found then
++  select * into legacy from public."order" where id=p_order_id;
++  if not found or legacy.owner is distinct from p_actor_id then raise exception 'not_owner' using errcode='42501';end if;
++  if legacy.paid is true then return jsonb_build_object('completed',true,'order_id',p_order_id);end if;
++  if legacy."pageUrl" ~ '^https://meetguru[.]payform[.]ru([/?#]|$)' then return jsonb_build_object('payLink',legacy."pageUrl",'order_id',p_order_id);end if;
++  raise exception 'legacy_link_unavailable';
++ end if;
++ if o.owner_id is distinct from p_actor_id then raise exception 'not_owner' using errcode='42501';end if;
++ if o.status='fulfilled' then return jsonb_build_object('completed',true,'order_id',o.order_id);end if;
++ if o.status<>'pending' then raise exception 'checkout_%',o.status;end if;
++ if o.total=0 then return jsonb_build_object('zero',true,'order_id',o.order_id);end if;
++ if o.pay_link is not null then return jsonb_build_object('payLink',o.pay_link,'order_id',o.order_id);end if;
++ if o.lease_until>clock_timestamp() then raise exception 'payment_link_in_progress';end if;
++ update checkout_private.orders set lease_id=p_lease,lease_until=clock_timestamp()+interval '30 seconds' where order_id=p_order_id;
++ return jsonb_build_object('order_id',o.order_id,'total',o.total,'lines',(select jsonb_agg(jsonb_build_object('name',name,'price',price,'quantity',1) order by shop_id) from checkout_private.items where order_id=p_order_id));
++end$$;
++create function public.checkout_store_link(p_order_id uuid,p_actor_id uuid,p_lease uuid,p_link text) returns void
++language plpgsql security definer set search_path=pg_catalog as $$
++begin
++ if p_link !~ '^https://meetguru[.]payform[.]ru([/?#]|$)' then raise exception 'invalid_payment_link';end if;
++ update checkout_private.orders set pay_link=p_link,lease_until=null where order_id=p_order_id and owner_id=p_actor_id and lease_id=p_lease and status='pending';
++ if not found then raise exception 'payment_link_lease_lost';end if;
++ update public."order" set "pageUrl"=p_link where id=p_order_id;
++end$$;
++create function checkout_private.finish_products(p_order uuid) returns void
++language plpgsql security definer set search_path=pg_catalog as $$
++declare i record;u uuid;chat_id uuid;recording uuid;
++begin
++ select owner_id into u from checkout_private.orders where order_id=p_order;
++ if not found then return;end if;
++ for i in select * from checkout_private.items where order_id=p_order order by product_id loop
++  if i.product_type='event' then
++   insert into public.event_registrations(event,"user",payment_type,amount_paid,amount_total,"order",status)
++    values(i.product_id,u,i.payment_type,i.price,i.amount_total,p_order,'paid')
++    on conflict(event,"user") do update set payment_type=excluded.payment_type,amount_paid=excluded.amount_paid,
++     amount_total=excluded.amount_total,"order"=excluded."order",status='paid';
++   select chat into chat_id from public.events where id=i.product_id;
++  elsif i.product_type='stream' then
++   select case when chat_enabled then chat end,case when recording_course_enabled then recording_course end into chat_id,recording from public.streams where id=i.product_id;
++   -- Reconcile optional artifacts for an UPDATE of an old buy=false row as well as INSERT.
++   if recording is not null and not exists(select 1 from public.user_course where "user"=u and course=recording) then
++    insert into public.user_course("user",course,"Free",buy) values(u,recording,true,true);
++   end if;
++  else chat_id:=null;
++  end if;
++  if chat_id is not null then
++   update public.chats set users=array_append(coalesce(users,'{}'::uuid[]),u),read=array_append(coalesce(read,'{}'::uuid[]),u)
++    where id=chat_id and not(u=any(coalesce(users,'{}'::uuid[])));
++  end if;
++ end loop;
++ update checkout_private.orders set status='fulfilled',lease_id=null,lease_until=null where order_id=p_order;
++end$$;
++create function public.checkout_register_free_event(p_event_id uuid,p_agreed boolean) returns void
++language plpgsql security definer set search_path=pg_catalog as $$
++declare e public.events%rowtype;u uuid:=auth.uid();
++begin
++ if u is null or not p_agreed then raise exception 'auth_and_terms_required';end if;
++ perform checkout_private.lock_all();select * into e from public.events where id=p_event_id and status='published' and price=0 for update;
++ if not found then raise exception 'not_a_free_event';end if;
++ if exists(select 1 from public.event_registrations where event=e.id and "user"=u and status='paid') then return;end if;
++ insert into public.event_registrations(event,"user",payment_type,amount_paid,amount_total,status) values(e.id,u,'full',0,0,'paid')
++ on conflict(event,"user") do update set status='paid',payment_type='full',amount_paid=0,amount_total=0;
++ if e.chat is not null then update public.chats set users=array_append(coalesce(users,'{}'::uuid[]),u),read=array_append(coalesce(read,'{}'::uuid[]),u)
++  where id=e.chat and not(u=any(coalesce(users,'{}'::uuid[])));end if;
++end$$;
++create function public.checkout_enroll_free_course(p_course_id uuid) returns uuid
++language plpgsql security definer set search_path=pg_catalog as $$
++declare u uuid:=auth.uid();access_id uuid;
++begin
++ if u is null then raise exception 'auth_required' using errcode='42501';end if;
++ perform checkout_private.lock_all();
++ if not exists(select 1 from public.course where id=p_course_id and "Free" is true and "ModStatus"='Опубликовано') then raise exception 'not_a_free_course';end if;
++ select id into access_id from public.user_course where "user"=u and course=p_course_id order by created_at limit 1 for update;
++ if not found then insert into public.user_course("user",course,"Free") values(u,p_course_id,true) returning id into access_id;
++ else update public.user_course set "Free"=true where id=access_id;end if;
++ update public.users set buied_courses=case when access_id=any(coalesce(buied_courses,'{}'::uuid[])) then buied_courses else array_append(coalesce(buied_courses,'{}'::uuid[]),access_id) end,
++  buied_course_orig=case when p_course_id=any(coalesce(buied_course_orig,'{}'::uuid[])) then buied_course_orig else array_append(coalesce(buied_course_orig,'{}'::uuid[]),p_course_id) end where id=u;
++ return access_id;
++end$$;
++create function checkout_private.resolve_row(p_shop public.shop,p_uid uuid) returns jsonb
++language plpgsql volatile security definer set search_path=pg_catalog as $$
++declare v_type text:=p_shop.product_type;v_id uuid:=p_shop.product_id;v_count integer;v_matches jsonb;
++begin
++ if p_shop.owner is distinct from p_uid then raise exception 'not_owner' using errcode='42501';end if;
++ if coalesce(p_shop.quantity,1)<>1 then raise exception 'unsupported_quantity';end if;
++ if v_type is null then
++  select count(*),jsonb_agg(to_jsonb(x)) into v_count,v_matches from
++   (select 'event' kind,id from public.events where backing_course_id=p_shop.course_id union all
++    select 'stream',id from public.streams where backing_course_id=p_shop.course_id) x;
++  if v_count>1 then raise exception 'ambiguous_product';end if;
++  if v_count=1 then v_type:=v_matches->0->>'kind';v_id:=(v_matches->0->>'id')::uuid;
++  else v_type:='course';v_id:=p_shop.course_id;end if;
++ end if;
++ return checkout_private.product(v_type,v_id,coalesce(p_shop.payment_type,'full'),coalesce(p_shop.is_renewal,false),p_uid)||jsonb_build_object('id',p_shop.id);
++end$$;
++create function public.cart_add_product(p_type text,p_product_id uuid,p_payment_type text default 'full',p_renewal boolean default false,p_agreed boolean default false)
++returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
++declare u uuid:=auth.uid();v jsonb;r public.shop%rowtype;n uuid;
++begin
++ perform checkout_private.lock_all();
++ v:=checkout_private.product(p_type,p_product_id,p_payment_type,p_renewal,u);
++ if p_type='event' and p_agreed is not true then raise exception 'terms_required';end if;
++ for r in select * from public.shop where owner=u and status='cart' order by id for update loop
++  if (r.product_type=p_type and r.product_id=p_product_id) or (r.product_type is null and r.course_id=(v->>'course_id')::uuid) then
++   update public.shop set product_type=p_type,product_id=p_product_id,payment_type=p_payment_type,is_renewal=p_renewal,
++    price=(v->>'price')::numeric,course_name=v->>'course_name',terms_accepted=p_agreed where id=r.id;
++   return v||jsonb_build_object('id',r.id,'reused',true);
++  end if;
++ end loop;
++ if exists(select 1 from checkout_private.items i join checkout_private.orders o on o.order_id=i.order_id
++   where o.owner_id=u and o.status='pending' and i.product_type=p_type and i.product_id=p_product_id) then raise exception 'product_already_in_pending_order';end if;
++ insert into public.shop(owner,course_id,course_name,price,quantity,status,position,prolong,is_renewal,product_type,product_id,payment_type,terms_accepted)
++ values(u,(v->>'course_id')::uuid,v->>'course_name',(v->>'price')::numeric,1,'cart',
++  (select count(*)+1 from public.shop where owner=u and status='cart'),12,p_renewal,p_type,p_product_id,p_payment_type,p_agreed) returning id into n;
++ return v||jsonb_build_object('id',n,'reused',false);
++end$$;
++create function public.cart_get() returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
++declare r public.shop%rowtype;v jsonb;out jsonb:='[]';u uuid:=auth.uid();
++begin
++ if u is null then raise exception 'auth_required' using errcode='42501';end if;
++ for r in select * from public.shop where owner=u and status='cart' order by created_at,id loop
++  begin v:=checkout_private.resolve_row(r,u)||jsonb_build_object('available',true);
++  exception when others then v:=jsonb_build_object('id',r.id,'course_name',r.course_name,'product_type',coalesce(r.product_type,'course'),'price',r.price,'available',false,'reason',sqlerrm);end;
++  out:=out||jsonb_build_array(v);
++ end loop;
++ return out;
++end$$;
++create function public.cart_remove(p_shop_id uuid) returns void language plpgsql security definer set search_path=pg_catalog as $$
++begin
++ if auth.uid() is null then raise exception 'auth_required' using errcode='42501';end if;
++ perform checkout_private.lock_all();
++ delete from public.shop where id=p_shop_id and owner=auth.uid() and status='cart';
++end$$;
++create function public.cart_quote(p_shop_ids uuid[],p_code text default null) returns jsonb
++language plpgsql security definer set search_path=pg_catalog as $$
++declare u uuid:=auth.uid();r public.shop%rowtype;v jsonb;ls jsonb:='[]';p public.promo_codes%rowtype;
++ total numeric:=0;eligible numeric:=0;disc numeric:=0;v_code text:=upper(btrim(coalesce(p_code,'')));
++begin
++ if u is null then raise exception 'auth_required' using errcode='42501';end if;
++ if coalesce(cardinality(p_shop_ids),0)=0 or cardinality(p_shop_ids)>100 or cardinality(p_shop_ids)<>(select count(distinct x) from unnest(p_shop_ids) x) then raise exception 'bad_cart';end if;
++ for r in select * from public.shop where id=any(p_shop_ids) and owner=u and status='cart' order by id loop
++  v:=checkout_private.resolve_row(r,u);ls:=ls||jsonb_build_array(v);total:=total+(v->>'price')::numeric;
++ end loop;
++ if jsonb_array_length(ls)<>cardinality(p_shop_ids) then raise exception 'cart_changed_or_not_owner';end if;
++ if v_code<>'' then
++  select * into p from public.promo_codes where upper(promo_codes.code)=v_code;
++  if not found then return jsonb_build_object('valid',false,'reason','not_found');end if;
++  if p.expires_at is not null and p.expires_at<clock_timestamp() then return jsonb_build_object('valid',false,'reason','expired');end if;
++  if p.usage_limit is not null and p.used_count>=p.usage_limit then return jsonb_build_object('valid',false,'reason','limit_reached');end if;
++  select coalesce(sum((j->>'price')::numeric),0) into eligible from jsonb_array_elements(ls) j
++   where j->>'payment_type'<>'deposit' and (p.scope_type='all' or (j->>'course_id')::uuid=p.scope_course_id);
++  if eligible<=0 then return jsonb_build_object('valid',false,'reason','not_applicable');end if;
++  disc:=case when p.discount_type='percent' then round(eligible*p.discount_value/100,2) else least(eligible,p.discount_value) end;
++  disc:=round(disc,2);
++  if disc<0 or disc>eligible then raise exception 'invalid_promo_configuration';end if;
++  -- Largest-remainder allocation, in kopecks: exact sum, no repeated discount, no negative line.
++  with a as (select j,case when j->>'payment_type'<>'deposit' and (p.scope_type='all' or (j->>'course_id')::uuid=p.scope_course_id) then (j->>'price')::numeric else 0 end weight from jsonb_array_elements(ls) j),
++  b as (select *,floor(disc*100*weight/eligible) cut,disc*100*weight/eligible-floor(disc*100*weight/eligible) rem from a),
++  c as (select *,row_number() over(order by rem desc,j->>'id') rn,sum(cut) over() all_cut from b)
++  select jsonb_agg(j||jsonb_build_object('price',(j->>'price')::numeric-(cut+case when rn<=disc*100-all_cut then 1 else 0 end)/100) order by j->>'id') into ls from c;
++ end if;
++ return jsonb_build_object('valid',true,'code',nullif(v_code,''),'promo_id',p.id,'discount',disc,'cart_total',total,'new_total',total-disc,'lines',ls);
++end$$;
++
++create function checkout_private.validate_snapshot(p_order uuid,p_plan jsonb) returns void
++language plpgsql security definer set search_path=pg_catalog as $$
++declare o checkout_private.orders%rowtype;r public."order"%rowtype;i record;
++begin
++ select * into r from public."order" where id=p_order for update;
++ select * into o from checkout_private.orders where order_id=p_order for update;
++ if not found then return;end if;
++ if o.total is distinct from r.summ or jsonb_array_length(p_plan)<>(select count(*) from checkout_private.items where order_id=p_order)
++  or exists(select 1 from checkout_private.items x left join public.shop sh on sh.id=x.shop_id
++    where x.order_id=p_order and (sh.owner is distinct from o.owner_id or sh.course_id is distinct from x.course_id or sh.price is distinct from x.price or sh.quantity is distinct from 1 or sh."order" is distinct from p_order))
++  or exists(select 1 from checkout_private.items x where x.order_id=p_order and x.shop_id::text<>all(r.course_positions)) then raise exception 'immutable_order_mismatch';end if;
++ -- Registration uniqueness is existing business logic, not a capacity/reservation rule.
++ for i in select * from checkout_private.items where order_id=p_order loop
++  if i.product_type='event' and exists(select 1 from public.event_registrations where event=i.product_id and "user"=o.owner_id and status='paid') then raise exception 'already_registered_at_payment';end if;
++  if i.product_type<>'event' and not i.is_renewal and exists(select 1 from public.user_course where "user"=o.owner_id and course=i.course_id and (buy is true or "Free" is true)) then raise exception 'duplicate_purchase_requires_review';end if;
++ end loop;
++end$$;
++
++-- GENERATED FULFILLMENT: scripts/generate-unified-fulfillment.mjs
++CREATE OR REPLACE FUNCTION public.fulfill_paid_course_order(p_order_id uuid, p_payment_id text, p_proof_id uuid, p_access_plan jsonb)
++ RETURNS jsonb
++ LANGUAGE plpgsql
++ SECURITY DEFINER
++ SET search_path TO 'pg_catalog'
++AS $function$
++declare
++    v_order public."order"%rowtype;
++    v_receipt public.order_access_fulfillments%rowtype;
++    v_shop public.shop%rowtype;
++    v_course public.course%rowtype;
++    v_author public.users%rowtype;
++    v_access public.user_course%rowtype;
++    v_item record;
++    v_credit record;
++    v_access_count integer;
++    v_created integer := 0;
++    v_updated integer := 0;
++    v_result jsonb := '[]'::jsonb;
++    v_zero boolean := false;
++    v_credits jsonb := '[]'::jsonb;
++    v_sale_id uuid;
++    v_now timestamptz := transaction_timestamp();
++    v_base timestamptz;
++    v_local timestamp;
++    v_end timestamptz;
++    v_months integer;
++    v_amount numeric;
++begin
++    if nullif(btrim(p_payment_id),'') is null then
++        raise exception 'payment_id_required' using errcode='22023';
++    end if;
++    perform checkout_private.lock_all();
++    select * into v_order from public."order" where id=p_order_id for update;
++    if not found then raise exception 'order_not_found' using errcode='22023'; end if;
++    v_zero := p_proof_id is null and p_payment_id='zero:'||p_order_id::text and exists(
++      select 1 from checkout_private.orders where order_id=p_order_id and total=0);
++    if v_order.checkout_version=1 and not v_zero then
++      perform 1 from public.payment_audit a where a.id=p_proof_id and a.order_id=p_order_id and a.event='ok'
++       and a.detail->>'sig_valid'='true' and a.detail->>'payment_status'='success' and a.detail->'verify'->>'ok'='true' for share;
++      if not found then raise exception 'verified_success_required' using errcode='42501';end if;
++    end if;
++    select * into v_receipt from public.order_access_fulfillments where order_id=p_order_id;
++    if found then
++        if v_receipt.payment_id is distinct from p_payment_id
++           or v_order.payment_id is distinct from p_payment_id or v_order.paid is not true then
++            raise exception 'completed_order_state_changed' using errcode='22023';
++        end if;
++        return jsonb_build_object('status','already_completed','order_id',p_order_id);
++    end if;
++    -- Never auto-reprocess historical paid orders, including manual repairs.
++    if v_order.paid is true then
++        return jsonb_build_object('status','legacy_paid_skipped','order_id',p_order_id);
++    end if;
++    if v_order.owner is null or v_order.subscription is true then
++        raise exception 'not_a_course_order' using errcode='22023';
++    end if;
++    if not v_zero then
++    perform 1 from public.payment_audit a
++      where a.id=p_proof_id and a.order_id=p_order_id and a.event='ok'
++        and a.detail->>'sig_valid'='true'
++        and a.detail->>'payment_status'='success'
++        and a.detail->'verify'->>'ok'='true'
++      for share;
++    if not found then raise exception 'verified_success_required' using errcode='42501'; end if;
++    end if;
++    if jsonb_typeof(p_access_plan) is distinct from 'array'
++       or coalesce(cardinality(v_order.course_positions),0)=0
++       or jsonb_array_length(p_access_plan)<>cardinality(v_order.course_positions) then
++        raise exception 'incomplete_access_plan' using errcode='22023';
++    end if;
++    if (select count(distinct x.shop_id) from jsonb_to_recordset(p_access_plan) x(shop_id uuid))
++       <>cardinality(v_order.course_positions) then
++        raise exception 'duplicate_or_missing_position' using errcode='22023';
++    end if;
++
++    perform checkout_private.validate_snapshot(p_order_id,p_access_plan);
++    -- Lock all credited authors in a stable order. Different orders cannot overwrite
++    -- each other's balances. No balance value supplied by the workflow is trusted.
++    perform u.id from public.users u
++      where u.id in (select x.author_id from jsonb_to_recordset(p_access_plan) x(author_id uuid))
++      order by u.id for update;
++
++    for v_item in
++      select * from jsonb_to_recordset(p_access_plan)
++        x(shop_id uuid,course_id uuid,author_id uuid,price numeric,author_commission numeric,author_amount text)
++      order by course_id,shop_id
++    loop
++        select * into v_shop from public.shop where id=v_item.shop_id for share;
++        if not found or v_shop.id::text<>all(v_order.course_positions::text[])
++           or v_shop.owner is distinct from v_order.owner
++           or v_shop.course_id is distinct from v_item.course_id
++           or v_shop.price is distinct from v_item.price then
++            raise exception 'position_buyer_course_or_price_mismatch' using errcode='22023';
++        end if;
++        select * into v_course from public.course where id=v_shop.course_id for share;
++        if not found or v_course.owner is distinct from v_item.author_id then
++            raise exception 'course_author_mismatch' using errcode='22023';
++        end if;
++        select * into v_author from public.users where id=v_course.owner;
++        if not found or v_author."authorCommission" is distinct from v_item.author_commission then
++            raise exception 'author_commission_changed' using errcode='22023';
++        end if;
++        if v_item.author_amount is null or v_item.author_amount !~ '^-?[0-9]+[.][0-9]{2}$' then
++            raise exception 'invalid_author_amount' using errcode='22023';
++        end if;
++        -- The trusted n8n Code preserves EXACT production JS (price*rate/100).toFixed(2).
++        -- Numeric round() is deliberately NOT substituted: ties such as 1.005 differ.
++        -- Check the locked price/rate and rounding envelope; never accept a browser plan.
++        v_amount := v_item.author_amount::numeric;
++        if abs(v_amount-coalesce(v_shop.price,0)*coalesce(v_author."authorCommission",0)/100)>0.00500001 then
++            raise exception 'author_amount_outside_rounding_envelope' using errcode='22023';
++        end if;
++        -- Do not silently duplicate a sale left by a legacy/in-flight handler.
++        -- Older sales for a legitimately reused shop position belong to older orders.
++        if exists(select 1 from public.sales s where s.position=v_shop.id and s.created_at>=v_order.created_at) then
++            raise exception 'unreceipted_sale_requires_review' using errcode='22023';
++        end if;
++        if coalesce(v_course."DurationLong",0)<0
++           or coalesce(v_course."DurationLong",0)<>trunc(coalesce(v_course."DurationLong",0)) then
++            raise exception 'unsupported_duration' using errcode='22023';
++        end if;
++        v_months := coalesce(v_course."DurationLong",0)::integer;
++
++        -- One entitlement per distinct course, even if two paid shop positions
++        -- refer to the same course. Each position still receives its own sale.
++        if not exists(select 1 from jsonb_array_elements(v_result) j where j->>'course_id'=v_course.id::text) then
++            perform pg_advisory_xact_lock(hashtextextended(
++                'order-access:'||v_order.owner::text||':'||v_course.id::text,0));
++            select count(*) into v_access_count from public.user_course
++              where "user"=v_order.owner and course=v_course.id;
++            if v_access_count>1 then
++                raise exception 'ambiguous_existing_access' using errcode='22023';
++            end if;
++            v_access := null;
++            if v_access_count=1 then
++                select * into v_access from public.user_course
++                  where "user"=v_order.owner and course=v_course.id for update;
++            end if;
++            if v_months=0 or (v_access_count=1 and (
++                v_access.end_period is null or v_access.end_period='infinity'::timestamptz
++                -- Preserve the legacy same-day sentinel in both the server's UTC
++                -- and the platform's Moscow calendar; never shorten such access.
++                or (v_access.end_period at time zone 'UTC')::date=(v_access.created_at at time zone 'UTC')::date
++                or (v_access.end_period at time zone 'Europe/Moscow')::date=(v_access.created_at at time zone 'Europe/Moscow')::date
++            )) then
++                v_end := null; -- Explicit lifetime, never turn it into a finite period.
++            else
++                v_base := greatest(v_now,coalesce(v_access.end_period,v_now));
++                v_local := v_base at time zone 'UTC';
++                -- Preserve JS setMonth rollover, rather than PostgreSQL end-of-month clamping.
++                v_end := (date_trunc('month',v_local)+make_interval(months=>v_months)
++                  +(extract(day from v_local)::integer-1)*interval '1 day'
++                  +(v_local-date_trunc('day',v_local))) at time zone 'UTC';
++                if v_access_count=0 then
++                    -- New access keeps the old UTC date-only grant convention.
++                    v_end := date_trunc('day',v_end at time zone 'UTC') at time zone 'UTC';
++                else
++                    -- Renewal preserves the full remaining timestamp; never shortens it.
++                    v_end := greatest(v_access.end_period,v_end);
++                end if;
++            end if;
++            if v_access_count=0 then
++                insert into public.user_course("user",course,"Free",buy,end_period)
++                  values(v_order.owner,v_course.id,v_course."Free",true,v_end)
++                  returning * into v_access;
++                v_created := v_created+1;
++            else
++                update public.user_course set end_period=v_end,buy=true where id=v_access.id;
++                v_updated := v_updated+1;
++            end if;
++        else
++            select * into v_access from public.user_course
++              where "user"=v_order.owner and course=v_course.id;
++        end if;
++        insert into public.sales("user",amount,price,position,position_name,position_category)
++          values(v_author.id,v_amount,v_shop.price,v_shop.id,v_course."Title",v_course."Category")
++          returning id into v_sale_id;
++        v_result := v_result||jsonb_build_array(jsonb_build_object(
++          'shop_id',v_shop.id,'course_id',v_course.id,'access_id',v_access.id,
++          'sale_id',v_sale_id,'author_id',v_author.id,'author_amount',v_amount));
++    end loop;
++
++    -- Financial failure here rolls back accesses, sales and queued notifications as well.
++    for v_credit in
++      select x.author_id,sum(x.author_amount) as amount
++      from jsonb_to_recordset(v_result) x(author_id uuid,author_amount numeric)
++      group by x.author_id order by x.author_id
++    loop
++        update public.users set "Ammount"=coalesce("Ammount",0)+v_credit.amount where id=v_credit.author_id;
++        if not found then raise exception 'author_missing_during_credit'; end if;
++        v_credits := v_credits||jsonb_build_array(jsonb_build_object('author_id',v_credit.author_id,'amount',v_credit.amount));
++    end loop;
++    perform checkout_private.finish_products(p_order_id);
++    update public."order" set paid=true,payment_id=p_payment_id where id=p_order_id;
++    insert into public.order_access_fulfillments(order_id,payment_id,proof_id,result)
++      values(p_order_id,p_payment_id,p_proof_id,jsonb_build_object('positions',v_result,'credits',v_credits));
++    update public.order_access_fulfillments set result=result||jsonb_build_object('checkout_kind',case when v_zero then 'zero' else 'paid' end) where order_id=p_order_id;
++    return jsonb_build_object('status','fulfilled','order_id',p_order_id,'created',v_created,
++      'updated',v_updated,'positions',jsonb_array_length(v_result),'authors',jsonb_array_length(v_credits));
++end;
++$function$
++;
++create function public.checkout_complete_zero(p_order_id uuid,p_actor_id uuid) returns jsonb
++language plpgsql security definer set search_path=pg_catalog as $$
++declare p jsonb;
++begin
++ perform checkout_private.lock_all();
++ if not exists(select 1 from checkout_private.orders where order_id=p_order_id and owner_id=p_actor_id and total=0) then raise exception 'not_a_zero_order' using errcode='42501';end if;
++ select jsonb_agg(jsonb_build_object('shop_id',i.shop_id,'course_id',i.course_id,'author_id',c.owner,
++  'price',0,'author_commission',u."authorCommission",'author_amount','0.00') order by i.shop_id) into p
++  from checkout_private.items i join public.course c on c.id=i.course_id join public.users u on u.id=c.owner where i.order_id=p_order_id;
++ return public.fulfill_paid_course_order(p_order_id,'zero:'||p_order_id::text,null,p);
++end$$;
++create or replace function public.update_shop_status_on_order() returns trigger language plpgsql set search_path=pg_catalog as $$
++begin
++ update public.shop set status='order' where id::text=any(new.course_positions);
++ return new;
++end$$;
++-- Direct client money writes must not bypass the server-owned cart, proof or receipt.
++revoke insert,update,delete on public.shop,public."order",public.event_registrations,public.payment_audit from public,anon,authenticated;
++alter table public.shop enable row level security;
++alter table public."order" enable row level security;
++alter table public.event_registrations enable row level security;
++create policy checkout_shop_read on public.shop for select to authenticated using(owner=auth.uid() or checkout_private.is_admin());
++create policy checkout_order_read on public."order" for select to authenticated using(owner=auth.uid() or checkout_private.is_admin());
++create policy checkout_registration_read on public.event_registrations for select to authenticated using("user"=auth.uid() or exists(select 1 from public.events e where e.id=event and e.owner=auth.uid()) or checkout_private.is_admin());
++
++create function public.checkout_guard_product_write() returns trigger language plpgsql security definer set search_path=pg_catalog as $$
++declare obj_owner uuid;
++begin
++ if current_setting('role',true) in ('anon','authenticated') then
++  if auth.uid() is null then raise exception 'auth_required' using errcode='42501';end if;
++  if TG_OP='INSERT' then obj_owner:=NEW.owner;else obj_owner:=OLD.owner;end if;
++  if not checkout_private.is_admin() and obj_owner is distinct from auth.uid() then raise exception 'not_owner' using errcode='42501';end if;
++  if TG_OP='UPDATE' and NEW.owner is distinct from OLD.owner and not checkout_private.is_admin() then raise exception 'owner_transfer_forbidden' using errcode='42501';end if;
++ end if;
++ if TG_OP='DELETE' then return OLD;else return NEW;end if;
++end$$;
++create trigger checkout_course_owner before insert or update or delete on public.course for each row execute function public.checkout_guard_product_write();
++create trigger checkout_event_owner before insert or update or delete on public.events for each row execute function public.checkout_guard_product_write();
++
++-- Existing free enrollment and author gifts continue. A buyer cannot forge a paid entitlement.
++create function public.checkout_guard_access_write() returns trigger language plpgsql set search_path=pg_catalog as $$
++declare cid uuid;
++begin
++ if current_user not in ('anon','authenticated') then if TG_OP='DELETE' then return OLD;else return NEW;end if;end if;
++ if TG_OP='DELETE' then cid:=OLD.course;else cid:=NEW.course;end if;
++ if checkout_private.is_admin() or exists(select 1 from public.course where id=cid and owner=auth.uid()) then
++  if TG_OP='DELETE' then return OLD;else return NEW;end if;
++ end if;
++ if TG_OP='INSERT' and NEW."user"=auth.uid() and NEW."Free" is true and coalesce(NEW.buy,false)=false and exists(select 1 from public.course where id=cid and "Free" is true and "ModStatus"='Опубликовано') then return NEW;end if;
++ raise exception 'server_entitlement_required' using errcode='42501';
++end$$;
++create trigger checkout_access_write before insert or update or delete on public.user_course for each row execute function public.checkout_guard_access_write();
++
++create function public.checkout_delete_event(p_event_id uuid) returns void language plpgsql security definer set search_path=pg_catalog as $$
++declare e public.events%rowtype;
++begin
++ perform checkout_private.lock_all();select * into e from public.events where id=p_event_id for update;
++ if not found then return;end if;
++ if auth.uid() is null or (e.owner is distinct from auth.uid() and not checkout_private.is_admin()) then raise exception 'not_owner' using errcode='42501';end if;
++ if exists(select 1 from public.event_registrations where event=e.id and status='paid') or exists(select 1 from public."order" where event_id=e.id and paid is true) then raise exception 'event_has_paid_participants';end if;
++ delete from public.event_registrations where event=e.id and status<>'paid';
++ update public."order" set event_id=null where event_id=e.id and paid is not true;
++ update public.event_contact_requests set event=null where event=e.id;
++ delete from public.events where id=e.id;
++end$$;
++
++-- Public RPC ACLs: only these names, never broad grants on existing financial functions.
++revoke all on function public.cart_add_product(text,uuid,text,boolean,boolean),public.cart_get(),public.cart_remove(uuid),public.cart_quote(uuid[],text),
++ public.checkout_prepare(uuid,uuid[],text),public.checkout_cancel(uuid),public.checkout_my_orders(),public.checkout_register_free_event(uuid,boolean),public.checkout_enroll_free_course(uuid),
++ public.checkout_delete_event(uuid) from public,anon;
++grant execute on function public.cart_add_product(text,uuid,text,boolean,boolean),public.cart_get(),public.cart_remove(uuid),public.cart_quote(uuid[],text),
++ public.checkout_prepare(uuid,uuid[],text),public.checkout_cancel(uuid),public.checkout_my_orders(),public.checkout_register_free_event(uuid,boolean),public.checkout_enroll_free_course(uuid),
++ public.checkout_delete_event(uuid) to authenticated;
++revoke all on function public.checkout_acquire_link(uuid,uuid,uuid),public.checkout_store_link(uuid,uuid,uuid,text),public.checkout_complete_zero(uuid,uuid) from public,anon,authenticated;
++grant execute on function public.checkout_acquire_link(uuid,uuid,uuid),public.checkout_store_link(uuid,uuid,uuid,text),public.checkout_complete_zero(uuid,uuid) to service_role;
++revoke all on all functions in schema checkout_private from public,anon,authenticated,service_role;
++-- Policy/trigger helpers can be invoked, but never mutate or reveal other people's data.
++grant usage on schema checkout_private to authenticated;
++grant execute on function checkout_private.is_admin() to authenticated;
++-- The legacy RPC retains its original definer owner. Grant only that trusted role internal access.
++do $$declare v_owner name;begin
++ select pg_get_userbyid(proowner) into v_owner from pg_proc where oid='public.fulfill_paid_course_order(uuid,text,uuid,jsonb)'::regprocedure;
++ if v_owner in ('anon','authenticated','service_role') then raise exception 'untrusted_fulfillment_owner';end if;
++ execute format('grant usage on schema checkout_private to %I',v_owner);
++ execute format('grant select,insert,update,delete on all tables in schema checkout_private to %I',v_owner);
++ execute format('grant execute on all functions in schema checkout_private to %I',v_owner);
++end$$;
++notify pgrst,'reload schema';
++commit;
++
+diff --git a/supabase/migrations/verify_unified_checkout.sql b/supabase/migrations/verify_unified_checkout.sql
+new file mode 100644
+index 0000000..398b83a
+--- /dev/null
++++ b/supabase/migrations/verify_unified_checkout.sql
+@@ -0,0 +1,11 @@
++-- READ ONLY: owner can run after manual migration/schema reload.
++select 'private_ledger' as check_name, case when to_regclass('checkout_private.orders') is not null and to_regclass('checkout_private.items') is not null then 'PASS' else 'FAIL' end as result
++union all select 'no_seat_reservation',case when not exists(select 1 from pg_tables where schemaname='checkout_private' and tablename not in ('orders','items')) then 'PASS' else 'FAIL' end
++union all select 'cart_rpc',case when to_regprocedure('public.cart_add_product(text,uuid,text,boolean,boolean)') is not null and to_regprocedure('public.checkout_prepare(uuid,uuid[],text)') is not null then 'PASS' else 'FAIL' end
++union all select 'service_only_zero',case when has_function_privilege('service_role','public.checkout_complete_zero(uuid,uuid)','EXECUTE') and not has_function_privilege('authenticated','public.checkout_complete_zero(uuid,uuid)','EXECUTE') and not has_function_privilege('anon','public.checkout_complete_zero(uuid,uuid)','EXECUTE') then 'PASS' else 'FAIL' end
++union all select 'client_writes_closed',case when not has_table_privilege('authenticated','public.shop','INSERT') and not has_table_privilege('authenticated','public.order','UPDATE') and not has_table_privilege('anon','public.event_registrations','INSERT') then 'PASS' else 'FAIL' end
++union all select 'rls',case when (select count(*) from pg_class where oid in ('public.shop'::regclass,'public.order'::regclass,'public.event_registrations'::regclass) and relrowsecurity)=3 then 'PASS' else 'FAIL' end
++union all select 'historical_receipt_contract',case when to_regprocedure('public.fulfill_paid_course_order(uuid,text,uuid,jsonb)') is not null then 'PASS' else 'FAIL' end;
++-- Metadata only, no customer rows or credentials.
++select schemaname,tablename,policyname,roles,cmd from pg_policies where tablename in ('shop','order','event_registrations') order by tablename,policyname;
++select p.proname,p.prosecdef,p.proconfig from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and (p.proname like 'checkout_%' or p.proname like 'cart_%') order by p.proname;
+diff --git a/supabase/migrations/rollback_unified_checkout.sql b/supabase/migrations/rollback_unified_checkout.sql
+new file mode 100644
+index 0000000..36133ab
+--- /dev/null
++++ b/supabase/migrations/rollback_unified_checkout.sql
+@@ -0,0 +1,8 @@
++-- OWNER MANUAL ONLY. Stop NEW cart additions/orders; preserve all purchases and callbacks.
++-- Not a destructive schema downgrade. Never reopen legacy client money writes.
++begin;
++set local lock_timeout='3s';
++revoke execute on function public.cart_add_product(text,uuid,text,boolean,boolean),public.checkout_prepare(uuid,uuid[],text) from authenticated;
++notify pgrst,'reload schema';
++commit;
++-- Existing owner order resume, verified payment fulfillment, receipts and all data remain.
+diff --git a/tests/unified-checkout.unit.mjs b/tests/unified-checkout.unit.mjs
+new file mode 100644
+index 0000000..ce22d4e
+--- /dev/null
++++ b/tests/unified-checkout.unit.mjs
+@@ -0,0 +1,88 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import fs from 'node:fs';
++import { addProduct, checkoutIntent, payCart } from '../src/_front/checkout/cartApi.js';
++import { createCheckoutHandler } from '../supabase/functions/checkout-pay-link/handler.mjs';
++const U='10000000-0000-4000-8000-000000000001',O='20000000-0000-4000-8000-000000000001',P='30000000-0000-4000-8000-000000000001';
++const env={SUPABASE_URL:'https://synthetic.invalid',SUPABASE_ANON_KEY:'synthetic-anon',SUPABASE_SERVICE_ROLE_KEY:'synthetic-service',SITE_ORIGIN:'https://local.invalid'};
++function fixture({ claim, zeroResult, providerError, badLink, rpcError }={}) {
++ const calls=[];
++ const fetch=async(url,init={})=>{
++  const u=new URL(url);const body=init.body?JSON.parse(init.body):null;calls.push({url:u,init,body});
++  if(u.hostname==='meetguru.payform.ru'){
++   assert.equal(init.headers,undefined,'provider must not receive Supabase credentials');
++   if(providerError)throw Error('synthetic-service internal failure');
++   return new Response(badLink||'https://meetguru.payform.ru/local-payment');
++  }
++  assert.equal(u.hostname,'synthetic.invalid');
++  if(u.pathname==='/auth/v1/user')return Response.json({id:U});
++  const name=u.pathname.split('/').at(-1);
++  if(rpcError&&name==='checkout_prepare')return Response.json({message:rpcError},{status:400});
++  if(name==='checkout_prepare'){
++   assert.equal(init.headers.Authorization,'Bearer synthetic-user');
++   assert.deepEqual(Object.keys(body).sort(),['p_code','p_request_id','p_shop_ids']);
++   return Response.json({order_id:O,total:6000});
++  }
++  assert.equal(init.headers.Authorization,'Bearer synthetic-service');
++  assert.equal(body.p_actor_id,U,'buyer must come from the verified auth endpoint');
++  if(name==='checkout_acquire_link')return Response.json(claim||{order_id:O,total:6000,lines:[{name:'Course',price:1000},{name:'Event',price:2000},{name:'Stream',price:3000}]});
++  if(name==='checkout_complete_zero')return Response.json(zeroResult||{status:'fulfilled'});
++  if(name==='checkout_store_link')return new Response(null,{status:204});
++  throw Error('unexpected RPC '+name);
++ };
++ const handler=createCheckoutHandler({fetch,env,uuid:()=>P});
++ const request=(extra={})=>handler(new Request('https://local.invalid/checkout',{method:'POST',headers:{Authorization:'Bearer synthetic-user'},body:JSON.stringify({request_id:P,shop_ids:[P],promo_code:null,owner:'spoof',price:1,products:[{price:1}],success_url:'https://evil.invalid',...extra})}));
++ return {calls,handler,request};
++}
++test('add course/event/stream sends one shared RPC with no caller price or buyer',async()=>{
++ for(const type of ['course','event','stream']){
++  const calls=[];const sb={rpc:async(...a)=>{calls.push(a);return{data:{id:P}};}};
++  await addProduct(sb,{type,id:P,agreed:type==='event',price:1,buyer:'spoof'});
++  assert.equal(calls[0][0],'cart_add_product');assert.deepEqual(Object.keys(calls[0][1]).sort(),['p_agreed','p_payment_type','p_product_id','p_renewal','p_type']);
++ }
++});
++test('invalid product references and non-event deposit fail before any request',async()=>{
++ const sb={rpc:()=>{throw Error('must not call');}};
++ await assert.rejects(addProduct(sb,{type:'unknown',id:P}));await assert.rejects(addProduct(sb,{type:'course',id:'x'}));await assert.rejects(addProduct(sb,{type:'stream',id:P,paymentType:'deposit'}));
++});
++test('intent persists across retries; cart order and promo case do not create duplicate intents',()=>{
++ const values=new Map();const store={getItem:k=>values.get(k),setItem:(k,v)=>values.set(k,v)};let n=0;
++ assert.equal(checkoutIntent(store,U,[P,O],' code ',()=>{n++;return P;}),P);
++ assert.equal(checkoutIntent(store,U,[O,P],'CODE',()=>{n++;return O;}),P);assert.equal(n,1);
++});
++test('browser checkout never sends amounts or an owner and does not call the provider directly',async()=>{
++ let payload;const sb={functions:{invoke:async(name,{body})=>{assert.equal(name,'checkout-pay-link');payload=body;return{data:{payLink:'https://meetguru.payform.ru/local',order_id:O}};}}};
++ await payCart(sb,{userId:U,ids:[P],storage:null});assert.deepEqual(Object.keys(payload).sort(),['promo_code','request_id','shop_ids']);
++});
++test('browser rejects hostile payment URLs and recognizes completed zero checkout',async()=>{
++ for(const url of ['javascript:alert(1)','https://evil.invalid','https://x:secret@meetguru.payform.ru/local'])await assert.rejects(payCart({functions:{invoke:async()=>({data:{payLink:url}})}},{userId:U,ids:[P],storage:null}));
++ assert.deepEqual(await payCart({functions:{invoke:async()=>({data:{completed:true,order_id:O}})}},{userId:U,ids:[P],storage:null}),{completed:true,orderId:O});
++});
++test('one merchant link includes all server-priced mixed lines; spoofed fields ignored',async()=>{
++ const f=fixture();const r=await f.request();assert.equal(r.status,200);assert.equal((await r.json()).payLink,'https://meetguru.payform.ru/local-payment');
++ const provider=f.calls.find(x=>x.url.hostname==='meetguru.payform.ru');assert.equal(provider.url.searchParams.get('products[2][price]'),'3000');assert.equal(provider.url.searchParams.get('products[0][price]'),'1000');assert.equal(provider.url.searchParams.get('order_id'),O);assert.equal(provider.url.searchParams.get('urlSuccess'),'https://local.invalid/');
++ assert.equal(f.calls.filter(x=>x.url.pathname.endsWith('checkout_store_link')).length,1);
++});
++test('existing payment link is returned without creating another provider link',async()=>{
++ const f=fixture({claim:{payLink:'https://meetguru.payform.ru/existing',order_id:O}});assert.equal((await f.request()).status,200);assert(!f.calls.some(x=>x.url.hostname==='meetguru.payform.ru'));
++});
++test('zero-price checkout uses server settlement without Prodamus or fake payment proof',async()=>{
++ const f=fixture({claim:{zero:true,order_id:O}});assert.equal((await(await f.request()).json()).completed,true);assert(!f.calls.some(x=>x.url.hostname==='meetguru.payform.ru'));const zero=f.calls.find(x=>x.url.pathname.endsWith('checkout_complete_zero'));assert.deepEqual(zero.body,{p_order_id:O,p_actor_id:U});
++});
++test('provider timeout/bad response keeps the order; no secrets or raw exception returned',async()=>{
++ const f=fixture({providerError:true});const r=await f.request();assert.equal(r.status,503);const body=await r.text();assert(!body.includes('synthetic-service'));assert(!f.calls.some(x=>x.url.pathname.endsWith('checkout_store_link')));
++});
++test('hostile provider link is never persisted',async()=>{
++ const f=fixture({badLink:'https://evil.invalid'});assert.equal((await f.request()).status,503);assert(!f.calls.some(x=>x.url.pathname.endsWith('checkout_store_link')));
++});
++test('CORS, method and auth guards run without database/provider calls',async()=>{
++ const f=fixture();assert.equal((await f.handler(new Request('https://local.invalid',{method:'OPTIONS',headers:{Origin:'https://local.invalid'}}))).status,204);assert.equal((await f.handler(new Request('https://local.invalid',{method:'GET'}))).status,405);assert.equal((await f.handler(new Request('https://local.invalid',{method:'POST',headers:{Origin:'https://evil.invalid'}}))).status,403);assert.equal((await f.handler(new Request('https://local.invalid',{method:'POST',body:'{}'}))).status,401);assert.equal(f.calls.length,0);
++});
++test('no booking/capacity/refund infrastructure is part of the migration',()=>{
++ const sql=fs.readFileSync(new URL('../supabase/migrations/pending_unified_checkout.sql',import.meta.url),'utf8');
++ assert(!/create\s+table[^;]*(?:reserv|refund)/i.test(sql));assert(!/30 minutes|capacity_below|event_sold_out|checkout_private\.seats|expires_at timestamptz/i.test(sql));
++});
++test('financial loop/date math/credit algorithm remains byte-identical to inspected BuyCourse RPC',()=>{
++ const base=fs.readFileSync(new URL('./fixtures/checkout-legacy-fulfillment.sql',import.meta.url),'utf8');const sql=fs.readFileSync(new URL('../supabase/migrations/pending_unified_checkout.sql',import.meta.url),'utf8');
++ const part=s=>s.slice(s.indexOf('    -- Lock all credited authors'),s.indexOf('    update public."order" set paid=true,payment_id=p_payment_id where id=p_order_id;')).replace('    perform checkout_private.finish_products(p_order_id);\n','');assert.equal(part(sql),part(base));
++});
+diff --git a/tests/unified-checkout.integration.py b/tests/unified-checkout.integration.py
+new file mode 100644
+index 0000000..e866734
+--- /dev/null
++++ b/tests/unified-checkout.integration.py
+@@ -0,0 +1,234 @@
++#!/usr/bin/env python3
++"""Actual PostgreSQL/PostgREST; synthetic data and local processes only."""
++import importlib.util,pathlib,json,uuid,subprocess,concurrent.futures,time
++ROOT=pathlib.Path(__file__).resolve().parents[1]
++sp=importlib.util.spec_from_file_location('checkout_stand',ROOT/'tests/helpers/checkout_stand.py');m=importlib.util.module_from_spec(sp);sp.loader.exec_module(m)
++s=m.Stand()
++def uid():return str(uuid.uuid4())
++def literal(v):return "'"+str(v).replace("'","''")+"'"
++def sql(q):return s.sql(q)
++def auth(u,q):return "set role authenticated;set request.jwt.claim.sub="+literal(u)+';'+q
++def call(u,name,args):
++ raw=sql(auth(u,'select public.'+name+'('+args+');')).splitlines()[-1]
++ try:return json.loads(raw)
++ except json.JSONDecodeError:return raw
++def denied(fn):
++ try:fn()
++ except RuntimeError:return
++ raise AssertionError('expected denial')
++def buyer(role='Ученик'):
++ u=uid();sql('insert into users(id,role) values('+literal(u)+','+literal(role)+')');return u
++def products(capacity=1):
++ owner=buyer('Спикер');c,ec,sc,e,t,chat,recording=[uid() for _ in range(7)]
++ sql("insert into chats(id,users,read) values('%s','{}','{}');"%chat+
++  "insert into course(id,owner,\"Title\",\"Category\",\"Price\",\"DurationLong\",\"DurationPrice\") values('%s','%s','Course','Курсы',1000,2,200),('%s','%s','Event backing','Мероприятия',2000,12,0),('%s','%s','Stream backing','Трансляции',3000,3,0),('%s','%s','Recording','Курсы',0,0,0);"%(c,owner,ec,owner,sc,owner,recording,owner)+
++  "insert into events(id,owner,title,price,deposit_percent,capacity,backing_course_id,chat) values('%s','%s','Event',2000,25,%s,'%s','%s');"%(e,owner,'null' if capacity is None else capacity,ec,chat)+
++  "insert into streams(id,author,title,price,backing_course_id,access_months,scheduled_at,chat,recording_course) values('%s','%s','Stream',3000,'%s',3,now(),'%s','%s')"%(t,owner,sc,chat,recording))
++ return dict(owner=owner,course=c,event=e,stream=t,event_course=ec,stream_course=sc,chat=chat,recording=recording)
++def add(u,kind,id,payment='full',renewal=False):
++ return call(u,'cart_add_product',','.join([literal(kind),literal(id),literal(payment),'true' if renewal else 'false','true']))
++def prepare(u,code=None,key=None):
++ rows=call(u,'cart_get','');ids=[x['id'] for x in rows]
++ return call(u,'checkout_prepare',literal(key or uid())+',array['+','.join(literal(x) for x in ids)+']::uuid[],'+('null' if code is None else literal(code)))
++def plan(order):
++ rows=json.loads(sql("select json_agg(json_build_object('shop_id',sh.id,'course_id',sh.course_id,'price',sh.price,'author_id',c.owner,'author_commission',u.\"authorCommission\")) from shop sh join course c on c.id=sh.course_id join users u on u.id=c.owner join public.\"order\" o on sh.id::text=any(o.course_positions) where o.id="+literal(order)))
++ js="let s='';for await(const c of process.stdin)s+=c;console.log(JSON.stringify(JSON.parse(s).map(x=>({...x,author_amount:(x.price*x.author_commission/100).toFixed(2)}))))"
++ return json.loads(subprocess.run(['node','--input-type=module','-e',js],input=json.dumps(rows),text=True,capture_output=True,check=True).stdout)
++def fulfill(order,payment=None,proof=None):
++ payment=payment or 'synthetic-'+order;proof=proof or uid()
++ sql("insert into payment_audit(id,order_id,event,detail) values('%s','%s','ok','{\"sig_valid\":true,\"payment_status\":\"success\",\"verify\":{\"ok\":true}}') on conflict do nothing"%(proof,order))
++ return json.loads(sql("set role service_role;select fulfill_paid_course_order(%s,%s,%s,%s::jsonb)"%(literal(order),literal(payment),literal(proof),literal(json.dumps(plan(order))))).splitlines()[-1])
++def state(order):
++ return json.loads(sql("select json_build_object('paid',o.paid,'sales',(select count(*) from sales where position::text=any(o.course_positions)),'access',(select count(*) from user_course where \"user\"=o.owner),'receipt',(select count(*) from order_access_fulfillments where order_id=o.id),'regs',(select count(*) from event_registrations where \"user\"=o.owner and status='paid')) from public.\"order\" o where id="+literal(order)))
++try:
++ s.start();s.cmd([m.PG/'psql','-X','-v','ON_ERROR_STOP=1','-f',ROOT/'tests/fixtures/unified-checkout.sql'])
++ s.cmd([m.PG/'psql','-X','-v','ON_ERROR_STOP=1','-f',ROOT/'supabase/migrations/pending_unified_checkout.sql'])
++ s.check('migration compiles against production-shaped text[] orders and captured legacy financial RPC',lambda:None)
++ def individual():
++  for kind in ['course','event','stream']:
++   p=products();u=buyer();add(u,kind,p[kind]);o=prepare(u);r=fulfill(o['order_id']);assert r['status']=='fulfilled';st=state(o['order_id']);assert st['sales']==1 and st['receipt']==1 and st['paid'] and st['access']==1
++ s.check('each product alone uses the same order/receipt/financial pipeline',individual)
++ def mixed():
++  p=products();u=buyer()
++  for kind in ['course','event','stream']:add(u,kind,p[kind])
++  o=prepare(u);r=fulfill(o['order_id']);st=state(o['order_id']);assert r['positions']==3 and st==dict(paid=True,sales=3,access=3,receipt=1,regs=1)
++  assert sql("select \"Ammount\" from users where id="+literal(p['owner']))=='4920.00'
++  before=sql('select count(*) from test_notices');assert fulfill(o['order_id'])['status']=='already_completed';assert state(o['order_id'])==st and sql('select count(*) from test_notices')==before
++ s.check('mixed order: all three products settle atomically, exact commission, repeat is a no-op',mixed)
++ def financial_failure():
++  p=products();u=buyer()
++  for k in ['course','event','stream']:add(u,k,p[k])
++  o=prepare(u);sql('insert into test_fail_credit values('+literal(p['owner'])+')');denied(lambda:fulfill(o['order_id']));assert state(o['order_id'])==dict(paid=False,sales=0,access=0,receipt=0,regs=0)
++  sql('delete from test_fail_credit where author_id='+literal(p['owner']));assert fulfill(o['order_id'])['status']=='fulfilled'
++ s.check('credit failure rolls back every access/sale/registration; retry completes once',financial_failure)
++ def guard():
++  p=products();u=buyer()
++  for table,values in [('shop',"(owner,course_id,price,status) values('%s','%s',1,'cart')"%(u,p['course'])),('"order"',"(owner,summ,paid) values('%s',1,true)"%u),('event_registrations',"(event,\"user\",payment_type,status) values('%s','%s','full','paid')"%(p['event'],u))]:denied(lambda t=table,v=values:sql(auth(u,'insert into '+t+v)))
++  denied(lambda:sql(auth(u,"update course set \"Price\"=1 where id="+literal(p['course']))))
++  denied(lambda:sql(auth(u,"insert into user_course(\"user\",course,buy) values('%s','%s',true)"%(u,p['course']))))
++ s.check('direct client money/paid/access/foreign-price mutations cannot bypass server checkout',guard)
++ def no_capacity():
++  p=products(capacity=0);a,b=buyer(),buyer();add(a,'event',p['event']);add(b,'event',p['event'])
++  oa,ob=prepare(a),prepare(b)
++  with concurrent.futures.ThreadPoolExecutor(2) as pool:rs=list(pool.map(lambda o:fulfill(o['order_id']),[oa,ob]))
++  assert all(r['status']=='fulfilled' for r in rs)
++  assert sql('select count(*) from event_registrations where event='+literal(p['event'])+" and status='paid'")=='2'
++  assert sql("select count(*) from information_schema.tables where table_schema='checkout_private' and (table_name like '%reserv%' or table_name like '%refund%')")=='0'
++  assert sql("select count(*) from information_schema.columns where table_schema='checkout_private' and column_name='expires_at'")=='0'
++ s.check('nominal capacity=0 never blocks sales; no reservation/refund tables or booking expiry exist',no_capacity)
++ def cancel_order():
++  p=products();u=buyer();add(u,'event',p['event']);o=prepare(u)
++  sql(auth(u,'select checkout_cancel('+literal(o['order_id'])+')'))
++  assert not state(o['order_id'])['paid'] and state(o['order_id'])['sales']==0
++  # Cancelling an unpaid UI order does not fabricate a provider refund or suppress a later real success.
++  assert fulfill(o['order_id'])['status']=='fulfilled'
++ s.check('unpaid cancellation has no access/sales effects; verified payment still settles atomically',cancel_order)
++ def idempotent_prepare():
++  p=products();u=buyer();item=add(u,'course',p['course']);key=uid();o=prepare(u,key=key)
++  args=literal(key)+',array['+literal(item['id'])+']::uuid[],null'
++  assert call(u,'checkout_prepare',args)['order_id']==o['order_id']
++  assert call(u,'checkout_prepare',literal(uid())+',array['+literal(item['id'])+']::uuid[],null')['order_id']==o['order_id']
++  denied(lambda:call(u,'checkout_prepare',literal(key)+',array['+literal(uid())+']::uuid[],null'))
++ s.check('repeat checkout and lost intent reuse one order; changed payload with same key is rejected',idempotent_prepare)
++ def parallel_callback():
++  p=products();u=buyer()
++  for k in ['course','event','stream']:add(u,k,p[k])
++  o=prepare(u)
++  with concurrent.futures.ThreadPoolExecutor(2) as pool:rs=list(pool.map(lambda _:fulfill(o['order_id']),range(2)))
++  assert sorted(x['status'] for x in rs)==['already_completed','fulfilled'] and state(o['order_id'])['sales']==3
++ s.check('parallel callbacks produce one receipt, three sales, one registration',parallel_callback)
++ def promos():
++  p=products();u=buyer();a=add(u,'course',p['course']);b=add(u,'event',p['event'],payment='deposit');add(u,'stream',p['stream'])
++  code='LOCAL-'+uid();sql("insert into promo_codes(code,discount_type,discount_value,scope_type) values(%s,'percent',10,'all')"%literal(code))
++  ids=[x['id'] for x in call(u,'cart_get','')];args='array['+','.join(literal(x) for x in ids)+']::uuid[],'+literal(code)
++  q=call(u,'cart_quote',args);r=call(u,'cart_quote',args)
++  assert q==r and q['cart_total']==4500 and q['discount']==400 and q['new_total']==4100
++  assert next(x for x in q['lines'] if x['id']==b['id'])['price']==500
++  assert sql('select price from shop where id='+literal(a['id']))=='1000'
++  o=prepare(u,code=code);assert o['total']==4100;assert fulfill(o['order_id'])['status']=='fulfilled'
++  reg=json.loads(sql('select row_to_json(x) from (select payment_type,amount_paid,amount_total from event_registrations where "user"='+literal(u)+') x'))
++  assert reg==dict(payment_type='deposit',amount_paid=500,amount_total=2000)
++  assert sql('select used_count from promo_codes where code='+literal(code))=='1'
++ s.check('mixed promo discounts only eligible lines, no stacking; deposit amount/remaining preserved',promos)
++ def fixed_rounding():
++  p=products();u=buyer()
++  for k in ['course','event','stream']:add(u,k,p[k])
++  code='LOCAL-'+uid();sql("insert into promo_codes(code,discount_type,discount_value,scope_type) values(%s,'fixed',0.01,'all')"%literal(code))
++  rows=call(u,'cart_get','');q=call(u,'cart_quote','array['+','.join(literal(x['id']) for x in rows)+']::uuid[],'+literal(code))
++  from decimal import Decimal
++  assert sum(Decimal(str(x['price'])) for x in q['lines'])==Decimal(str(q['new_total']))==Decimal('5999.99')
++ s.check('one-kopeck fixed discount across three products has exact line/order sums',fixed_rounding)
++ def scoped_promo():
++  p=products();u=buyer();add(u,'course',p['course']);add(u,'stream',p['stream']);code='LOCAL-'+uid()
++  sql("insert into promo_codes(code,discount_type,discount_value,scope_type,scope_course_id) values(%s,'percent',50,'course',%s)"%(literal(code),literal(p['course'])))
++  o=prepare(u,code=code);assert o['total']==3500
++ s.check('course-scoped promo does not discount another product',scoped_promo)
++ def zero():
++  p=products();u=buyer();add(u,'course',p['course']);code='LOCAL-'+uid();sql("insert into promo_codes(code,discount_type,discount_value) values(%s,'percent',100)"%literal(code));o=prepare(u,code=code);assert o['total']==0
++  q="set role service_role;select checkout_complete_zero(%s,%s)"%(literal(o['order_id']),literal(u))
++  assert json.loads(sql(q).splitlines()[-1])['status']=='fulfilled';assert json.loads(sql(q).splitlines()[-1])['status']=='already_completed'
++  assert sql('select count(*) from payment_audit where order_id='+literal(o['order_id']))=='0'
++  assert sql('select proof_id is null from order_access_fulfillments where order_id='+literal(o['order_id']))=='t'
++ s.check('100% promo completes on server without fabricated payment/audit; repeat is idempotent',zero)
++ def proof_failure():
++  p=products();u=buyer();add(u,'event',p['event']);o=prepare(u);bad=uid();sql("insert into payment_audit(id,order_id,event,detail) values(%s,%s,'warn','{\"sig_valid\":false,\"payment_status\":\"failed\"}')"%(literal(bad),literal(o['order_id'])))
++  q="set role service_role;select fulfill_paid_course_order(%s,'failed',%s,%s::jsonb)"%(literal(o['order_id']),literal(bad),literal(json.dumps(plan(o['order_id']))))
++  denied(lambda:sql(q));assert state(o['order_id'])['sales']==0 and state(o['order_id'])['access']==0 and not state(o['order_id'])['paid']
++ s.check('failed/unverified payment cannot grant access or credit',proof_failure)
++ def free_products():
++  p=products();u=buyer();sql('update events set price=0 where id='+literal(p['event']))
++  call_args=literal(p['event'])+',true';sql(auth(u,'select checkout_register_free_event('+call_args+')'));sql(auth(u,'select checkout_register_free_event('+call_args+')'))
++  free=uid();sql("insert into course(id,owner,\"Title\",\"Free\",\"Buy\",\"Price\") values(%s,%s,'Free',true,false,0)"%(literal(free),literal(p['owner'])))
++  a=call(u,'checkout_enroll_free_course',literal(free));assert call(u,'checkout_enroll_free_course',literal(free))==a
++  assert sql('select count(*) from public."order" where owner='+literal(u))=='0'
++  assert sql('select count(*) from event_registrations where "user"='+literal(u))=='1'
++  assert sql('select cardinality(buied_courses) from users where id='+literal(u))=='1'
++ s.check('free event/course: atomic idempotent registration, no payment order, library arrays preserved',free_products)
++ def renewal():
++  p=products();u=buyer();access=uid();sql("insert into user_course(id,\"user\",course,buy,end_period,created_at) values(%s,%s,%s,true,now()+interval '10 days',now()-interval '20 days')"%(literal(access),literal(u),literal(p['course'])))
++  old=sql('select end_period from user_course where id='+literal(access));denied(lambda:add(u,'course',p['course']));add(u,'course',p['course'],renewal=True);o=prepare(u);assert o['total']==200;fulfill(o['order_id'])
++  assert sql('select end_period>'+literal(old)+'::timestamptz from user_course where id='+literal(access))=='t';assert state(o['order_id'])['access']==1
++ s.check('explicit renewal uses DurationPrice and preserves remaining paid time',renewal)
++ def lifetime():
++  p=products();u=buyer();sql("insert into user_course(\"user\",course,buy,end_period) values(%s,%s,true,null)"%(literal(u),literal(p['course'])))
++  add(u,'course',p['course'],renewal=True);o=prepare(u);fulfill(o['order_id']);assert sql('select end_period is null from user_course where "user"='+literal(u))=='t'
++ s.check('existing lifetime entitlement remains lifetime',lifetime)
++ def stream_modes():
++  for mode in ['scheduled','live','ended']:
++   p=products();u=buyer();sql('update streams set status='+literal(mode)+' where id='+literal(p['stream']));add(u,'stream',p['stream']);o=prepare(u);fulfill(o['order_id']);assert sql('select buy from user_course where "user"='+literal(u)+' and course='+literal(p['stream_course']))=='t'
++  p=products();u=buyer();sql('update streams set scheduled_at=now()-interval \'1 year\' where id='+literal(p['stream']));denied(lambda:add(u,'stream',p['stream']))
++ s.check('stream before/during/after live uses backing access; expired access window rejects purchase',stream_modes)
++ def artifacts():
++  p=products();u=buyer();sql('update streams set recording_course_enabled=true,chat_enabled=true where id='+literal(p['stream']));add(u,'stream',p['stream']);o=prepare(u);fulfill(o['order_id'])
++  assert sql('select count(*) from user_course where "user"='+literal(u))=='2';assert sql('select '+literal(u)+'::uuid=any(users) from chats where id='+literal(p['chat']))=='t'
++ s.check('opt-in stream recording and chat access survive shared checkout',artifacts)
++ def legacy():
++  p=products();u=buyer();oid,shop=uid(),uid();sql("insert into shop(id,owner,course_id,price) values(%s,%s,%s,1000);insert into public.\"order\"(id,owner,summ,course_positions) values(%s,%s,1000,array[%s]);"%(literal(shop),literal(u),literal(p['course']),literal(oid),literal(u),literal(shop)))
++  assert fulfill(oid)['status']=='fulfilled'
++  old=uid();sql("insert into public.\"order\"(id,owner,paid,payment_id,course_positions) values(%s,%s,true,'historical',array[]::text[])"%(literal(old),literal(u)))
++  result=json.loads(sql("set role service_role;select fulfill_paid_course_order(%s,'historical',null,'[]')"%literal(old)).splitlines()[-1]);assert result['status']=='legacy_paid_skipped'
++ s.check('legacy unpaid course order remains compatible; historical paid order is not reprocessed',legacy)
++ def pending_false():
++  p=products();u=buyer();sql("insert into user_course(\"user\",course,buy,\"Free\") values(%s,%s,false,false)"%(literal(u),literal(p['course'])))
++  denied(lambda:add(u,'course',p['course'],renewal=True));assert add(u,'course',p['course'])['price']==1000
++ s.check('buy=false placeholder is not a discounted renewal or a purchased product',pending_false)
++ def multiple_authors():
++  ps=[products() for _ in range(3)];u=buyer()
++  for p,k in zip(ps,['course','event','stream']):add(u,k,p[k])
++  o=prepare(u);fulfill(o['order_id']);assert state(o['order_id'])['sales']==3
++  for p,amount in zip(ps,['820.00','1640.00','2460.00']):assert sql('select "Ammount" from users where id='+literal(p['owner']))==amount
++ s.check('mixed products by three authors credit each author separately with unchanged commission',multiple_authors)
++ def legacy_cart():
++  p=products();u=buyer();sql("insert into shop(owner,course_id,course_name,price,quantity,status) values(%s,%s,'Old cart',1,1,'cart')"%(literal(u),literal(p['course'])))
++  cart=call(u,'cart_get','');assert cart[0]['product_type']=='course' and cart[0]['price']==1000
++  o=prepare(u);assert o['total']==1000;assert fulfill(o['order_id'])['status']=='fulfilled'
++ s.check('legacy untyped cart row is resolved and repriced from canonical product, not shop price',legacy_cart)
++ def link_resume():
++  p=products();u=buyer();add(u,'course',p['course']);o=prepare(u);lease=uid()
++  claim=json.loads(sql("set role service_role;select checkout_acquire_link(%s,%s,%s)"%(literal(o['order_id']),literal(u),literal(lease))).splitlines()[-1]);assert claim['lines'][0]['price']==1000
++  denied(lambda:sql("set role service_role;select checkout_acquire_link(%s,%s,%s)"%(literal(o['order_id']),literal(u),literal(uid()))))
++  sql("set role service_role;select checkout_store_link(%s,%s,%s,'https://meetguru.payform.ru/synthetic')"%(literal(o['order_id']),literal(u),literal(lease)))
++  replay=json.loads(sql("set role service_role;select checkout_acquire_link(%s,%s,%s)"%(literal(o['order_id']),literal(u),literal(uid()))).splitlines()[-1]);assert replay['payLink']=='https://meetguru.payform.ru/synthetic'
++  denied(lambda:sql("set role service_role;select checkout_acquire_link(%s,%s,%s)"%(literal(o['order_id']),literal(buyer()),literal(uid()))))
++  old=uid();sql("insert into public.\"order\"(id,owner,summ,course_positions,\"pageUrl\") values(%s,%s,1000,array[]::text[],'https://meetguru.payform.ru/legacy')"%(literal(old),literal(u)))
++  assert any(x['order_id']==old for x in call(u,'checkout_my_orders',''))
++  existing=json.loads(sql("set role service_role;select checkout_acquire_link(%s,%s,%s)"%(literal(old),literal(u),literal(uid()))).splitlines()[-1]);assert existing['payLink'].endswith('/legacy')
++ s.check('payment-link single-flight/reuse, actor binding and old payment-link resumption',link_resume)
++ def postgres_api():
++  sql('create role mg_pgrst_authenticator login noinherit;grant anon,authenticated,service_role to mg_pgrst_authenticator;')
++  config=s.tmp/'postgrest.conf';config.write_text('\n'.join([f'db-uri="postgres://mg_pgrst_authenticator@127.0.0.1:{s.pgport}/{m.DB}"','db-schemas="public"','db-anon-role="anon"','server-host="127.0.0.1"',f'server-port={s.apiport}',f'jwt-secret="{s.secret}"','jwt-aud="mg-fixture"','log-level="crit"']));config.chmod(0o600)
++  s.restlog=(s.tmp/'postgrest.log').open('w');s.rest=subprocess.Popen([str(m.REST),str(config)],stdout=s.restlog,stderr=s.restlog,env=s.env)
++  for _ in range(100):
++   try:
++    if s.request('/course?select=id&limit=1')[0]==200:break
++   except OSError:pass
++   time.sleep(.1)
++  p=products();u=buyer();v=buyer();item=s.expect(s.rpc('cart_add_product',{'p_type':'course','p_product_id':p['course']},u),200)
++  assert item['price']==1000
++  assert s.expect(s.rpc('cart_get',{},u),200)[0]['id']==item['id']
++  assert s.expect(s.request('/shop?id=eq.'+item['id'],v),200)==[]
++  s.expect(s.request('/shop',u,'POST',{'owner':u,'price':1}),denied=True)
++  s.expect(s.rpc('checkout_complete_zero',{'p_order_id':uid(),'p_actor_id':u},u),denied=True)
++  s.expect(s.request('/orders',u,headers={'Accept-Profile':'checkout_private'}),denied=True)
++  s.expect(s.rpc('cart_add_product',{'p_type':'course','p_product_id':p['course']}),denied=True)
++  s.expect(s.rpc('cart_quote',{'p_shop_ids':[item['id']]},v),denied=True)
++ s.check('actual PostgREST: owner cart, foreign-row isolation, protected writes/service RPCs/private schema',postgres_api)
++ def nominal_change():
++  p=products();u=buyer();add(u,'event',p['event']);o=prepare(u);sql(auth(p['owner'],'update events set capacity=0 where id='+literal(p['event'])))
++  assert fulfill(o['order_id'])['status']=='fulfilled'
++ s.check('editing nominal capacity cannot invalidate checkout or block confirmed payment',nominal_change)
++ def verify_and_stop():
++  output=s.sql_file(ROOT/'supabase/migrations/verify_unified_checkout.sql') if hasattr(s,'sql_file') else sql((ROOT/'supabase/migrations/verify_unified_checkout.sql').read_text())
++  assert 'FAIL' not in output
++  p=products();u=buyer();add(u,'course',p['course']);o=prepare(u)
++  sql((ROOT/'supabase/migrations/rollback_unified_checkout.sql').read_text())
++  denied(lambda:add(buyer(),'course',p['course']))
++  denied(lambda:prepare(u))
++  assert fulfill(o['order_id'])['status']=='fulfilled'
++  assert call(u,'checkout_my_orders','')
++ s.check('verify SQL passes; non-destructive rollback blocks new orders but preserves pending fulfillment',verify_and_stop)
++
++finally:
++ s.check('temporary services stopped; loopback ports closed',s.stop)
++ out=s.tmp/'unified-checkout-results.json';out.write_text(json.dumps(s.results,indent=2)+'\n');print(json.dumps({'pass':sum(x['status']=='PASS' for x in s.results),'fail':sum(x['status']=='FAIL' for x in s.results),'results':str(out)}))
++if any(x['status']=='FAIL' for x in s.results):raise SystemExit(1)
+diff --git a/tests/unified-checkout.browser.mjs b/tests/unified-checkout.browser.mjs
+new file mode 100644
+index 0000000..e75530b
+--- /dev/null
++++ b/tests/unified-checkout.browser.mjs
+@@ -0,0 +1,65 @@
++// Real AppHeader/CheckoutOrders and course/cart clients. Synthetic RPC boundary; no provider or production calls.
++import fs from 'node:fs';import path from 'node:path';import os from 'node:os';import http from 'node:http';import {spawn} from 'node:child_process';import assert from 'node:assert/strict';import {build} from 'vite';import vue from '@vitejs/plugin-vue';
++const root=path.resolve(new URL('..',import.meta.url).pathname),work=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'mg-checkout-ui-')));
++fs.symlinkSync(path.join(root,'node_modules'),path.join(work,'node_modules'),'dir');
++const account=path.join(root,'src/_front/chrome/headerAccount.js');
++const mocks={
++ 'chrome/headerAccount.js':`export * from 'actual-account';export const getSupabase=()=>window.fixture.sb,loadUser=async()=>window.fixture.user,waitForUid=async()=>window.fixture.user?.id;`,
++ 'chrome/unread.js':`import {ref} from 'vue';export const hasUnread=ref(false),initUnread=()=>{},resetUnread=()=>{};`
++};
++fs.writeFileSync(path.join(work,'index.html'),'<html><meta name="viewport" content="width=device-width,initial-scale=1"><div id="app"></div><script type="module" src="/main.js"></script></html>');
++fs.writeFileSync(path.join(work,'main.js'),`
++import {createApp} from 'vue';import {createRouter,createWebHistory} from 'vue-router';
++import Header from ${JSON.stringify(path.join(root,'src/_front/chrome/AppHeader.vue'))};
++import {addProduct,openSharedCart} from ${JSON.stringify(path.join(root,'src/_front/checkout/cartApi.js'))};
++import {addToCart,enrollFree} from ${JSON.stringify(path.join(root,'src/_front/course/coursesApi.js'))};
++const f=window.fixture={user:{id:'10000000-0000-4000-8000-000000000001',Name:'Synthetic buyer'},cart:[],calls:[],invokes:[],orders:[],failCart:false};
++let seq=0;const id=()=>('00000000-0000-4000-8000-'+String(++seq).padStart(12,'0'));
++f.sb={channel(){return {on(){return this},subscribe(){return this}}},removeChannel(){},rpc:async(name,args={})=>{
++ f.calls.push({name,args});if(name==='cart_get')return f.failCart?{error:{message:'synthetic'}}:{data:structuredClone(f.cart)};
++ if(name==='cart_add_product'){const row={id:id(),course_name:{course:'Course',event:'Event',stream:'Stream'}[args.p_type],product_type:args.p_type,price:{course:1000,event:2000,stream:3000}[args.p_type],payment_type:args.p_payment_type,available:true};f.cart.push(row);return {data:row};}
++ if(name==='cart_remove'){f.cart=f.cart.filter(x=>x.id!==args.p_shop_id);return {data:null};}
++ if(name==='cart_quote')return {data:args.p_code==='GOOD'?{valid:true,code:'GOOD',discount:600,new_total:5400}:{valid:false,reason:'not_applicable'}};
++ if(name==='checkout_my_orders')return {data:structuredClone(f.orders)};
++ if(name==='checkout_cancel'){f.orders=f.orders.map(x=>({...x,status:'cancelled'}));return {data:null};}
++ return {data:id()};
++},functions:{invoke:async(name,{body})=>{f.invokes.push({name,body});return {error:{message:'Synthetic provider stopped before navigation'}};}}};
++f.add=async type=>{if(type==='course')await addToCart(f.sb,{buyer:f.user,course:{id:id()}});else await addProduct(f.sb,{type,id:id(),agreed:type==='event'});openSharedCart();};f.free=()=>enrollFree(f.sb,{course:{id:id()}});
++const router=createRouter({history:createWebHistory(),routes:[{path:'/:pathMatch(.*)*',component:{template:'<main>Mock route boundary</main>'}}]});createApp({components:{Header},template:'<Header/><router-view/>'}).use(router).mount('#app');
++`);
++await build({root:work,configFile:false,plugins:[{name:'synthetic-auth',enforce:'pre',resolveId(id,importer){if(id.startsWith('.')&&importer&&!importer.startsWith('\0'))id=path.resolve(path.dirname(importer),id);if(id==='actual-account')return '\0real-account';const key=Object.keys(mocks).find(k=>id.endsWith('/_front/'+k));if(key)return '\0mock:'+key;},load(id){if(id==='\0real-account')return fs.readFileSync(account,'utf8');if(id.startsWith('\0mock:'))return mocks[id.slice(6)];}},vue()],logLevel:'error',resolve:{alias:{'@':path.join(root,'src'),'vue':path.join(root,'node_modules/vue/dist/vue.esm-bundler.js')}},build:{outDir:'dist'}});
++const server=http.createServer((req,res)=>{res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-src 'self'; img-src 'self' data:");const rel=req.url.split('?')[0];const file=path.join(work,'dist',rel.startsWith('/assets/')?rel:'index.html');if(!file.startsWith(path.join(work,'dist')+path.sep)||!fs.existsSync(file)){res.writeHead(404).end();return;}res.setHeader('Content-Type',file.endsWith('.js')?'application/javascript':file.endsWith('.css')?'text/css':'text/html');res.end(fs.readFileSync(file));});
++await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.0.1:'+server.address().port;
++let browser,ws;const results=[],exceptions=[];
++try{
++ browser=spawn('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',['--headless=new','--disable-gpu','--no-first-run','--disable-background-networking','--disable-component-update','--disable-sync','--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1','--remote-debugging-port=0','--user-data-dir='+path.join(work,'profile'),'about:blank'],{stdio:['ignore','ignore','pipe']});
++ const address=await new Promise((resolve,reject)=>{let s='';const t=setTimeout(()=>reject(Error('Chrome timeout')),15000);browser.stderr.on('data',b=>{s+=b;const m=s.match(/DevTools listening on (ws:\/\/[^\s]+)/);if(m){clearTimeout(t);resolve(m[1]);}});browser.on('exit',()=>reject(Error('Chrome exited')));});
++ ws=new WebSocket(address);await new Promise(r=>ws.addEventListener('open',r,{once:true}));let id=0;const pending=new Map();
++ ws.addEventListener('message',e=>{const m=JSON.parse(e.data);if(m.method==='Runtime.exceptionThrown')exceptions.push(m.params.exceptionDetails.text);if(m.id){const p=pending.get(m.id);pending.delete(m.id);m.error?p.reject(Error(m.error.message)):p.resolve(m.result);}});
++ const send=(method,params={},sessionId)=>new Promise((resolve,reject)=>{const n=++id;pending.set(n,{resolve,reject});ws.send(JSON.stringify({id:n,method,params,...(sessionId?{sessionId}:{})}));});
++ const {targetId}=await send('Target.createTarget',{url:'about:blank'});const {sessionId}=await send('Target.attachToTarget',{targetId,flatten:true});
++ const ev=async expression=>{const r=await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true},sessionId);if(r.exceptionDetails)throw Error(r.exceptionDetails.exception?.description||r.exceptionDetails.text);return r.result.value;};
++ await send('Runtime.enable',{},sessionId);await send('Page.enable',{},sessionId);await send('Network.enable',{},sessionId);await send('Network.setBlockedURLs',{urls:['https://*','wss://*','ws://*']},sessionId);
++ const until=async expression=>{for(let i=0;i<100;i++){if(await ev(expression))return;await new Promise(r=>setTimeout(r,100));}throw Error('Condition timed out: '+expression);};
++
++ await send('Page.navigate',{url:origin+'/'},sessionId);await until('!!window.fixture&&!!document.querySelector(".mgh__avatar")');
++ for(const type of ['course','event','stream'])await ev(`fixture.add('${type}')`);
++ await until('document.querySelectorAll(".mgh__cart-list li").length===3');
++ assert.deepEqual(await ev('[...document.querySelectorAll(".mgh__cart-name small:first-of-type")].map(x=>x.textContent)'),['Курс','Мероприятие','Трансляция']);results.push('three product types in the existing shared header cart');
++ assert.match(await ev('document.querySelector(".mgh__cart-total").textContent'),/6.000/);results.push('one mixed total');
++ await ev('var p=document.querySelector(".mgh__promo-row input");p.value="BAD";p.dispatchEvent(new Event("input",{bubbles:true}));');await ev('document.querySelector(".mgh__promo-apply").click()');await until('document.querySelector(".mgh__err")?.textContent.includes("не действует")');results.push('inapplicable promo does not change checkout');
++ await ev('var p=document.querySelector(".mgh__promo-row input");p.value="GOOD";p.dispatchEvent(new Event("input",{bubbles:true}));');await ev('document.querySelector(".mgh__promo-apply").click()');await until('!!document.querySelector(".mgh__promo-on")');assert.match(await ev('document.querySelector(".mgh__dd--cart").textContent'),/5.400/);results.push('server promo quote applied once to mixed cart');
++ assert(await ev('document.querySelector(".mgh__btn--block").disabled'));await ev('document.querySelector(".mgh__agree input").click()');await ev('document.querySelector(".mgh__btn--block").click()');await until('fixture.invokes.length===1');
++ const call=await ev('fixture.invokes[0]');assert.equal(call.name,'checkout-pay-link');assert.equal(call.body.shop_ids.length,3);assert.equal(call.body.promo_code,'GOOD');assert(!('price' in call.body)&&!('owner' in call.body));results.push('single shared checkout, terms required, no client price/buyer');
++ await until('!document.querySelector(".mgh__btn--block").disabled');await ev('document.querySelector(".mgh__btn--block").click()');await until('fixture.invokes.length===2');assert.equal(await ev('fixture.invokes[0].body.request_id===fixture.invokes[1].body.request_id'),true);results.push('retry after failed link uses the same intent');
++ await ev('document.querySelector(".mgh__cart-x[aria-label=Убрать]").click()');await until('document.querySelectorAll(".mgh__cart-list li").length===2');assert.equal(await ev('!!document.querySelector(".mgh__promo-on")'),false);results.push('remove uses server RPC and invalidates stale promo');
++ await ev('fixture.free()');assert.equal(await ev('fixture.calls.at(-1).name'),'checkout_enroll_free_course');assert.equal(await ev('fixture.invokes.length'),2);results.push('free course enrollment never invokes checkout');
++ await ev(`fixture.orders=[{order_id:'20000000-0000-4000-8000-000000000001',status:'pending',total:6000,items:[{name:'Mixed pending'}]}];window.dispatchEvent(new CustomEvent('mg-open-cart'));`);
++ // remount the orders panel by closing/reopening the dropdown
++ await ev('document.querySelector("[aria-label=Корзина]").click()');await ev('document.querySelector("[aria-label=Корзина]").click()');await until('!!document.querySelector(".checkout-orders article")');
++ await ev('[...document.querySelectorAll(".checkout-orders button")].find(b=>b.textContent.includes("Продолжить")).click()');await until('fixture.invokes.length===3');assert.equal(await ev('fixture.invokes[2].body.order_id'),'20000000-0000-4000-8000-000000000001');results.push('pending order resumes existing payment instead of a second cart');
++ await ev('[...document.querySelectorAll(".checkout-orders button")].find(b=>b.textContent.includes("Отменить")).click()');await until('document.querySelector(".checkout-orders").textContent.includes("Отменён")');results.push('cancel pending order without booking timer');
++ for(const width of [390,1366]){await send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width===390},sessionId);assert(await ev('document.documentElement.scrollWidth<=innerWidth'));const shot=await send('Page.captureScreenshot',{format:'png'},sessionId);fs.writeFileSync(path.join(work,'cart-'+width+'.png'),Buffer.from(shot.data,'base64'));results.push('responsive shared cart '+width);}
++ await ev('fixture.failCart=true;window.dispatchEvent(new CustomEvent("mg-open-cart"))');await until('document.querySelector(".mgh__err")?.textContent.includes("загрузить корзину")');assert.equal(await ev('document.querySelectorAll(".mgh__cart-list li").length'),0);results.push('cart failure has no unsafe legacy checkout fallback');
++ assert.deepEqual(exceptions,[]);const report={pass:results.length,fail:0,results,artifacts:work};fs.writeFileSync(path.join(work,'results.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report));
++}finally{ws?.close();browser?.kill();server.closeAllConnections();await new Promise(r=>server.close(r));}
+diff --git a/tests/unified-checkout.pages.browser.mjs b/tests/unified-checkout.pages.browser.mjs
+new file mode 100644
+index 0000000..65ca0d0
+--- /dev/null
++++ b/tests/unified-checkout.pages.browser.mjs
+@@ -0,0 +1,82 @@
++// Real AppHeader/CheckoutOrders and course/cart clients. Synthetic RPC boundary; no provider or production calls.
++import fs from 'node:fs';import path from 'node:path';import os from 'node:os';import http from 'node:http';import {spawn} from 'node:child_process';import assert from 'node:assert/strict';import {build} from 'vite';import vue from '@vitejs/plugin-vue';
++const root=path.resolve(new URL('..',import.meta.url).pathname),work=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'mg-checkout-pages-')));
++fs.symlinkSync(path.join(root,'node_modules'),path.join(work,'node_modules'),'dir');
++const account=path.join(root,'src/_front/chrome/headerAccount.js');
++const mocks={
++ 'streams/peertubeLive.js':`export const VIDEO_STATE={PUBLISHED:1,LIVE_ENDED:5};export const getVideoInfo=async()=>({stateId:1,state:{id:1},isLive:false}),assetUrl=x=>x,embedUrl=()=>'/local-frame';export const createLive=()=>{throw Error('no live writes')},getLiveCredentials=createLive,deleteLive=createLive;`,
++ 'chrome/errorLogger.js':`export const logClientEvent=()=>{};`,
++ 'components/PushToggle.vue':`export default {render(){return null}};`,
++ 'components/StreamDiagnostics.vue':`export default {render(){return null}};`,
++ 'components/StreamViewer.vue':`export default {template:'<div data-synthetic-player>Local player boundary</div>'};`,
++
++ 'chrome/headerAccount.js':`export * from 'actual-account';export const getSupabase=()=>window.fixture.sb,loadUser=async()=>window.fixture.user,waitForUid=async()=>window.fixture.user?.id,readStoredSession=()=>window.fixture.user?{user:window.fixture.user}:null,authCookieUser=()=>null;`,
++ 'chrome/unread.js':`import {ref} from 'vue';export const hasUnread=ref(false),initUnread=()=>{},resetUnread=()=>{};`
++};
++fs.writeFileSync(path.join(work,'index.html'),'<html><meta name="viewport" content="width=device-width,initial-scale=1"><div id="app"></div><script type="module" src="/main.js"></script></html>');
++fs.writeFileSync(path.join(work,'main.js'),`
++import {createApp} from 'vue';import {createRouter,createWebHistory} from 'vue-router';
++import Header from ${JSON.stringify(path.join(root,'src/_front/chrome/AppHeader.vue'))};
++import Course from ${JSON.stringify(path.join(root,'src/_front/views/CoursePage.vue'))};
++import Events from ${JSON.stringify(path.join(root,'src/_front/views/EventsPage.vue'))};
++import Streams from ${JSON.stringify(path.join(root,'src/_front/views/StreamsPage.vue'))};
++import {addProduct,openSharedCart} from ${JSON.stringify(path.join(root,'src/_front/checkout/cartApi.js'))};
++import {addToCart,enrollFree} from ${JSON.stringify(path.join(root,'src/_front/course/coursesApi.js'))};
++const f=window.fixture={user:{id:'10000000-0000-4000-8000-000000000001',Name:'Synthetic buyer'},cart:[],calls:[],invokes:[],orders:[],failCart:false};
++const q=new URLSearchParams(location.search);f.user=q.has('guest')?null:f.user;
++let seq=0;const id=()=>('00000000-0000-4000-8000-'+String(++seq).padStart(12,'0'));
++f.c='20000000-0000-4000-8000-000000000001';f.e='20000000-0000-4000-8000-000000000002';f.t='20000000-0000-4000-8000-000000000003';
++f.products={course:[{id:f.c,slug:'synthetic',Title:'Synthetic course',Price:1000,Free:false,DurationLong:6,DurationPrice:0,ModStatus:'Опубликовано',Less_Id:[],owner:'author'}],events:[{id:f.e,slug:'synthetic',title:'Synthetic event',price:q.has('free')?0:2000,capacity:0,deposit_percent:25,status:'published',owner:'author'}],streams:[{id:f.t,title:'Synthetic stream',price:q.has('free')?0:3000,status:'scheduled',scheduled_at:'2099-01-01T00:00:00Z',created_at:'2026-01-01T00:00:00Z',access_months:12,backing_course_id:f.c,author:'author',mode:'multi',visibility:'public',hidden:false}],users:f.user?[f.user]:[],user_course:q.has('owned')&&f.user?[{id:'owned',course:f.c,user:f.user.id,buy:true,Free:false}]:[],event_registrations:q.has('owned')&&f.user?[{id:'reg',event:f.e,user:f.user.id,status:'paid'}]:[]};
++if(q.has('incart'))f.cart.push({id:id(),product_type:location.pathname.includes('event')?'event':'stream',product_id:location.pathname.includes('event')?f.e:f.t,course_name:'Existing product',price:2000});
++f.sb={auth:{getSession:async()=>({data:{session:f.user?{user:f.user}:null}})},from(table){let rows=f.products[table]||[];const chain={select(){return this},eq(k,v){rows=rows.filter(x=>x[k]===v);return this},in(k,v){rows=rows.filter(x=>v.includes(x[k]));return this},or(){rows=rows.filter(x=>x.buy||x.Free);return this},order(){return this},limit(n){rows=rows.slice(0,n);return this},update(){return this},then(resolve){return Promise.resolve({data:structuredClone(rows),count:rows.length,error:null}).then(resolve)}};return chain;},channel(){return {on(){return this},subscribe(){return this}}},removeChannel(){},rpc:async(name,args={})=>{
++ f.calls.push({name,args});if(name==='cart_get')return f.failCart?{error:{message:'synthetic'}}:{data:structuredClone(f.cart)};
++ if(name==='cart_add_product'){const row={id:id(),course_name:{course:'Course',event:'Event',stream:'Stream'}[args.p_type],product_type:args.p_type,product_id:args.p_product_id,price:{course:1000,event:2000,stream:3000}[args.p_type],payment_type:args.p_payment_type,available:true};f.cart.push(row);return {data:row};}
++ if(name==='cart_remove'){f.cart=f.cart.filter(x=>x.id!==args.p_shop_id);return {data:null};}
++ if(name==='cart_quote')return {data:args.p_code==='GOOD'?{valid:true,code:'GOOD',discount:600,new_total:5400}:{valid:false,reason:'not_applicable'}};
++ if(name==='checkout_my_orders')return {data:structuredClone(f.orders)};
++ if(name==='checkout_register_free_event'){f.products.event_registrations.push({id:id(),event:args.p_event_id,user:f.user.id,status:'paid'});return {data:null};}
++ if(name==='stream_visibility_capabilities')return {data:{version:2,unlisted_enabled:true}};
++ if(name==='stream_video_quality_capabilities')return {data:{version:1,full_hd_enabled:false}};
++ if(name==='checkout_cancel'){f.orders=f.orders.map(x=>({...x,status:'cancelled'}));return {data:null};}
++ return {data:id()};
++},functions:{invoke:async(name,{body})=>{f.invokes.push({name,body});return {error:{message:'Synthetic provider stopped before navigation'}};}}};
++f.add=async type=>{if(type==='course')await addToCart(f.sb,{buyer:f.user,course:{id:id()}});else await addProduct(f.sb,{type,id:id(),agreed:type==='event'});openSharedCart();};f.free=()=>enrollFree(f.sb,{course:{id:id()}});
++window.wwLib={wwPlugins:{supabase:{instance:f.sb}}};
++const router=createRouter({history:createWebHistory(),routes:[{path:'/course/:slug',component:Course},{path:'/events',component:Events},{path:'/event/:slug',component:Events},{path:'/streams',component:Streams}]});f.router=router;createApp({components:{Header},template:'<Header/><router-view :key="$route.fullPath"/>'}).use(router).mount('#app');
++`);
++await build({root:work,configFile:false,plugins:[{name:'synthetic-auth',enforce:'pre',resolveId(id,importer){if(id.startsWith('.')&&importer&&!importer.startsWith('\0'))id=path.resolve(path.dirname(importer),id);if(id==='actual-account')return '\0real-account';const key=Object.keys(mocks).find(k=>id.endsWith('/_front/'+k));if(key)return '\0mock:'+key;},load(id){if(id==='\0real-account')return fs.readFileSync(account,'utf8');if(id.startsWith('\0mock:'))return mocks[id.slice(6)];}},vue({template:{transformAssetUrls:false}})],logLevel:'error',resolve:{alias:{'@':path.join(root,'src'),'vue':path.join(root,'node_modules/vue/dist/vue.esm-bundler.js')}},build:{outDir:'dist'}});
++const server=http.createServer((req,res)=>{res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-src 'self'; img-src 'self' data:");const rel=req.url.split('?')[0];const file=path.join(work,'dist',rel.startsWith('/assets/')?rel:'index.html');if(!file.startsWith(path.join(work,'dist')+path.sep)||!fs.existsSync(file)){res.writeHead(404).end();return;}res.setHeader('Content-Type',file.endsWith('.js')?'application/javascript':file.endsWith('.css')?'text/css':'text/html');res.end(fs.readFileSync(file));});
++await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.0.1:'+server.address().port;
++let browser,ws;const results=[],exceptions=[];
++try{
++ browser=spawn('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',['--headless=new','--disable-gpu','--no-first-run','--disable-background-networking','--disable-component-update','--disable-sync','--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1','--remote-debugging-port=0','--user-data-dir='+path.join(work,'profile'),'about:blank'],{stdio:['ignore','ignore','pipe']});
++ const address=await new Promise((resolve,reject)=>{let s='';const t=setTimeout(()=>reject(Error('Chrome timeout')),15000);browser.stderr.on('data',b=>{s+=b;const m=s.match(/DevTools listening on (ws:\/\/[^\s]+)/);if(m){clearTimeout(t);resolve(m[1]);}});browser.on('exit',()=>reject(Error('Chrome exited')));});
++ ws=new WebSocket(address);await new Promise(r=>ws.addEventListener('open',r,{once:true}));let id=0;const pending=new Map();
++ ws.addEventListener('message',e=>{const m=JSON.parse(e.data);if(m.method==='Runtime.exceptionThrown')exceptions.push(m.params.exceptionDetails.text);if(m.id){const p=pending.get(m.id);pending.delete(m.id);m.error?p.reject(Error(m.error.message)):p.resolve(m.result);}});
++ const send=(method,params={},sessionId)=>new Promise((resolve,reject)=>{const n=++id;pending.set(n,{resolve,reject});ws.send(JSON.stringify({id:n,method,params,...(sessionId?{sessionId}:{})}));});
++ const {targetId}=await send('Target.createTarget',{url:'about:blank'});const {sessionId}=await send('Target.attachToTarget',{targetId,flatten:true});
++ const ev=async expression=>{const r=await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true},sessionId);if(r.exceptionDetails)throw Error(r.exceptionDetails.exception?.description||r.exceptionDetails.text);return r.result.value;};
++ await send('Runtime.enable',{},sessionId);await send('Page.enable',{},sessionId);await send('Network.enable',{},sessionId);await send('Network.setBlockedURLs',{urls:['https://*','wss://*','ws://*']},sessionId);
++ const until=async expression=>{for(let i=0;i<100;i++){if(await ev(expression))return;await new Promise(r=>setTimeout(r,100));}throw Error('Condition timed out: '+expression);};
++
++
++ const nav=async url=>{await send('Page.navigate',{url:origin+url},sessionId);await until('!!window.fixture&&!!document.querySelector(".mgh")');};
++ const addCalls=()=>ev('fixture.calls.filter(x=>x.name==="cart_add_product")');
++ const click=async selector=>{await until(`!!document.querySelector('${selector}')`);await ev(`document.querySelector('${selector}').click()`);};
++ await nav('/course/synthetic');await until('[...document.querySelectorAll(".pd-buycard button")].some(b=>b.textContent.includes("Добавить в корзину"))');
++ await click('.pd-buycard button');await until('fixture.cart.length===1');await until('document.querySelector(".pd-buycard button").textContent.trim()==="В корзине"');
++ assert.equal(await ev('location.pathname'),'/course/synthetic');assert.equal(await ev('!!document.querySelector(".mgh__dd--cart")'),false);assert.equal(await ev('fixture.invokes.length'),0);results.push('real CoursePage add stays on page, label changes, checkout/cart not opened');
++ await ev('fixture.router.push("/event/synthetic")');await until('!!document.querySelector(".ed-agree input")');await click('.ed-agree input');await click('.ed .pd-buycard button');await until('fixture.cart.length===2');await until('document.querySelector(".ed .pd-buycard button").textContent.includes("В корзине")');
++ assert.equal(await ev('!!document.querySelector(".mgh__dd--cart")'),false);assert.equal(await ev('location.pathname'),'/event/synthetic');assert.equal((await addCalls()).at(-1).args.p_agreed,true);results.push('real event with capacity=0 adds to same cart without navigation or automatic dropdown');
++ await ev('fixture.router.push("/streams?stream="+fixture.t)');await until('!!document.querySelector(".sp-buy-btn")');await click('.sp-buy-btn');await until('fixture.cart.length===3');await until('document.querySelector(".sp-buy-btn").textContent.trim()==="В корзине"');assert.equal(await ev('!!document.querySelector(".mgh__dd--cart")'),false);assert.equal(await ev('fixture.invokes.length'),0);results.push('real StreamsPage add stays on page; mixed three products retained across SPA routes');
++ await click('.sp-buy-btn');await until('document.querySelectorAll(".mgh__cart-list li").length===3');assert.equal((await addCalls()).length,3);results.push('second click on In cart manually opens existing cart without adding duplicate');
++ await click('.mgh__cart-x[aria-label=Убрать]');await until('document.querySelectorAll(".mgh__cart-list li").length===2');results.push('remove a mixed line using existing cart');
++ await nav('/event/synthetic?incart');await until('document.querySelector(".ed .pd-buycard button")?.textContent.includes("В корзине")');assert.equal((await addCalls()).length,0);assert.equal(await ev('document.querySelector(".ed .pd-buycard button").disabled'),false);await click('.ed .pd-buycard button');await until('!!document.querySelector(".mgh__dd--cart")');assert.equal((await addCalls()).length,0);results.push('reopening event restores In cart; manual cart opens without renewed agreement or duplicate');
++ await nav('/streams?stream=20000000-0000-4000-8000-000000000003&incart');await until('document.querySelector(".sp-buy-btn")?.textContent.trim()==="В корзине"');assert.equal((await addCalls()).length,0);results.push('reopening stream restores server cart state');
++ await nav('/event/synthetic?owned');await until('document.querySelector(".ed")?.textContent.includes("Вы записаны")');assert.equal((await addCalls()).length,0);results.push('paid event registration is not offered for repurchase');
++ await nav('/streams?stream=20000000-0000-4000-8000-000000000003&owned');await until('!!document.querySelector(".sp-detail-title")&&!document.querySelector(".sp-loading-access")');assert.equal(await ev('!!document.querySelector(".sp-buy-btn")'),false);results.push('existing stream purchase preserves access gate');
++ await nav('/event/synthetic?free');await until('!!document.querySelector(".ed-agree input")');await click('.ed-agree input');await click('.ed .pd-buycard button');await until('document.querySelector(".ed")?.textContent.includes("Вы записаны")');assert.equal((await addCalls()).length,0);assert.equal(await ev('fixture.invokes.length'),0);results.push('free event registers without payment or cart');
++ await nav('/event/synthetic?guest');await until('document.querySelector(".ed")?.textContent.includes("Войти, чтобы записаться")');assert.equal((await addCalls()).length,0);results.push('guest event keeps existing login gate');
++ await nav('/streams?stream=20000000-0000-4000-8000-000000000003&free');await until('!!document.querySelector(".sp-detail-title")&&!document.querySelector(".sp-loading-access")');assert.equal(await ev('!!document.querySelector(".sp-buy-btn")'),false);results.push('free stream needs no checkout');
++ assert.deepEqual(exceptions,[]);const report={pass:results.length,fail:0,results,artifacts:work};fs.writeFileSync(path.join(work,'results.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report));
++}finally{ws?.close();browser?.kill();server.closeAllConnections();await new Promise(r=>server.close(r));}
+diff --git a/tests/helpers/checkout_stand.py b/tests/helpers/checkout_stand.py
+new file mode 100644
+index 0000000..09d515e
+--- /dev/null
++++ b/tests/helpers/checkout_stand.py
+@@ -0,0 +1,68 @@
++# Existing disposable launcher, restricted to loopback; no app env loaded.
++import base64,hashlib,hmac,json,os,pathlib,secrets,socket,subprocess,tempfile,time,urllib.request,urllib.error
++ROOT=pathlib.Path(__file__).resolve().parents[2]
++PG=pathlib.Path('/opt/homebrew/opt/postgresql@15/bin')
++REST=pathlib.Path('/opt/homebrew/bin/postgrest')
++DB='mg_stream_visibility_test'
++def port():
++ with socket.socket() as s:s.bind(('127.0.0.1',0));return s.getsockname()[1]
++def safe_error(value):
++ import re
++ return re.sub(r'eyJ[\w-]+\.[\w-]+\.[\w-]+','[fixture JWT]',str(value))[:1500]
++class Stand:
++    def __init__(self):
++        self.tmp=pathlib.Path(tempfile.mkdtemp(prefix='mg-stream-pg-',dir='/private/tmp')); self.tmp.chmod(0o700)
++        self.pgport=port(); self.apiport=port(); self.rest=None; self.started=False; self.results=[]
++        self.env={k:v for k,v in os.environ.items() if k in ['PATH','LANG','LC_ALL','TMPDIR','SYSTEMROOT']}
++        self.env.update(PGHOST='127.0.0.1',PGPORT=str(self.pgport),PGUSER='mg_fixture_admin',PGDATABASE=DB,PGPASSFILE=str(self.tmp/'no-passfile'),PGSERVICEFILE=str(self.tmp/'no-servicefile'),PSQLRC=str(self.tmp/'no-psqlrc'))
++        self.secret=secrets.token_hex(32)
++    def cmd(self,args,sql=None):
++        p=subprocess.run([str(x) for x in args],input=sql,text=True,capture_output=True,env=self.env,cwd=ROOT)
++        if p.returncode: raise RuntimeError(safe_error(p.stderr))
++        return p.stdout
++    def sql(self,q): return self.cmd([PG/'psql','-X','--no-password','-v','ON_ERROR_STOP=1','-At'],q).strip()
++    def check(self,name,fn):
++        try: fn(); self.results.append({'name':name,'status':'PASS'}); print('PASS '+name,flush=True)
++        except Exception as e: self.results.append({'name':name,'status':'FAIL','reason':safe_error(e)}); print('FAIL '+name+': '+safe_error(e),flush=True)
++    def jwt(self,role='authenticated',sub=None):
++        enc=lambda v:base64.urlsafe_b64encode(json.dumps(v,separators=(',',':')).encode()).decode().rstrip('=')
++        value=enc({'alg':'HS256','typ':'JWT'})+'.'+enc({'role':role,'aud':'mg-fixture','exp':int(time.time())+3600,**({'sub':sub} if sub else {})})
++        return value+'.'+base64.urlsafe_b64encode(hmac.new(self.secret.encode(),value.encode(),hashlib.sha256).digest()).decode().rstrip('=')
++    def request(self,path,actor=None,method='GET',data=None,headers=None):
++        assert path.startswith('/') and not path.startswith('//')
++        url='http://127.0.0.1:'+str(self.apiport)+path
++        h={'Content-Type':'application/json',**(headers or {})}
++        if actor: h['Authorization']='Bearer '+self.jwt('service_role' if actor=='service' else 'authenticated',None if actor=='service' else actor)
++        req=urllib.request.Request(url,headers=h,method=method,data=None if data is None else json.dumps(data).encode())
++        # Ignore inherited HTTP(S) proxy configuration; never leave loopback or follow redirects.
++        class NoRedirect(urllib.request.HTTPRedirectHandler):
++            def redirect_request(self,*args): raise AssertionError('unexpected redirect')
++        opener=urllib.request.build_opener(urllib.request.ProxyHandler({}),NoRedirect())
++        try:
++            with opener.open(req,timeout=5) as r: status=r.status; body=r.read(); response_headers=r.headers
++        except urllib.error.HTTPError as r: status=r.code; body=r.read(); response_headers=r.headers
++        try: decoded=json.loads(body) if body else None
++        except ValueError: decoded=None
++        return status,decoded,response_headers
++    def rpc(self,name,args,actor=None): return self.request('/rpc/'+name,actor,'POST',args)
++    def expect(self,response,status=None,denied=False):
++        code,body,_=response
++        if denied: assert code in (400,401,403,404,406), 'expected denial, got HTTP '+str(code)
++        elif status is not None: assert code==status, 'expected HTTP '+str(status)+', got '+str(code)+' code='+str(body.get('code') if isinstance(body,dict) else '')
++        return body
++    def start(self):
++        assert PG.joinpath('postgres').exists() and REST.exists(),'approved packages missing'
++        self.cmd([PG/'initdb','-D',self.tmp/'cluster','-U','mg_fixture_admin','--auth=trust','--encoding=UTF8','--no-locale'])
++        self.cmd([PG/'pg_ctl','-D',self.tmp/'cluster','-l',self.tmp/'postgres.log','-o',f"-h 127.0.0.1 -p {self.pgport} -k {self.tmp} -c log_statement=none -c log_min_error_statement=panic",'-w','start']); self.started=True
++        self.cmd([PG/'createdb','--no-password',DB])
++        assert self.sql('show listen_addresses;')=='127.0.0.1'
++    def stop(self):
++        if self.rest:
++            if self.rest.poll() is None:
++                self.rest.terminate()
++                try:self.rest.wait(timeout=10)
++                except subprocess.TimeoutExpired:self.rest.kill();self.rest.wait(timeout=5)
++            self.restlog.close()
++        if self.started:self.cmd([PG/'pg_ctl','-D',self.tmp/'cluster','-m','fast','-w','stop']);self.started=False
++        for p in [self.pgport,self.apiport]:
++            with socket.socket() as sock: assert sock.connect_ex(('127.0.0.1',p))!=0,'test listener still running'
+diff --git a/tests/fixtures/checkout-legacy-fulfillment.sql b/tests/fixtures/checkout-legacy-fulfillment.sql
+new file mode 100644
+index 0000000..bd3c728
+--- /dev/null
++++ b/tests/fixtures/checkout-legacy-fulfillment.sql
+@@ -0,0 +1,190 @@
++-- Read-only production function definition, captured 2026-11-10. No data or credentials.
++CREATE OR REPLACE FUNCTION public.fulfill_paid_course_order(p_order_id uuid, p_payment_id text, p_proof_id uuid, p_access_plan jsonb)
++ RETURNS jsonb
++ LANGUAGE plpgsql
++ SECURITY DEFINER
++ SET search_path TO 'pg_catalog'
++AS $function$
++declare
++    v_order public."order"%rowtype;
++    v_receipt public.order_access_fulfillments%rowtype;
++    v_shop public.shop%rowtype;
++    v_course public.course%rowtype;
++    v_author public.users%rowtype;
++    v_access public.user_course%rowtype;
++    v_item record;
++    v_credit record;
++    v_access_count integer;
++    v_created integer := 0;
++    v_updated integer := 0;
++    v_result jsonb := '[]'::jsonb;
++    v_credits jsonb := '[]'::jsonb;
++    v_sale_id uuid;
++    v_now timestamptz := transaction_timestamp();
++    v_base timestamptz;
++    v_local timestamp;
++    v_end timestamptz;
++    v_months integer;
++    v_amount numeric;
++begin
++    if nullif(btrim(p_payment_id),'') is null then
++        raise exception 'payment_id_required' using errcode='22023';
++    end if;
++    select * into v_order from public."order" where id=p_order_id for update;
++    if not found then raise exception 'order_not_found' using errcode='22023'; end if;
++    select * into v_receipt from public.order_access_fulfillments where order_id=p_order_id;
++    if found then
++        if v_receipt.payment_id is distinct from p_payment_id
++           or v_order.payment_id is distinct from p_payment_id or v_order.paid is not true then
++            raise exception 'completed_order_state_changed' using errcode='22023';
++        end if;
++        return jsonb_build_object('status','already_completed','order_id',p_order_id);
++    end if;
++    -- Never auto-reprocess historical paid orders, including manual repairs.
++    if v_order.paid is true then
++        return jsonb_build_object('status','legacy_paid_skipped','order_id',p_order_id);
++    end if;
++    if v_order.owner is null or v_order.subscription is true then
++        raise exception 'not_a_course_order' using errcode='22023';
++    end if;
++    perform 1 from public.payment_audit a
++      where a.id=p_proof_id and a.order_id=p_order_id and a.event='ok'
++        and a.detail->>'sig_valid'='true'
++        and a.detail->>'payment_status'='success'
++        and a.detail->'verify'->>'ok'='true'
++      for share;
++    if not found then raise exception 'verified_success_required' using errcode='42501'; end if;
++    if jsonb_typeof(p_access_plan) is distinct from 'array'
++       or coalesce(cardinality(v_order.course_positions),0)=0
++       or jsonb_array_length(p_access_plan)<>cardinality(v_order.course_positions) then
++        raise exception 'incomplete_access_plan' using errcode='22023';
++    end if;
++    if (select count(distinct x.shop_id) from jsonb_to_recordset(p_access_plan) x(shop_id uuid))
++       <>cardinality(v_order.course_positions) then
++        raise exception 'duplicate_or_missing_position' using errcode='22023';
++    end if;
++
++    -- Lock all credited authors in a stable order. Different orders cannot overwrite
++    -- each other's balances. No balance value supplied by the workflow is trusted.
++    perform u.id from public.users u
++      where u.id in (select x.author_id from jsonb_to_recordset(p_access_plan) x(author_id uuid))
++      order by u.id for update;
++
++    for v_item in
++      select * from jsonb_to_recordset(p_access_plan)
++        x(shop_id uuid,course_id uuid,author_id uuid,price numeric,author_commission numeric,author_amount text)
++      order by course_id,shop_id
++    loop
++        select * into v_shop from public.shop where id=v_item.shop_id for share;
++        if not found or v_shop.id::text<>all(v_order.course_positions::text[])
++           or v_shop.owner is distinct from v_order.owner
++           or v_shop.course_id is distinct from v_item.course_id
++           or v_shop.price is distinct from v_item.price then
++            raise exception 'position_buyer_course_or_price_mismatch' using errcode='22023';
++        end if;
++        select * into v_course from public.course where id=v_shop.course_id for share;
++        if not found or v_course.owner is distinct from v_item.author_id then
++            raise exception 'course_author_mismatch' using errcode='22023';
++        end if;
++        select * into v_author from public.users where id=v_course.owner;
++        if not found or v_author."authorCommission" is distinct from v_item.author_commission then
++            raise exception 'author_commission_changed' using errcode='22023';
++        end if;
++        if v_item.author_amount is null or v_item.author_amount !~ '^-?[0-9]+[.][0-9]{2}$' then
++            raise exception 'invalid_author_amount' using errcode='22023';
++        end if;
++        -- The trusted n8n Code preserves EXACT production JS (price*rate/100).toFixed(2).
++        -- Numeric round() is deliberately NOT substituted: ties such as 1.005 differ.
++        -- Check the locked price/rate and rounding envelope; never accept a browser plan.
++        v_amount := v_item.author_amount::numeric;
++        if abs(v_amount-coalesce(v_shop.price,0)*coalesce(v_author."authorCommission",0)/100)>0.00500001 then
++            raise exception 'author_amount_outside_rounding_envelope' using errcode='22023';
++        end if;
++        -- Do not silently duplicate a sale left by a legacy/in-flight handler.
++        -- Older sales for a legitimately reused shop position belong to older orders.
++        if exists(select 1 from public.sales s where s.position=v_shop.id and s.created_at>=v_order.created_at) then
++            raise exception 'unreceipted_sale_requires_review' using errcode='22023';
++        end if;
++        if coalesce(v_course."DurationLong",0)<0
++           or coalesce(v_course."DurationLong",0)<>trunc(coalesce(v_course."DurationLong",0)) then
++            raise exception 'unsupported_duration' using errcode='22023';
++        end if;
++        v_months := coalesce(v_course."DurationLong",0)::integer;
++
++        -- One entitlement per distinct course, even if two paid shop positions
++        -- refer to the same course. Each position still receives its own sale.
++        if not exists(select 1 from jsonb_array_elements(v_result) j where j->>'course_id'=v_course.id::text) then
++            perform pg_advisory_xact_lock(hashtextextended(
++                'order-access:'||v_order.owner::text||':'||v_course.id::text,0));
++            select count(*) into v_access_count from public.user_course
++              where "user"=v_order.owner and course=v_course.id;
++            if v_access_count>1 then
++                raise exception 'ambiguous_existing_access' using errcode='22023';
++            end if;
++            v_access := null;
++            if v_access_count=1 then
++                select * into v_access from public.user_course
++                  where "user"=v_order.owner and course=v_course.id for update;
++            end if;
++            if v_months=0 or (v_access_count=1 and (
++                v_access.end_period is null or v_access.end_period='infinity'::timestamptz
++                -- Preserve the legacy same-day sentinel in both the server's UTC
++                -- and the platform's Moscow calendar; never shorten such access.
++                or (v_access.end_period at time zone 'UTC')::date=(v_access.created_at at time zone 'UTC')::date
++                or (v_access.end_period at time zone 'Europe/Moscow')::date=(v_access.created_at at time zone 'Europe/Moscow')::date
++            )) then
++                v_end := null; -- Explicit lifetime, never turn it into a finite period.
++            else
++                v_base := greatest(v_now,coalesce(v_access.end_period,v_now));
++                v_local := v_base at time zone 'UTC';
++                -- Preserve JS setMonth rollover, rather than PostgreSQL end-of-month clamping.
++                v_end := (date_trunc('month',v_local)+make_interval(months=>v_months)
++                  +(extract(day from v_local)::integer-1)*interval '1 day'
++                  +(v_local-date_trunc('day',v_local))) at time zone 'UTC';
++                if v_access_count=0 then
++                    -- New access keeps the old UTC date-only grant convention.
++                    v_end := date_trunc('day',v_end at time zone 'UTC') at time zone 'UTC';
++                else
++                    -- Renewal preserves the full remaining timestamp; never shortens it.
++                    v_end := greatest(v_access.end_period,v_end);
++                end if;
++            end if;
++            if v_access_count=0 then
++                insert into public.user_course("user",course,"Free",buy,end_period)
++                  values(v_order.owner,v_course.id,v_course."Free",true,v_end)
++                  returning * into v_access;
++                v_created := v_created+1;
++            else
++                update public.user_course set end_period=v_end,buy=true where id=v_access.id;
++                v_updated := v_updated+1;
++            end if;
++        else
++            select * into v_access from public.user_course
++              where "user"=v_order.owner and course=v_course.id;
++        end if;
++        insert into public.sales("user",amount,price,position,position_name,position_category)
++          values(v_author.id,v_amount,v_shop.price,v_shop.id,v_course."Title",v_course."Category")
++          returning id into v_sale_id;
++        v_result := v_result||jsonb_build_array(jsonb_build_object(
++          'shop_id',v_shop.id,'course_id',v_course.id,'access_id',v_access.id,
++          'sale_id',v_sale_id,'author_id',v_author.id,'author_amount',v_amount));
++    end loop;
++
++    -- Financial failure here rolls back accesses, sales and queued notifications as well.
++    for v_credit in
++      select x.author_id,sum(x.author_amount) as amount
++      from jsonb_to_recordset(v_result) x(author_id uuid,author_amount numeric)
++      group by x.author_id order by x.author_id
++    loop
++        update public.users set "Ammount"=coalesce("Ammount",0)+v_credit.amount where id=v_credit.author_id;
++        if not found then raise exception 'author_missing_during_credit'; end if;
++        v_credits := v_credits||jsonb_build_array(jsonb_build_object('author_id',v_credit.author_id,'amount',v_credit.amount));
++    end loop;
++    update public."order" set paid=true,payment_id=p_payment_id where id=p_order_id;
++    insert into public.order_access_fulfillments(order_id,payment_id,proof_id,result)
++      values(p_order_id,p_payment_id,p_proof_id,jsonb_build_object('positions',v_result,'credits',v_credits));
++    return jsonb_build_object('status','fulfilled','order_id',p_order_id,'created',v_created,
++      'updated',v_updated,'positions',jsonb_array_length(v_result),'authors',jsonb_array_length(v_credits));
++end;
++$function$
++;
+diff --git a/tests/fixtures/unified-checkout.sql b/tests/fixtures/unified-checkout.sql
+new file mode 100644
+index 0000000..2a1a2b8
+--- /dev/null
++++ b/tests/fixtures/unified-checkout.sql
+@@ -0,0 +1,38 @@
++-- SYNTHETIC ONLY, guarded by the disposable test database name.
++do $$begin if current_database()<>'mg_stream_visibility_test' then raise exception 'disposable_fixture_required';end if;end$$;
++create role anon nologin;create role authenticated nologin;create role service_role nologin bypassrls;
++create schema auth;
++create function auth.uid() returns uuid language sql stable as $$select coalesce(nullif(current_setting('request.jwt.claim.sub',true),''),nullif(current_setting('request.jwt.claims',true),'')::jsonb->>'sub')::uuid$$;
++grant usage on schema auth to anon,authenticated,service_role;
++create table public.users(id uuid primary key,role text,buied_courses uuid[],buied_course_orig uuid[],superadmin boolean default false,"Ammount" numeric default 0,"authorCommission" numeric default 82);
++create table public.course(id uuid primary key default gen_random_uuid(),created_at timestamptz default now(),owner uuid references users(id),"Title" text,"Category" text,"Free" boolean default false,"Buy" boolean default true,"Price" numeric,"DurationLong" numeric default 0,"DurationPrice" numeric,"ModStatus" text default 'Опубликовано',old_price numeric);
++create table public.chats(id uuid primary key default gen_random_uuid(),users uuid[],read uuid[]);
++create table public.events(id uuid primary key default gen_random_uuid(),title text,owner uuid references users(id),status text default 'published',price numeric default 0,deposit_percent numeric,capacity integer,backing_course_id uuid references course(id),chat uuid references chats(id));
++create table public.streams(id uuid primary key default gen_random_uuid(),title text,author uuid references users(id),price numeric default 0,status text default 'scheduled',visibility text default 'public',hidden boolean default false,backing_course_id uuid references course(id),created_at timestamptz default now(),scheduled_at timestamptz,access_months integer,chat uuid,chat_enabled boolean default false,recording_course uuid,recording_course_enabled boolean default false);
++create table public."order"(id uuid primary key default gen_random_uuid(),created_at timestamptz not null default now(),owner uuid references users(id),paid boolean default false,payment_id text,course_positions text[],subscription boolean default false,summ numeric,num text,"pageUrl" text,event_id uuid references events(id),promo_code_id uuid,promo_discount numeric);
++create table public.shop(id uuid primary key default gen_random_uuid(),created_at timestamptz default now(),owner uuid references users(id),course_id uuid references course(id),price numeric,course_name text,quantity numeric default 1,status text,"order" uuid references public."order"(id),position numeric,prolong numeric,is_renewal boolean default false);
++create table public.user_course(id uuid primary key default gen_random_uuid(),created_at timestamptz not null default now(),"user" uuid references users(id),course uuid references course(id),"Free" boolean default false,buy boolean default false,end_period timestamptz,updated_at timestamptz default now());
++create table public.sales(id uuid primary key default gen_random_uuid(),created_at timestamptz default now(),"user" uuid,amount numeric,price numeric,position uuid,position_name text,position_category text);
++create table public.payment_audit(id uuid primary key default gen_random_uuid(),order_id uuid,event text,detail jsonb);
++create table public.order_access_fulfillments(order_id uuid primary key references public."order"(id),payment_id text not null unique,proof_id uuid not null,completed_at timestamptz default now(),result jsonb);
++create table public.event_registrations(id uuid primary key default gen_random_uuid(),created_at timestamptz default now(),event uuid references events(id),"user" uuid references users(id),payment_type text not null,amount_paid numeric,amount_total numeric,"order" uuid references public."order"(id),status text default 'pending',unique(event,"user"));
++create table public.event_contact_requests(id uuid primary key default gen_random_uuid(),event uuid references events(id));
++create table public.promo_codes(id uuid primary key default gen_random_uuid(),code text unique,discount_type text,discount_value numeric,scope_type text default 'all',scope_course_id uuid,usage_limit integer,used_count integer default 0,expires_at timestamptz);
++create table public.promo_redemptions(id uuid primary key default gen_random_uuid(),promo_id uuid,user_id uuid,order_id uuid,amount_discounted numeric);
++create function public.tg_order_paid_promo() returns trigger language plpgsql set search_path=public as $$begin
++ update promo_codes set used_count=used_count+1 where id=NEW.promo_code_id and (usage_limit is null or used_count<usage_limit);
++ insert into promo_redemptions(promo_id,user_id,order_id,amount_discounted) values(NEW.promo_code_id,NEW.owner,NEW.id,NEW.promo_discount);return NEW;end$$;
++create trigger trg_order_paid_promo after update on public."order" for each row when(NEW.paid is true and OLD.paid is distinct from true and NEW.promo_code_id is not null) execute function tg_order_paid_promo();
++grant select,insert,update,delete on all tables in schema public to authenticated;
++grant all on all tables in schema public to service_role;
++grant select on course,events,streams to anon;
++\ir checkout-legacy-fulfillment.sql
++revoke all on function public.fulfill_paid_course_order(uuid,text,uuid,jsonb) from public,anon,authenticated;
++grant execute on function public.fulfill_paid_course_order(uuid,text,uuid,jsonb) to service_role;
++-- Failure/notification fixtures perform no external operations.
++create table public.test_fail_credit(author_id uuid primary key);
++create table public.test_notices(access_id uuid);
++create function public.test_credit() returns trigger language plpgsql as $$begin if exists(select 1 from public.test_fail_credit where author_id=NEW.id) then raise exception 'synthetic_credit_failure';end if;return NEW;end$$;
++create trigger test_credit before update of "Ammount" on users for each row execute function test_credit();
++create function public.test_notice() returns trigger language plpgsql as $$begin insert into public.test_notices values(NEW.id);return NEW;end$$;
++create trigger test_notice after insert on user_course for each row execute function test_notice();
