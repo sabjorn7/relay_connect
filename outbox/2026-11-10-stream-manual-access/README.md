@@ -1,0 +1,97 @@
+# Ручной доступ к платному эфиру по email
+
+Локальная реализация от production main `ca6a23532b0bfa6340f3bd734b4fe66694a9b94a`.
+Production и исходный MeetGuru не опубликованы; SQL не применялся. Этот пакет публикуется только в relay_connect для review.
+
+## Поведение
+
+В «Мои трансляции» → «Купившие» добавлены поле email и кнопка «Добавить без оплаты».
+Email зарегистрированного пользователя нормализуется (пробелы по краям и регистр).
+Неизвестный email не создаёт пользователя или доступ. Неоднозначный email отклоняется.
+После успешного RPC список перезагружается. Повторное добавление подтверждает существующий доступ.
+
+Защищённая RPC `grant_stream_access_by_email(uuid,text)` проверяет `auth.uid()` и автора эфира ДО поиска email.
+Ручной доступ предоставляется только владельцем платного эфира с его курсом-подложкой.
+Связанные чат и курс записи также проверяются на принадлежность организатору.
+Никакого обхода RLS или выдачи авторских/ведущих токенов клиенту нет. Existing RLS/ACL не изменяются.
+
+Используются `user_course` и существующие INSERT-триггеры чата/записи.
+Для основного доступа устанавливается `Free=true, buy=false`: это не покупка.
+Строка получает пометку «Добавлен без оплаты» только при `Free=true` и `buy!=true`.
+Оплаченные доступы не меняются и не получают эту пометку.
+Новая конечная длительность основной подложки рассчитывается в UTC с тем же переносом месяцев, что у BuyCourse;
+повторный вызов не продлевает и не перезаписывает срок. Окно просмотра эфира остаётся привязанным к дате эфира,
+как у обычного покупателя. Запись выдаётся с теми же полями, что у существующего триггера.
+Обновление старой неоплаченной строки без права доступа восстанавливает также чат/запись.
+Любая ошибка откатывает всю выдачу.
+
+RPC не создаёт и не изменяет shop, order, payment_audit, sales, receipts и баланс автора.
+Она не устанавливает buy=true и не запускает уведомление course_purchase.
+Блокировки согласованы с авторской строкой и order-access lock существующей транзакционной выдачи BuyCourse.
+
+## Изменённые файлы
+
+- src/_front/views/StreamsPage.vue — форма, состояния и пометка.
+- src/_front/streams/streamsApi.js — вызов RPC и получение маркера из Free/buy.
+- supabase/migrations/pending_stream_manual_access.sql — RPC и её права.
+- supabase/migrations/verify_stream_manual_access.sql — read-only проверка RPC/прав.
+- supabase/migrations/rollback_stream_manual_access.sql — отключение RPC без удаления доступов.
+- tests/stream-manual-access.unit.mjs — клиентский контракт и пометка.
+- tests/stream-manual-access.integration.py — PostgreSQL/PostgREST, синтетические данные.
+- tests/fixtures/stream-manual-access.sql — синтетическая схема и действующее поведение триггеров.
+- tests/streams-mine.browser.mjs — форма и регрессия списка на локальных моках.
+- tests/full-hd-test.browser.mjs — только адаптация mock-экспорта нового API; настройки качества не меняются.
+
+## Проверки
+
+- `node tests/stream-manual-access.unit.mjs`: 7 PASS.
+- `node tests/streams-mine.unit.mjs`: 18 PASS.
+- `node tests/stream-purchase-browser.unit.mjs`: 6 PASS, код оплаты не менялся.
+- `python3 tests/stream-manual-access.integration.py`: 16 PASS.
+- `node tests/streams-mine.browser.mjs`: 15 PASS, изолированные моки и блокировка внешней сети.
+- Vite build без npm postbuild: PASS.
+- `node tests/full-hd-test.browser.mjs`: 14 PASS, существующий UI качества на изолированных моках.
+- Итого: 76 PASS, 0 FAIL.
+
+Интеграция проверяет владельца, гостя, другого организатора, отсутствующий/неоднозначный email,
+основной доступ, чат, запись, opt-out, идемпотентность, параллельную выдачу, конкурентный платёж,
+защиту чужого курса записи, полный rollback при ошибке и сохранность данных после удаления RPC.
+Локальные PostgreSQL/PostgREST остановлены после тестов.
+
+Production использовался только для чтения схемы и определений триггеров.
+Read-only проверка 4 текущих платных эфиров: 0 несоответствий подложки, чата и записи новой проверке связей.
+Реальная ручная выдача и воспроизведение платного эфира/записи в production не выполнялись.
+
+## Внедрение — только после отдельного разрешения
+
+1. Владелец вручную применяет pending_stream_manual_access.sql в Supabase SQL Editor.
+   В миграции есть NOTIFY pgrst,'reload schema'. Финансовые миграции не нужны.
+2. Выполнить verify_stream_manual_access.sql: security_definer=true, search_path=pg_catalog,
+   authenticated_can_execute=true, guest_can_execute=false.
+3. Выпустить только перечисленные файлы через штатный frontend deploy.
+   Edge Functions, n8n, LiveKit, Egress, PeerTube и окружение не меняются.
+4. По согласованию организатор добавляет зарегистрированного тестового зрителя;
+   проверить пометку, просмотр эфира в пределах текущего окна, чат и запись (если опции включены).
+5. Проверить обычного оплаченного зрителя: пометки нет, доступ и сроки прежние.
+
+## Откат
+
+Вернуть два frontend-файла к версии до этой задачи. SQL rollback удаляет только RPC;
+уже предоставленные доступы, чат, запись и финансовые данные сохраняются.
+Автоматически отзывать ранее выданный доступ не следует.
+
+## Пакет review
+
+- `changes.diff` — полный патч задачи к базе `ca6a23532b0bfa6340f3bd734b4fe66694a9b94a`; `git apply --check` на этой базе прошёл.
+- Исходники, миграция, проверочный SQL, rollback и изменённые тесты разложены по исходным путям.
+- `test-results.json` — сводка реально выполненных локальных проверок; это не production E2E.
+- `screenshots/` — реальные локальные скриншоты формы с фиктивными email `example.invalid`.
+- `SHA256SUMS` — контрольные суммы всех файлов пакета.
+
+Тесты запускаются в полном checkout MeetGuru указанной базы после применения патча, с уже установленными зависимостями.
+Они используют существующие в базе `tests/helpers/checkout_stand.py`, `tests/fixtures/unified-checkout.sql`,
+`tests/fixtures/checkout-legacy-fulfillment.sql` и `supabase/migrations/pending_unified_checkout.sql`
+ТОЛЬКО для создания синтетического временного PostgreSQL. Эти старые миграции повторно применять к production НЕ нужно.
+Единственный новый SQL для production — `supabase/migrations/pending_stream_manual_access.sql`, только владельцем вручную после одобрения.
+
+SHA-256 changes.diff: `e2f230f8a38ab9f7b73b33073a9afae4fa89421ebee0f2e6d3e300641dc8a71b`.

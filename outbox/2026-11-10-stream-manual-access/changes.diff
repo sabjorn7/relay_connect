@@ -1,0 +1,553 @@
+diff --git a/src/_front/streams/streamsApi.js b/src/_front/streams/streamsApi.js
+index dbea132..b4e77ec 100644
+--- a/src/_front/streams/streamsApi.js
++++ b/src/_front/streams/streamsApi.js
+@@ -199,21 +199,44 @@ export async function hasBoughtStream(supabase, stream, userId) {
+ 
+ /** Buyers of a paid stream (author view): user_course rows on the backing course + user Name/email,
+  *  oldest purchase first. Streams have no "pending registration" like events — a row here = paid. */
++export async function grantStreamAccessByEmail(supabase, streamId, email) {
++    const normalized = String(email || '').trim().toLowerCase();
++    if (!normalized || normalized.length > 320 || !/^[^\s@]+@[^\s@]+$/.test(normalized)) throw new Error('Укажите корректный email.');
++    const { data, error } = await supabase.rpc('grant_stream_access_by_email', { p_stream_id: streamId, p_email: normalized });
++    if (error) {
++        const messages = {
++            registered_user_not_found: 'Пользователь с таким email не зарегистрирован на MeetGuru.',
++            ambiguous_email: 'Найдено несколько аккаунтов с таким email. Уточните аккаунт у поддержки.',
++            auth_required: 'Войдите в аккаунт организатора.',
++            not_stream_owner: 'Добавлять участников может только организатор этого эфира.',
++            not_paid_stream: 'Ручное добавление доступно только для платного эфира.',
++            invalid_email: 'Укажите корректный email.',
++            invalid_stream_access_configuration: 'Не удалось проверить настройки доступа к эфиру. Обратитесь в поддержку.',
++            ambiguous_existing_access: 'У пользователя несколько записей доступа. Обратитесь в поддержку.',
++        };
++        throw new Error(messages[error.message] || 'Не удалось предоставить доступ. Повторите попытку.');
++    }
++    if (!['granted', 'already_has_access'].includes(data?.status)) throw new Error('Сервер не подтвердил предоставление доступа.');
++    return data;
++}
++
+ export async function listStreamBuyers(supabase, stream) {
+     if (!stream.backing_course_id) return [];
+-    const { data: ucs } = await supabase
++    const { data: ucs, error: accessError } = await supabase
+         .from('user_course')
+-        .select('id, "user", created_at')
++        .select('id, "user", created_at, "Free", buy')
+         .eq('course', stream.backing_course_id)
+         .order('created_at', { ascending: true });
++    if (accessError) throw new Error('Не удалось загрузить доступы к эфиру.');
+     const rows = ucs || [];
+     const ids = [...new Set(rows.map((r) => r.user).filter(Boolean))];
+     let byId = {};
+     if (ids.length) {
+-        const { data: us } = await supabase.from('users').select('id, "Name", email').in('id', ids);
++        const { data: us, error: usersError } = await supabase.from('users').select('id, "Name", email').in('id', ids);
++        if (usersError) throw new Error('Не удалось загрузить участников эфира.');
+         byId = Object.fromEntries((us || []).map((u) => [u.id, u]));
+     }
+-    return rows.map((r) => ({ id: r.id, created_at: r.created_at, user: byId[r.user] || null }));
++    return rows.map((r) => ({ id: r.id, created_at: r.created_at, addedWithoutPayment: r.Free === true && r.buy !== true, user: byId[r.user] || null }));
+ }
+ 
+ /** All streams by a given author, newest first (for the author's own list). */
+diff --git a/src/_front/views/StreamsPage.vue b/src/_front/views/StreamsPage.vue
+index c52eacc..ccf4a94 100644
+--- a/src/_front/views/StreamsPage.vue
++++ b/src/_front/views/StreamsPage.vue
+@@ -344,12 +344,21 @@
+                                 <p class="sp-note">Никому не передавайте ключ потока — по нему можно вести эфир от вашего имени.</p>
+                             </div>
+                             <div v-if="expandedBuyers[s.id]" class="sp-buyers">
++                                <form class="sp-buyer-grant" @submit.prevent="grantBuyer(s)">
++                                    <label :for="'stream-grant-' + s.id">Предоставить доступ по email</label>
++                                    <div class="sp-buyer-grant-row">
++                                        <input :id="'stream-grant-' + s.id" v-model="grantEmail[s.id]" type="email" required maxlength="320" autocomplete="email" placeholder="Email зарегистрированного пользователя" :disabled="grantBusy[s.id]" />
++                                        <button class="sp-btn sp-btn-mini" type="submit" :disabled="grantBusy[s.id]">{{ grantBusy[s.id] ? 'Добавление…' : 'Добавить без оплаты' }}</button>
++                                    </div>
++                                    <p v-if="grantError[s.id]" class="sp-note-err" role="alert">{{ grantError[s.id] }}</p>
++                                    <p v-if="grantSuccess[s.id]" class="sp-muted" role="status">{{ grantSuccess[s.id] }}</p>
++                                </form>
+                                 <div v-if="buyersLoading[s.id]" class="sp-muted">Загрузка…</div>
+                                 <div v-else-if="buyersError[s.id]" class="sp-note-err">{{ buyersError[s.id] }}</div>
+                                 <div v-else-if="!(buyers[s.id] || []).length" class="sp-muted">Пока никто не купил этот эфир.</div>
+                                 <ul v-else class="sp-buyers-list">
+                                     <li v-for="b in buyers[s.id]" :key="b.id" class="sp-buyers-item">
+-                                        <span class="sp-buyers-name">{{ b.user?.Name || 'Без имени' }}</span>
++                                        <span class="sp-buyers-name">{{ b.user?.Name || 'Без имени' }}<span v-if="b.addedWithoutPayment" class="sp-buyer-manual">Добавлен без оплаты</span></span>
+                                         <span class="sp-buyers-email">{{ b.user?.email || '—' }}</span>
+                                     </li>
+                                 </ul>
+@@ -465,6 +474,7 @@ import {
+     accessExpiry,
+     listMyStreams,
+     listStreamBuyers,
++    grantStreamAccessByEmail,
+     updateStream,
+     listAllStreams,
+     getStreamById,
+@@ -513,6 +523,10 @@ const expandedBuyers = ref({});
+ const buyers = ref({});
+ const buyersLoading = ref({});
+ const buyersError = ref({});
++const grantEmail = ref({});
++const grantBusy = ref({});
++const grantError = ref({});
++const grantSuccess = ref({});
+ // manage/edit modal (per stream)
+ const manageStream = ref(null);
+ const editForm = ref({ title: '', description: '', cover_url: '', scheduledAt: '', video_quality: 'hd' });
+@@ -936,6 +950,23 @@ async function toggleBuyers(s) {
+     expandedBuyers.value = { ...expandedBuyers.value, [s.id]: open };
+     if (open) await loadBuyers(s);
+ }
++async function grantBuyer(s) {
++    if (grantBusy.value[s.id]) return;
++    grantBusy.value = { ...grantBusy.value, [s.id]: true };
++    grantError.value = { ...grantError.value, [s.id]: '' };
++    grantSuccess.value = { ...grantSuccess.value, [s.id]: '' };
++    try {
++        const result = await grantStreamAccessByEmail(supa(), s.id, grantEmail.value[s.id]);
++        grantEmail.value = { ...grantEmail.value, [s.id]: '' };
++        grantSuccess.value = { ...grantSuccess.value, [s.id]: result.status === 'already_has_access' ? 'У пользователя уже есть доступ к эфиру.' : 'Доступ предоставлен без оплаты.' };
++        await loadBuyers(s);
++    } catch (e) {
++        grantError.value = { ...grantError.value, [s.id]: e.message || 'Не удалось предоставить доступ.' };
++    } finally {
++        grantBusy.value = { ...grantBusy.value, [s.id]: false };
++    }
++}
++
+ async function loadBuyers(s) {
+     buyersLoading.value = { ...buyersLoading.value, [s.id]: true };
+     buyersError.value = { ...buyersError.value, [s.id]: '' };
+@@ -2058,3 +2089,15 @@ textarea.pd-input { resize: vertical; }
+     text-align: center;
+ }
+ </style>
++
++<style scoped>
++.sp-buyer-grant { display: grid; gap: 8px; margin-bottom: 14px; }
++.sp-buyer-grant label { font-size: 13px; font-weight: 600; color: #091747; }
++.sp-buyer-grant-row { display: flex; flex-wrap: wrap; gap: 8px; }
++.sp-buyer-grant-row input { flex: 1 1 230px; min-width: 0; padding: 9px 11px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 14px; }
++.sp-buyer-grant-row input:focus-visible { outline: 2px solid #1f5fc9; outline-offset: 2px; }
++.sp-buyer-grant-row input:disabled { opacity: .65; }
++.sp-buyer-manual { display: block; margin-top: 3px; color: #5b6472; font-size: 12px; font-weight: 400; }
++.sp-buyers-item > span { min-width: 0; overflow-wrap: anywhere; }
++@media (max-width: 480px) { .sp-buyer-grant-row > button { width: 100%; } .sp-buyers-item { flex-wrap: wrap; gap: 4px; } }
++</style>
+diff --git a/tests/full-hd-test.browser.mjs b/tests/full-hd-test.browser.mjs
+index a7a6a2b..c029ed3 100644
+--- a/tests/full-hd-test.browser.mjs
++++ b/tests/full-hd-test.browser.mjs
+@@ -19,6 +19,7 @@ export async function createStream(sb,fields){const row={...fields,id:'created',
+ export async function getStreamById(sb,id){return f().rows.find(s=>s.id===id)||f().created;}
+ export async function updateStream(sb,id,patch){f().updates.push({id,patch});Object.assign(f().rows.find(s=>s.id===id),patch);}
+ export const accessExpiry=()=>null,hasBoughtStream=async()=>false,listStreamMessages=async()=>[],listStreamBuyers=async()=>[];
++export const grantStreamAccessByEmail=()=>{throw Error('manual grant forbidden in quality fixture')};
+ export const purchaseStream=()=>{throw Error('payment forbidden')},createBackingCourse=()=>{throw Error('payment forbidden')};
+ export const setStreamStatus=()=>{throw Error('live forbidden')},deleteStream=()=>{throw Error('delete forbidden')},sendStreamMessage=()=>{throw Error('chat write forbidden')},deleteStreamMessage=()=>{throw Error('chat write forbidden')};`;
+ const peer=`export const VIDEO_STATE={PUBLISHED:1,LIVE_ENDED:5};export const getVideoInfo=async()=>({state:{id:1},isLive:false}),assetUrl=x=>x,embedUrl=()=>'/frame';export const createLive=async()=>({video:{uuid:'synthetic-video'},rtmpUrl:'synthetic-local',streamKey:'synthetic-only'});export const getLiveCredentials=()=>{throw Error('credentials forbidden')};`;
+diff --git a/tests/streams-mine.browser.mjs b/tests/streams-mine.browser.mjs
+index f182bad..ce677eb 100644
+--- a/tests/streams-mine.browser.mjs
++++ b/tests/streams-mine.browser.mjs
+@@ -18,7 +18,13 @@ export async function getStreamLinkKey(sb,id){f().linkReads.push(id);if(!f().row
+ export async function createStream(sb,fields){const row={...fields,id:'created',status:'scheduled',hidden:false};f().rows.push(row);f().created=row;return row;}
+ export async function getStreamById(sb,id){return f().rows.find(s=>s.id===id)||f().created;}
+ export async function updateStream(sb,id,patch){f().updates.push({id,patch});Object.assign(f().rows.find(s=>s.id===id),patch);}
+-export const accessExpiry=()=>null,hasBoughtStream=async()=>false,listStreamMessages=async()=>[],listStreamBuyers=async()=>[];
++export const accessExpiry=()=>null,hasBoughtStream=async()=>false,listStreamMessages=async()=>[],listStreamBuyers=async(sb,s)=>f().buyers?.[s.id]||[];
++export async function grantStreamAccessByEmail(sb,id,email){
++ f().grantCalls.push({id,email});if(f().grantDelay)await new Promise(resolve=>{f().grantRelease=resolve;});
++ if(email.trim().toLowerCase()!=='viewer@example.invalid')throw Error('Пользователь с таким email не зарегистрирован на MeetGuru.');
++ const rows=f().buyers[id]||[];if(rows.some(r=>r.user.email==='viewer@example.invalid'))return {status:'already_has_access'};
++ rows.push({id:'manual-viewer',user:{Name:'Synthetic viewer',email:'viewer@example.invalid'},addedWithoutPayment:true});f().buyers[id]=rows;return {status:'granted'};
++}
+ export const purchaseStream=()=>{throw Error('payment forbidden')},createBackingCourse=()=>{throw Error('payment forbidden')};
+ export const setStreamStatus=()=>{throw Error('live forbidden')},deleteStream=()=>{throw Error('delete forbidden')},sendStreamMessage=()=>{throw Error('chat write forbidden')},deleteStreamMessage=()=>{throw Error('chat write forbidden')};`;
+ const peer=`export const VIDEO_STATE={PUBLISHED:1,LIVE_ENDED:5};export const getVideoInfo=async()=>({state:{id:1},isLive:false}),assetUrl=x=>x,embedUrl=()=>'/frame';export const createLive=async()=>({video:{uuid:'synthetic-video'},rtmpUrl:'synthetic-local',streamKey:'synthetic-only'});export const getLiveCredentials=()=>{throw Error('credentials forbidden')};`;
+@@ -35,7 +41,7 @@ const rows=[];for(const visibility of ['public','unlisted'])for(const status of
+ rows.push({id:'paid',author:'owner',title:'Paid public',visibility:'public',status:'scheduled',price:3500,backing_course_id:'course',mode:'multi',hidden:false});
+ rows.push({id:'foreign-hidden',author:'other',title:'Foreign hidden',visibility:'unlisted',status:'scheduled',price:0,mode:'multi',hidden:false});
+ const user=actor==='guest'?null:{id:actor,role:'Спикер',Name:'Synthetic organizer'};
+-window.fixture={rows,user,queries:[],linkReads:[],copied:[],updates:[],catalogFail:params.has('catalog-fail'),mineFail:params.has('mine-fail')};
++window.fixture={rows,user,buyers:{paid:[{id:'existing-paid',user:{Name:'Paid viewer',email:'paid@example.invalid'},addedWithoutPayment:false}]},grantCalls:[],queries:[],linkReads:[],copied:[],updates:[],catalogFail:params.has('catalog-fail'),mineFail:params.has('mine-fail')};
+ Object.defineProperty(navigator,'clipboard',{value:{writeText:async text=>window.fixture.copied.push(text)},configurable:true});
+ const chain=new Proxy({}, {get:(_,method)=>method==='then'?resolve=>resolve({data:user?[user]:[],error:null}):()=>chain});
+ window.wwLib={wwPlugins:{supabase:{instance:{from:()=>chain,rpc:async name=>({data:name==='stream_visibility_capabilities'?{version:2,unlisted_enabled:true}:{version:1,full_hd_enabled:false},error:null})}}}};
+@@ -62,15 +68,22 @@ try{
+  assert(await ev('[...document.querySelectorAll(".sp-mine .sp-item")].every(x=>["Открыть эфир","Редактировать","Копировать ссылку"].every(t=>x.textContent.includes(t)))'));
+  assert(!await ev('document.querySelector(".sp-mine").textContent.includes("Foreign hidden")'));
+  results.push('owner sees all own statuses, public/hidden/paid, actions and no foreign hidden; own block precedes public catalog');
++ await ev('document.querySelector(".sp-buyers-toggle").click()');await until('!!document.querySelector(".sp-buyer-grant")');
++ assert.equal(await ev('document.querySelectorAll(".sp-buyer-manual").length'),0);
++ const submitEmail=async email=>{await ev(`var input=document.querySelector('.sp-buyer-grant input');input.value=${JSON.stringify(email)};input.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('.sp-buyer-grant').requestSubmit();`);};
++ await submitEmail('missing@example.invalid');await until('document.querySelector(".sp-buyer-grant [role=alert]")?.textContent.includes("не зарегистрирован")');assert.equal(await ev('document.querySelectorAll(".sp-buyers-item").length'),1);results.push('unregistered email shows an error and adds no buyer');
++ await submitEmail('viewer@example.invalid');await until('document.querySelectorAll(".sp-buyers-item").length===2');assert.equal(await ev('document.querySelectorAll(".sp-buyer-manual").length'),1);assert.equal(await ev('document.querySelector(".sp-buyer-manual").textContent'),'Добавлен без оплаты');results.push('manual viewer appears alongside existing buyer with exact no-payment label');
++ await submitEmail('viewer@example.invalid');await until('document.querySelector(".sp-buyer-grant [role=status]")?.textContent.includes("уже есть доступ")');assert.equal(await ev('document.querySelectorAll(".sp-buyers-item").length'),2);results.push('repeated manual add confirms existing access without duplicate row');
++ await ev('fixture.grantDelay=true');await submitEmail('viewer@example.invalid');await until('!!fixture.grantRelease');const beforeGrant=await ev('fixture.grantCalls.length');assert(await ev('document.querySelector(".sp-buyer-grant button").disabled'));await ev('document.querySelector(".sp-buyer-grant").dispatchEvent(new Event("submit",{bubbles:true,cancelable:true}))');assert.equal(await ev('fixture.grantCalls.length'),beforeGrant);await ev('fixture.grantDelay=false;fixture.grantRelease()');await until('!document.querySelector(".sp-buyer-grant button").disabled');results.push('pending grant disables controls and blocks double submission');
+  await filter('Скрытые');assert.equal(await ev('document.querySelectorAll(".sp-mine .sp-item").length'),3);await filter('Публичные');assert.equal(await ev('document.querySelectorAll(".sp-mine .sp-item").length'),4);results.push('three visibility filters preserve all lifecycle statuses');
+  await filter('Скрытые');await ev('[...document.querySelectorAll(".sp-mine .sp-item-actions button")].find(b=>b.textContent.includes("Копировать ссылку")).click()');await until('window.fixture.copied.length===1');
+  assert(await ev('window.fixture.copied[0].includes("#access-")'));assert.deepEqual(await ev('window.fixture.linkReads'),['unlisted-scheduled']);
+  await filter('Публичные');await ev('[...document.querySelectorAll(".sp-mine .sp-item-actions button")].find(b=>b.textContent.includes("Копировать ссылку")).click()');await until('window.fixture.copied.length===2');assert(!await ev('window.fixture.copied[1].includes("#access-")'));assert.equal(await ev('window.fixture.linkReads.length'),1);results.push('hidden/public copy reuse capability RPC and ordinary URL respectively');
+  await ev('[...document.querySelectorAll(".sp-mine .sp-item-actions button")].find(b=>b.textContent.includes("Редактировать")).click()');await until('!!document.querySelector(".pd-dialog")');assert.equal(await ev('document.querySelector(".pd-dialog input").value'),'public scheduled');await ev('document.querySelector(".pd-x").click()');results.push('existing edit dialog opens from own list');
+- for(const width of [390,1366]){await send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width===390},sessionId);assert(await ev('document.documentElement.scrollWidth<=innerWidth'));const shot=await send('Page.captureScreenshot',{format:'png'},sessionId);fs.writeFileSync(path.join(work,'mine-'+width+'.png'),Buffer.from(shot.data,'base64'));results.push('responsive own list '+width);}
+- await ev('[...document.querySelectorAll(".sp-card-head button")].find(b=>b.textContent.includes("Запланировать")).click()');await until('!!document.querySelector("form")');
+- await ev(`const t=document.querySelector('form input[type="text"]');t.value='Synthetic hidden';t.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('input[name="stream-visibility"]').click();`);
+- await ev('document.querySelector("form").requestSubmit()');await until('!!window.fixture.created');await until('!!document.querySelector(".sp-created button")');
++ for(const width of [390,1366]){await send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width===390},sessionId);assert(await ev('document.documentElement.scrollWidth<=innerWidth'));await ev('document.querySelector(".sp-buyer-grant")?.scrollIntoView({block:"center"})');const shot=await send('Page.captureScreenshot',{format:'png'},sessionId);fs.writeFileSync(path.join(work,'mine-'+width+'.png'),Buffer.from(shot.data,'base64'));results.push('responsive own list '+width);}
++ await ev('[...document.querySelectorAll(".sp-card-head button")].find(b=>b.textContent.includes("Запланировать")).click()');await until('!!document.querySelector(".sp-form")');
++ await ev(`const t=document.querySelector('.sp-form input[type="text"]');t.value='Synthetic hidden';t.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('input[name="stream-visibility"]').click();`);
++ await ev('document.querySelector(".sp-form").requestSubmit()');await until('!!window.fixture.created');await until('!!document.querySelector(".sp-created button")');
+  assert.equal(await ev('window.fixture.created.visibility'),'unlisted');assert.equal(await ev('document.querySelectorAll(".sp-catalog .pd-course").length'),4);assert.equal(await ev('document.querySelectorAll(".sp-mine .sp-item").length'),8);
+  await ev('document.querySelector(".sp-created button").click()');await until('new URL(location.href).searchParams.get("stream")==="created"');results.push('hidden creation appears in own list only and offers direct navigation');
+  await navigate('actor=guest');assert.equal(await ev('document.querySelector(".sp-mine")'),null);assert.deepEqual(await ev('window.fixture.queries'),[]);results.push('guest sees public catalog only; no owner query');
+diff --git a/supabase/migrations/pending_stream_manual_access.sql b/supabase/migrations/pending_stream_manual_access.sql
+new file mode 100644
+index 0000000..6efd5f0
+--- /dev/null
++++ b/supabase/migrations/pending_stream_manual_access.sql
+@@ -0,0 +1,63 @@
++-- OWNER MANUAL ONLY. No payment, order, sale or balance writes.
++begin;
++set local lock_timeout='3s';
++set local statement_timeout='30s';
++create function public.grant_stream_access_by_email(p_stream_id uuid,p_email text)
++returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
++declare
++ actor uuid:=auth.uid();s public.streams%rowtype;target uuid;matches integer;
++ v_email text:=lower(btrim(p_email));access public.user_course%rowtype;existing integer;
++ months integer;local_now timestamp:=transaction_timestamp() at time zone 'UTC';ends timestamptz;
++begin
++ if actor is null then raise exception 'auth_required' using errcode='42501';end if;
++ select * into s from public.streams where id=p_stream_id for update;
++ if not found or s.author is distinct from actor then raise exception 'not_stream_owner' using errcode='42501';end if;
++ if s.price<=0 or s.backing_course_id is null then raise exception 'not_paid_stream';end if;
++ if v_email is null or length(v_email)>320 or v_email!~'^[^[:space:]@]+@[^[:space:]@]+$' then raise exception 'invalid_email';end if;
++ -- Verify linkage before INSERT triggers can grant chat or recording access.
++ if not exists(select 1 from public.course where id=s.backing_course_id and owner=actor)
++  or (select count(*) from public.streams where backing_course_id=s.backing_course_id)<>1 then raise exception 'invalid_stream_access_configuration';end if;
++ if s.chat_enabled then
++  if s.chat is null or not exists(select 1 from public.chats where id=s.chat and creator=actor and forced_group is true) then raise exception 'invalid_stream_access_configuration';end if;
++ elsif s.chat is not null then raise exception 'invalid_stream_access_configuration';end if;
++ if s.recording_course_enabled then
++  if s.recording_course is null or s.recording_course=s.backing_course_id or not exists(select 1 from public.course where id=s.recording_course and owner=actor) then raise exception 'invalid_stream_access_configuration';end if;
++ elsif s.recording_course is not null then raise exception 'invalid_stream_access_configuration';end if;
++ select count(*),(array_agg(id))[1] into matches,target from public.users where lower(btrim(users.email))=v_email;
++ if matches=0 then raise exception 'registered_user_not_found';end if;
++ if matches<>1 then raise exception 'ambiguous_email';end if;
++ -- Same author row and per-buyer/course lock as verified BuyCourse fulfillment.
++ perform 1 from public.users where id=actor for update;
++ perform pg_advisory_xact_lock(hashtextextended('order-access:'||target::text||':'||s.backing_course_id::text,0));
++ select count(*) into existing from public.user_course where "user"=target and course=s.backing_course_id;
++ if existing>1 then raise exception 'ambiguous_existing_access';end if;
++ if existing=1 then
++  select * into access from public.user_course where "user"=target and course=s.backing_course_id for update;
++  if access.buy is true or access."Free" is true then return jsonb_build_object('status','already_has_access','access_id',access.id);end if;
++  update public.user_course set "Free"=true where id=access.id returning * into access;
++ else
++  select coalesce("DurationLong",0)::integer into months from public.course where id=s.backing_course_id;
++  if months<>0 then
++   -- Same new-access UTC date convention and JS month rollover as BuyCourse.
++   ends:=date_trunc('day',date_trunc('month',local_now)+make_interval(months=>months)+(extract(day from local_now)::integer-1)*interval '1 day') at time zone 'UTC';
++  end if;
++  insert into public.user_course("user",course,"Free",buy,end_period) values(target,s.backing_course_id,true,false,ends) returning * into access;
++ end if;
++ -- Existing INSERT triggers handle new rows. Reconcile UPDATE of an old placeholder too.
++ if s.chat_enabled then
++  update public.chats set users=array_append(coalesce(users,'{}'::uuid[]),target),read=array_append(coalesce(read,'{}'::uuid[]),target)
++   where id=s.chat and not(target=any(coalesce(users,'{}'::uuid[])));
++ end if;
++ if s.recording_course_enabled then
++  perform pg_advisory_xact_lock(hashtextextended('order-access:'||target::text||':'||s.recording_course::text,0));
++  if not exists(select 1 from public.user_course where "user"=target and course=s.recording_course) then
++   -- Exactly the existing tg_stream_bought_grant_recording entitlement shape.
++   insert into public.user_course("user",course,"Free") values(target,s.recording_course,false);
++  end if;
++ end if;
++ return jsonb_build_object('status','granted','access_id',access.id);
++end$$;
++revoke all on function public.grant_stream_access_by_email(uuid,text) from public,anon,authenticated;
++grant execute on function public.grant_stream_access_by_email(uuid,text) to authenticated;
++notify pgrst,'reload schema';
++commit;
+diff --git a/supabase/migrations/verify_stream_manual_access.sql b/supabase/migrations/verify_stream_manual_access.sql
+new file mode 100644
+index 0000000..e2de266
+--- /dev/null
++++ b/supabase/migrations/verify_stream_manual_access.sql
+@@ -0,0 +1,7 @@
++-- READ ONLY, no user records returned.
++select p.oid::regprocedure as rpc,p.prosecdef as security_definer,
++ p.proconfig as settings,pg_get_userbyid(p.proowner) as owner,
++ has_function_privilege('authenticated',p.oid,'EXECUTE') as authenticated_can_execute,
++ has_function_privilege('anon',p.oid,'EXECUTE') as guest_can_execute
++from pg_proc p join pg_namespace n on n.oid=p.pronamespace
++where n.nspname='public' and p.proname='grant_stream_access_by_email';
+diff --git a/supabase/migrations/rollback_stream_manual_access.sql b/supabase/migrations/rollback_stream_manual_access.sql
+new file mode 100644
+index 0000000..0dfea9b
+--- /dev/null
++++ b/supabase/migrations/rollback_stream_manual_access.sql
+@@ -0,0 +1,5 @@
++-- OWNER MANUAL ONLY. Stops new manual grants; keeps every granted entitlement.
++begin;
++drop function if exists public.grant_stream_access_by_email(uuid,text);
++notify pgrst,'reload schema';
++commit;
+diff --git a/tests/stream-manual-access.unit.mjs b/tests/stream-manual-access.unit.mjs
+new file mode 100644
+index 0000000..6c12ddd
+--- /dev/null
++++ b/tests/stream-manual-access.unit.mjs
+@@ -0,0 +1,32 @@
++// Focused stream-list/access regression; no push-worker or router changes.
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import { readFile } from 'node:fs/promises';
++import { validateVisibility, isPublicStream, streamLinkKey, streamShareUrl, visibilityCapabilities, requireUnlistedSupport } from '../src/_front/streams/visibility.js';
++import { videoProfile } from '../src/_front/streams/videoQuality.js';
++
++// Import the real data helpers with ONLY the destructive PeerTube delete dependency stubbed.
++// No browser, auth service, SDK or network is started.
++let source = await readFile(new URL('../src/_front/streams/streamsApi.js', import.meta.url), 'utf8');
++source = source.replace("from './videoQuality.js'", `from '${new URL('../src/_front/streams/videoQuality.js', import.meta.url).href}'`);
++source = source.replace("from './visibility.js'", `from '${new URL('../src/_front/streams/visibility.js', import.meta.url).href}'`)
++    .replace("import { deleteLive } from '@/_front/streams/peertubeLive.js';", 'const deleteLive = async () => { throw new Error("network forbidden"); };');
++const api = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
++test('manual grant uses one owner-checked RPC and never writes money or access from the browser',async()=>{
++ const calls=[];const sb={from(){throw Error('direct write forbidden')},rpc:async(name,args)=>{calls.push({name,args});return {data:{status:'granted',access_id:'synthetic'}};}};
++ assert.equal((await api.grantStreamAccessByEmail(sb,'stream',' VIEWER@EXAMPLE.INVALID ')).status,'granted');assert.deepEqual(calls,[{name:'grant_stream_access_by_email',args:{p_stream_id:'stream',p_email:'viewer@example.invalid'}}]);
++});
++test('invalid email stops before RPC',async()=>{for(const email of ['', 'a b@example.invalid','a@','x'.repeat(321)])await assert.rejects(api.grantStreamAccessByEmail({rpc(){throw Error('RPC must not execute')}},'stream',email),/корректный email/);});
++test('unregistered user gets a clear message',async()=>{await assert.rejects(api.grantStreamAccessByEmail({rpc:async()=>({error:{message:'registered_user_not_found'}})},'stream','viewer@example.invalid'),/не зарегистрирован/);});
++test('permission errors do not leak raw database details',async()=>{
++ for(const message of ['not_stream_owner','auth_required','synthetic internal secret'])await assert.rejects(api.grantStreamAccessByEmail({rpc:async()=>({error:{message}})},'stream','viewer@example.invalid'),e=>!e.message.includes('synthetic internal secret'));
++});
++test('unknown RPC result is never reported as a successful grant',async()=>{await assert.rejects(api.grantStreamAccessByEmail({rpc:async()=>({data:{status:'unknown'}})},'stream','viewer@example.invalid'),/не подтвердил/);});
++test('buyers label only non-paid Free entitlement and preserves paid buyers',async()=>{
++ const rows=[{id:'paid',user:'a',buy:true,Free:false},{id:'manual',user:'b',buy:false,Free:true},{id:'converted-to-paid',user:'c',buy:true,Free:true},{id:'placeholder',user:'d',buy:false,Free:false}];
++ const sb={from(table){const result=table==='user_course'?rows:rows.map(r=>({id:r.user,Name:r.id,email:r.user+'@example.invalid'}));const chain=new Proxy({},{get:(_,k)=>k==='then'?resolve=>resolve({data:result}):()=>chain});return chain;}};
++ const result=await api.listStreamBuyers(sb,{backing_course_id:'backing'});assert.deepEqual(result.map(r=>r.addedWithoutPayment),[false,true,false,false]);
++});
++test('buyers read failure is surfaced instead of pretending the list is empty',async()=>{
++ const chain=new Proxy({},{get:(_,k)=>k==='then'?resolve=>resolve({error:{message:'denied'}}):()=>chain});await assert.rejects(api.listStreamBuyers({from:()=>chain},{backing_course_id:'backing'}),/загрузить доступы/);
++});
+diff --git a/tests/stream-manual-access.integration.py b/tests/stream-manual-access.integration.py
+new file mode 100644
+index 0000000..eb139d0
+--- /dev/null
++++ b/tests/stream-manual-access.integration.py
+@@ -0,0 +1,96 @@
++#!/usr/bin/env python3
++"""Synthetic loopback PostgreSQL/PostgREST only; never loads application env."""
++import importlib.util,pathlib,json,uuid,subprocess,concurrent.futures,time
++ROOT=pathlib.Path(__file__).resolve().parents[1]
++sp=importlib.util.spec_from_file_location('stand',ROOT/'tests/helpers/checkout_stand.py');m=importlib.util.module_from_spec(sp);sp.loader.exec_module(m);s=m.Stand()
++def uid():return str(uuid.uuid4())
++def lit(x):return "'"+str(x).replace("'","''")+"'"
++def sql(q):return s.sql(q)
++def user(email=None):
++ u=uid();sql("insert into users(id,email,role) values(%s,%s,'Спикер')"%(lit(u),lit(email or u+'@example.invalid')));return u
++def product(chat=True,recording=True):
++ a=user();t,c,r,h=[uid() for _ in range(4)]
++ sql("insert into course(id,owner,\"Title\",\"DurationLong\") values(%s,%s,'Synthetic stream backing',3),(%s,%s,'Synthetic recording',0)"%(lit(c),lit(a),lit(r),lit(a)))
++ if chat:sql("insert into chats(id,creator,forced_group,users,read) values(%s,%s,true,array[%s]::uuid[],array[%s]::uuid[])"%(lit(h),lit(a),lit(a),lit(a)))
++ sql("insert into streams(id,author,title,price,backing_course_id,chat_enabled,chat,recording_course_enabled,recording_course) values(%s,%s,'Synthetic',1000,%s,%s,%s,%s,%s)"%(lit(t),lit(a),lit(c),str(chat).lower(),lit(h) if chat else 'null',str(recording).lower(),lit(r) if recording else 'null'))
++ return dict(a=a,t=t,c=c,r=r,h=h)
++def grant(p,u,email=None):
++ return json.loads(sql("set role authenticated;set request.jwt.claim.sub=%s;select grant_stream_access_by_email(%s,%s)"%(lit(u),lit(p['t']),lit(email))).splitlines()[-1])
++def denied(fn):
++ try:fn()
++ except RuntimeError:return
++ raise AssertionError('expected rejection')
++def snapshot():return sql("select json_build_object('orders',(select count(*) from public.\"order\"),'shops',(select count(*) from shop),'sales',(select count(*) from sales),'proofs',(select count(*) from payment_audit),'receipts',(select count(*) from order_access_fulfillments),'balances',(select sum(\"Ammount\") from users),'notices',(select count(*) from test_notices))")
++try:
++ s.start()
++ for f in ['tests/fixtures/unified-checkout.sql','supabase/migrations/pending_unified_checkout.sql','tests/fixtures/stream-manual-access.sql','supabase/migrations/pending_stream_manual_access.sql']:s.cmd([m.PG/'psql','-X','-v','ON_ERROR_STOP=1','-f',ROOT/f])
++ s.check('migration compiles with current access guard and production-shaped triggers',lambda:None)
++ def complete():
++  p=product();u=user('buyer@example.invalid');before=snapshot();r=grant(p,p['a'],' BUYER@EXAMPLE.INVALID ');assert r['status']=='granted'
++  assert sql("select \"Free\" and not buy from user_course where \"user\"=%s and course=%s"%(lit(u),lit(p['c'])))=='t'
++  assert sql("select %s=any(users) and %s=any(read) from chats where id=%s"%(lit(u),lit(u),lit(p['h'])))=='t'
++  assert sql("select count(*) from user_course where \"user\"=%s and course=%s"%(lit(u),lit(p['r'])))=='1';assert snapshot()==before
++ s.check('registered email grants backing, chat and recording atomically without payment/sale/credit/push',complete)
++ def repeat():
++  p=product();u=user();email=sql('select email from users where id='+lit(u));r=grant(p,p['a'],email);old=sql('select row_to_json(x) from user_course x where id='+lit(r['access_id']));assert grant(p,p['a'],email)['status']=='already_has_access';assert sql('select row_to_json(x) from user_course x where id='+lit(r['access_id']))==old
++  assert sql('select count(*) from user_course where \"user\"='+lit(u))=='2'
++ s.check('repeat is idempotent and does not extend or rewrite access',repeat)
++ def paid():
++  p=product();u=user();sql("insert into user_course(\"user\",course,buy,end_period) values(%s,%s,true,now()+interval '10 days')"%(lit(u),lit(p['c'])));old=sql("select json_agg(x) from user_course x where \"user\"="+lit(u));before=snapshot();assert grant(p,p['a'],sql('select email from users where id='+lit(u)))['status']=='already_has_access';assert sql("select json_agg(x) from user_course x where \"user\"="+lit(u))==old;assert snapshot()==before
++ s.check('existing buyer stays paid with identical end date and no manual marker',paid)
++ def unauthorized():
++  p=product();u=user();email=sql('select email from users where id='+lit(u));denied(lambda:grant(p,u,email));denied(lambda:sql('set role anon;select grant_stream_access_by_email('+lit(p['t'])+','+lit(email)+')'));assert sql('select count(*) from user_course where \"user\"='+lit(u))=='0'
++ s.check('guest and another organizer cannot grant access or enumerate registration by email',unauthorized)
++ def missing():
++  p=product();before=sql('select count(*) from user_course');denied(lambda:grant(p,p['a'],'missing@example.invalid'));assert sql('select count(*) from user_course')==before
++ s.check('unknown registered email changes nothing',missing)
++ def duplicate_email():
++  p=product();user('duplicate@example.invalid');user('DUPLICATE@example.invalid');denied(lambda:grant(p,p['a'],'duplicate@example.invalid'))
++ s.check('ambiguous registered emails fail closed',duplicate_email)
++ def placeholder():
++  p=product();u=user();access=uid();sql("alter table user_course disable trigger trg_stream_bought_add_to_chat;alter table user_course disable trigger trg_stream_bought_grant_recording;insert into user_course(id,\"user\",course,buy,\"Free\") values(%s,%s,%s,false,false);alter table user_course enable trigger trg_stream_bought_add_to_chat;alter table user_course enable trigger trg_stream_bought_grant_recording"%(lit(access),lit(u),lit(p['c'])))
++  r=grant(p,p['a'],sql('select email from users where id='+lit(u)));assert r['access_id']==access;assert sql('select count(*) from user_course where \"user\"='+lit(u))=='2';assert sql('select '+lit(u)+'=any(users) from chats where id='+lit(p['h']))=='t'
++ s.check('old non-paid placeholder gets the same chat/recording rights without duplicate primary row',placeholder)
++ def optout():
++  p=product(False,False);u=user();grant(p,p['a'],sql('select email from users where id='+lit(u)));assert sql('select count(*) from user_course where \"user\"='+lit(u))=='1'
++ s.check('disabled chat/recording do not receive additional entitlements',optout)
++ def malformed():
++  p=product();other=product();sql('update streams set recording_course='+lit(other['r'])+' where id='+lit(p['t']));before=sql('select count(*) from user_course');denied(lambda:grant(p,p['a'],'buyer@example.invalid'));assert sql('select count(*) from user_course')==before
++ s.check('cannot gift another author recording through a forged stream link',malformed)
++ def parallel():
++  p=product();u=user();email=sql('select email from users where id='+lit(u))
++  with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:rs=list(pool.map(lambda _:grant(p,p['a'],email),range(2)))
++  assert sorted(r['status'] for r in rs)==['already_has_access','granted'];assert sql('select count(*) from user_course where \"user\"='+lit(u))=='2'
++ s.check('parallel manual requests grant exactly one backing and one recording access',parallel)
++ def payment_race():
++  p=product();u=user();email=sql('select email from users where id='+lit(u));sh,o,proof=[uid() for _ in range(3)]
++  sql("insert into shop(id,owner,course_id,price,quantity) values(%s,%s,%s,1000,1);insert into public.\"order\"(id,owner,summ,course_positions) values(%s,%s,1000,array[%s]);insert into payment_audit(id,order_id,event,detail) values(%s,%s,'ok','{\"sig_valid\":true,\"payment_status\":\"success\",\"verify\":{\"ok\":true}}')"%(lit(sh),lit(u),lit(p['c']),lit(o),lit(u),lit(sh),lit(proof),lit(o)))
++  plan=[dict(shop_id=sh,course_id=p['c'],author_id=p['a'],price=1000,author_commission=82,author_amount='820.00')]
++  def paid_callback():return json.loads(sql("set role service_role;select fulfill_paid_course_order(%s,'synthetic-payment',%s,%s::jsonb)"%(lit(o),lit(proof),lit(json.dumps(plan)))).splitlines()[-1])
++  with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
++   manual=pool.submit(grant,p,p['a'],email);paid=pool.submit(paid_callback);assert manual.result()['status'] in ['granted','already_has_access'];assert paid.result()['status']=='fulfilled'
++  assert sql('select count(*) from user_course where \"user\"='+lit(u))=='2'
++  assert sql('select buy from user_course where \"user\"='+lit(u)+' and course='+lit(p['c']))=='t'
++  assert sql('select count(*) from sales where position='+lit(sh))=='1';assert sql('select count(*) from order_access_fulfillments where order_id='+lit(o))=='1';assert sql('select \"Ammount\" from users where id='+lit(p['a']))=='820.00'
++ s.check('manual grant racing a verified payment preserves single entitlement, single sale and one author credit',payment_race)
++ def failure():
++  p=product();u=user();sql("create function test_manual_failure() returns trigger language plpgsql as $$begin if NEW.course=%s::uuid then raise exception 'synthetic_recording_failure';end if;return NEW;end$$;create trigger test_manual_failure before insert on user_course for each row execute function test_manual_failure()"%lit(p['r']))
++  denied(lambda:grant(p,p['a'],sql('select email from users where id='+lit(u))));assert sql('select count(*) from user_course where \"user\"='+lit(u))=='0';assert sql('select '+lit(u)+'=any(users) from chats where id='+lit(p['h']))=='f';sql('drop trigger test_manual_failure on user_course;drop function test_manual_failure()')
++ s.check('recording failure rolls back backing and chat membership',failure)
++ def invalid_stream():
++  p=product();sql('update streams set price=0 where id='+lit(p['t']));denied(lambda:grant(p,p['a'],'buyer@example.invalid'))
++ s.check('free stream cannot use paid manual-grant RPC',invalid_stream)
++ def rest():
++  sql('create role mg_pgrst_authenticator login noinherit;grant anon,authenticated,service_role to mg_pgrst_authenticator;grant usage on schema public to anon,authenticated,service_role')
++  config=s.tmp/'postgrest.conf';config.write_text('\n'.join([f'db-uri="postgres://mg_pgrst_authenticator@127.0.0.1:{s.pgport}/{m.DB}"','db-schemas="public"','db-anon-role="anon"','server-host="127.0.0.1"',f'server-port={s.apiport}',f'jwt-secret="{s.secret}"','jwt-aud="mg-fixture"','log-level="crit"']));config.chmod(0o600)
++  s.restlog=(s.tmp/'postgrest.log').open('w');s.rest=subprocess.Popen([str(m.REST),str(config)],stdout=s.restlog,stderr=s.restlog,env=s.env)
++  for _ in range(50):
++   try:s.request('/');break
++   except OSError:time.sleep(.1)
++  p=product();u=user();args={'p_stream_id':p['t'],'p_email':sql('select email from users where id='+lit(u))};s.expect(s.rpc('grant_stream_access_by_email',args),denied=True);assert s.expect(s.rpc('grant_stream_access_by_email',args,p['a']),status=200)['status']=='granted';s.expect(s.rpc('grant_stream_access_by_email',args,u),denied=True)
++ s.check('real PostgREST owner JWT works; guest and other viewer JWT are rejected',rest)
++ def rollback():
++  before=sql('select count(*) from user_course');s.cmd([m.PG/'psql','-X','-v','ON_ERROR_STOP=1','-f',ROOT/'supabase/migrations/rollback_stream_manual_access.sql']);assert sql('select count(*) from user_course')==before;assert sql("select to_regprocedure('public.grant_stream_access_by_email(uuid,text)') is null")=='t'
++ s.check('rollback removes only RPC and preserves all granted access',rollback)
++ print(json.dumps({'pass':sum(r['status']=='PASS' for r in s.results),'fail':sum(r['status']=='FAIL' for r in s.results),'results':s.results}));assert all(r['status']=='PASS' for r in s.results)
++finally:s.stop();print('Temporary PostgreSQL/PostgREST stopped')
+diff --git a/tests/fixtures/stream-manual-access.sql b/tests/fixtures/stream-manual-access.sql
+new file mode 100644
+index 0000000..1b8b6ac
+--- /dev/null
++++ b/tests/fixtures/stream-manual-access.sql
+@@ -0,0 +1,21 @@
++-- Synthetic schema additions and captured production trigger behavior, no real users.
++do $$begin if current_database()<>'mg_stream_visibility_test' then raise exception 'disposable_fixture_required';end if;end$$;
++alter table public.users add column email text,add column "Name" text;
++alter table public.chats add column creator uuid,add column forced_group boolean default false;
++create function public.tg_stream_bought_add_to_chat() returns trigger language plpgsql security definer set search_path=public as $$
++declare v_chat uuid;begin
++ select chat into v_chat from public.streams where backing_course_id=NEW.course and chat is not null limit 1;
++ if v_chat is not null and NEW."user" is not null then
++  update public.chats set users=array_append(coalesce(users,'{}'::uuid[]),NEW."user"),read=array_append(coalesce(read,'{}'::uuid[]),NEW."user") where id=v_chat and not(NEW."user"=any(coalesce(users,'{}'::uuid[])));
++ end if;return NEW;end$$;
++create function public.tg_stream_bought_grant_recording() returns trigger language plpgsql security definer set search_path=public as $$
++declare v_rec uuid;begin
++ select recording_course into v_rec from public.streams where backing_course_id=NEW.course and recording_course is not null limit 1;
++ if v_rec is not null and NEW."user" is not null and not exists(select 1 from public.user_course where "user"=NEW."user" and course=v_rec) then
++  insert into public.user_course("user",course,"Free") values(NEW."user",v_rec,false);
++ end if;return NEW;end$$;
++create trigger trg_stream_bought_add_to_chat after insert on public.user_course for each row execute function public.tg_stream_bought_add_to_chat();
++create trigger trg_stream_bought_grant_recording after insert on public.user_course for each row execute function public.tg_stream_bought_grant_recording();
++-- Model purchase notifications using the actual NEW.buy predicate; no network calls.
++drop trigger test_notice on public.user_course;
++create trigger test_notice after insert on public.user_course for each row when(NEW.buy is true) execute function public.test_notice();
+diff --git a/reviews/2026-11-10-stream-manual-access/README.md b/reviews/2026-11-10-stream-manual-access/README.md
+new file mode 100644
+index 0000000..4addf60
+--- /dev/null
++++ b/reviews/2026-11-10-stream-manual-access/README.md
+@@ -0,0 +1,81 @@
++# Ручной доступ к платному эфиру по email
++
++Локальная реализация от production main `ca6a23532b0bfa6340f3bd734b4fe66694a9b94a`.
++Production не изменён; commit, push, deploy и применение SQL не выполнялись.
++
++## Поведение
++
++В «Мои трансляции» → «Купившие» добавлены поле email и кнопка «Добавить без оплаты».
++Email зарегистрированного пользователя нормализуется (пробелы по краям и регистр).
++Неизвестный email не создаёт пользователя или доступ. Неоднозначный email отклоняется.
++После успешного RPC список перезагружается. Повторное добавление подтверждает существующий доступ.
++
++Защищённая RPC `grant_stream_access_by_email(uuid,text)` проверяет `auth.uid()` и автора эфира ДО поиска email.
++Ручной доступ предоставляется только владельцем платного эфира с его курсом-подложкой.
++Связанные чат и курс записи также проверяются на принадлежность организатору.
++Никакого обхода RLS или выдачи авторских/ведущих токенов клиенту нет. Existing RLS/ACL не изменяются.
++
++Используются `user_course` и существующие INSERT-триггеры чата/записи.
++Для основного доступа устанавливается `Free=true, buy=false`: это не покупка.
++Строка получает пометку «Добавлен без оплаты» только при `Free=true` и `buy!=true`.
++Оплаченные доступы не меняются и не получают эту пометку.
++Новая конечная длительность основной подложки рассчитывается в UTC с тем же переносом месяцев, что у BuyCourse;
++повторный вызов не продлевает и не перезаписывает срок. Окно просмотра эфира остаётся привязанным к дате эфира,
++как у обычного покупателя. Запись выдаётся с теми же полями, что у существующего триггера.
++Обновление старой неоплаченной строки без права доступа восстанавливает также чат/запись.
++Любая ошибка откатывает всю выдачу.
++
++RPC не создаёт и не изменяет shop, order, payment_audit, sales, receipts и баланс автора.
++Она не устанавливает buy=true и не запускает уведомление course_purchase.
++Блокировки согласованы с авторской строкой и order-access lock существующей транзакционной выдачи BuyCourse.
++
++## Изменённые файлы
++
++- src/_front/views/StreamsPage.vue — форма, состояния и пометка.
++- src/_front/streams/streamsApi.js — вызов RPC и получение маркера из Free/buy.
++- supabase/migrations/pending_stream_manual_access.sql — RPC и её права.
++- supabase/migrations/verify_stream_manual_access.sql — read-only проверка RPC/прав.
++- supabase/migrations/rollback_stream_manual_access.sql — отключение RPC без удаления доступов.
++- tests/stream-manual-access.unit.mjs — клиентский контракт и пометка.
++- tests/stream-manual-access.integration.py — PostgreSQL/PostgREST, синтетические данные.
++- tests/fixtures/stream-manual-access.sql — синтетическая схема и действующее поведение триггеров.
++- tests/streams-mine.browser.mjs — форма и регрессия списка на локальных моках.
++- tests/full-hd-test.browser.mjs — только адаптация mock-экспорта нового API; настройки качества не меняются.
++
++## Проверки
++
++- `node tests/stream-manual-access.unit.mjs`: 7 PASS.
++- `node tests/streams-mine.unit.mjs`: 18 PASS.
++- `node tests/stream-purchase-browser.unit.mjs`: 6 PASS, код оплаты не менялся.
++- `python3 tests/stream-manual-access.integration.py`: 16 PASS.
++- `node tests/streams-mine.browser.mjs`: 15 PASS, изолированные моки и блокировка внешней сети.
++- Vite build без npm postbuild: PASS.
++- `node tests/full-hd-test.browser.mjs`: 14 PASS, существующий UI качества на изолированных моках.
++- Итого: 76 PASS, 0 FAIL.
++
++Интеграция проверяет владельца, гостя, другого организатора, отсутствующий/неоднозначный email,
++основной доступ, чат, запись, opt-out, идемпотентность, параллельную выдачу, конкурентный платёж,
++защиту чужого курса записи, полный rollback при ошибке и сохранность данных после удаления RPC.
++Локальные PostgreSQL/PostgREST остановлены после тестов.
++
++Production использовался только для чтения схемы и определений триггеров.
++Read-only проверка 4 текущих платных эфиров: 0 несоответствий подложки, чата и записи новой проверке связей.
++Реальная ручная выдача и воспроизведение платного эфира/записи в production не выполнялись.
++
++## Внедрение — только после отдельного разрешения
++
++1. Владелец вручную применяет pending_stream_manual_access.sql в Supabase SQL Editor.
++   В миграции есть NOTIFY pgrst,'reload schema'. Финансовые миграции не нужны.
++2. Выполнить verify_stream_manual_access.sql: security_definer=true, search_path=pg_catalog,
++   authenticated_can_execute=true, guest_can_execute=false.
++3. Выпустить только перечисленные файлы через штатный frontend deploy.
++   Edge Functions, n8n, LiveKit, Egress, PeerTube и окружение не меняются.
++4. По согласованию организатор добавляет зарегистрированного тестового зрителя;
++   проверить пометку, просмотр эфира в пределах текущего окна, чат и запись (если опции включены).
++5. Проверить обычного оплаченного зрителя: пометки нет, доступ и сроки прежние.
++
++## Откат
++
++Вернуть два frontend-файла к версии до этой задачи. SQL rollback удаляет только RPC;
++уже предоставленные доступы, чат, запись и финансовые данные сохраняются.
++Автоматически отзывать ранее выданный доступ не следует.

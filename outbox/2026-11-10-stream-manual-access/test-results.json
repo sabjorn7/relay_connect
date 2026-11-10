@@ -1,0 +1,46 @@
+{
+  "source_base": "ca6a23532b0bfa6340f3bd734b4fe66694a9b94a",
+  "scope": "local isolated synthetic tests; no production grants or purchases",
+  "results_type": "summary of observed command outputs, not raw logs",
+  "pass": 76,
+  "fail": 0,
+  "checks": [
+    {
+      "command": "node tests/stream-manual-access.unit.mjs",
+      "pass": 7,
+      "fail": 0
+    },
+    {
+      "command": "node tests/streams-mine.unit.mjs",
+      "pass": 18,
+      "fail": 0
+    },
+    {
+      "command": "node tests/stream-purchase-browser.unit.mjs",
+      "pass": 6,
+      "fail": 0
+    },
+    {
+      "command": "python3 tests/stream-manual-access.integration.py",
+      "pass": 16,
+      "fail": 0
+    },
+    {
+      "command": "node tests/streams-mine.browser.mjs",
+      "pass": 15,
+      "fail": 0
+    },
+    {
+      "command": "node tests/full-hd-test.browser.mjs",
+      "pass": 14,
+      "fail": 0
+    }
+  ],
+  "build": {
+    "command": "./node_modules/.bin/vite build -l warn --outDir /private/tmp/mg-stream-manual-access-build-20261110",
+    "status": "PASS",
+    "npm_postbuild_run": false
+  },
+  "patch_apply_check": "PASS on clean source base",
+  "services": "temporary PostgreSQL/PostgREST stopped"
+}
