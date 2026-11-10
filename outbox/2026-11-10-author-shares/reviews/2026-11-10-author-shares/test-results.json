@@ -1,0 +1,167 @@
+{
+  "source_main": "36d3798f151cc9706d4921536e4eda6ad5d5a67a",
+  "scope": "local-only synthetic tests; no production data writes or callback executions",
+  "pass": 54,
+  "fail": 0,
+  "checks": [
+    {
+      "command": "node tests/author-shares.unit.mjs",
+      "pass": 10,
+      "fail": 0
+    },
+    {
+      "command": "python3 tests/author-shares.integration.py",
+      "pass": 29,
+      "fail": 0,
+      "results": [
+        {
+          "name": "migration preserves old balances, sales, paid orders, accesses and receipts",
+          "status": "PASS"
+        },
+        {
+          "name": "all three initial shares exactly copy the legacy author percentage",
+          "status": "PASS"
+        },
+        {
+          "name": "before-use rollback restores exact original financial RPC inside a rolled-back test transaction",
+          "status": "PASS"
+        },
+        {
+          "name": "existing user INSERT initializes all three fields without client changes",
+          "status": "PASS"
+        },
+        {
+          "name": "admin edits only selected share with atomic audit; event percentage unchanged",
+          "status": "PASS"
+        },
+        {
+          "name": "guest/viewer cannot edit or insert financial rates directly or through admin RPC",
+          "status": "PASS"
+        },
+        {
+          "name": "events are excluded; bad category/range/missing reason rejected",
+          "status": "PASS"
+        },
+        {
+          "name": "course, live backing, standalone recording and event select the correct distinct rates",
+          "status": "PASS"
+        },
+        {
+          "name": "legacy event-labelled courses without events linkage retain legacy rate",
+          "status": "PASS"
+        },
+        {
+          "name": "four mixed positions and multiple authors receive exactly their own shares",
+          "status": "PASS"
+        },
+        {
+          "name": "BuyCourse duplicate callback never repeats money or access",
+          "status": "PASS"
+        },
+        {
+          "name": "parallel BuyCourse callback remains idempotent",
+          "status": "PASS"
+        },
+        {
+          "name": "stale n8n share plan fails atomically without mismatched credits or access",
+          "status": "PASS"
+        },
+        {
+          "name": "financial error still rolls back all BuyCourse sales, credits and access",
+          "status": "PASS"
+        },
+        {
+          "name": "historical paid order is not replayed or recalculated",
+          "status": "PASS"
+        },
+        {
+          "name": "club current rate applies once with receipt and atomic balance update",
+          "status": "PASS"
+        },
+        {
+          "name": "parallel club callback does not create duplicate sale or credit",
+          "status": "PASS"
+        },
+        {
+          "name": "existing club next renewal uses current club rate, not original subscription rate",
+          "status": "PASS"
+        },
+        {
+          "name": "historical club payments including null-payment-id paid orders never receive another credit",
+          "status": "PASS"
+        },
+        {
+          "name": "club credit failure rolls back sale and receipt; safe retry completes once",
+          "status": "PASS"
+        },
+        {
+          "name": "SQL club fixed2 matches actual JS on half-cent, sign, tiny and large golden values",
+          "status": "PASS"
+        },
+        {
+          "name": "club preserves both original sale rounding and original final-balance rounding",
+          "status": "PASS"
+        },
+        {
+          "name": "zero and full author percentages have no truthy-default fallback",
+          "status": "PASS"
+        },
+        {
+          "name": "discounted shop price is used without recomputing catalog price or promotion",
+          "status": "PASS"
+        },
+        {
+          "name": "existing zero checkout remains compatible with selected category rates",
+          "status": "PASS"
+        },
+        {
+          "name": "different simultaneous club payments do not overwrite the same author balance",
+          "status": "PASS"
+        },
+        {
+          "name": "300 additional deterministic JS half-cent and ordinary rounding comparisons match",
+          "status": "PASS"
+        },
+        {
+          "name": "real PostgREST exposes owner-admin editing and service-only financial rates",
+          "status": "PASS"
+        },
+        {
+          "name": "rollback refuses after new rates/credits were used and never undoes financial records",
+          "status": "PASS"
+        }
+      ]
+    },
+    {
+      "command": "node tests/author-shares.browser.mjs",
+      "pass": 10,
+      "fail": 0,
+      "results": [
+        "admin sees exactly three author-share categories without event editing",
+        "course save changes only course field, keeps legacy event rate/balance and requires reason",
+        "zero club share is saved without a default fallback",
+        "stream share allows 100 and blocks values outside 0..100",
+        "cancel does not mutate any rate",
+        "RPC failure is visible and leaves displayed/stored shares intact",
+        "responsive commission table 390",
+        "responsive commission table 1366",
+        "missing rate columns/read failure never shows invented 100-percent values",
+        "non-admin is redirected and cannot edit rates"
+      ]
+    },
+    {
+      "command": "node tests/author-shares.n8n190.mjs",
+      "pass": 5,
+      "fail": 0,
+      "scope": "Pinned official Code/Supabase/WorkflowDataProxy sources; HTTP and VM sandbox boundary mocked, no real n8n instance"
+    }
+  ],
+  "rounding": "11 direct JS golden values and 300 deterministic additional comparisons; 5 complete club sale/balance rounding cases",
+  "build": {
+    "command": "./node_modules/.bin/vite build -l warn --outDir /private/tmp/mg-author-shares-build-20261110",
+    "status": "PASS",
+    "npm_postbuild": false
+  },
+  "rollback": "before-use original RPC fingerprint restored inside test transaction; after-use rollback refused and financial records preserved",
+  "database_processes": "temporary PostgreSQL and PostgREST stopped"
+}

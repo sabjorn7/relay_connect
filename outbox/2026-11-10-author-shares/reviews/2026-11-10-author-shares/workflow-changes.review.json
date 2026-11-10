@@ -1,0 +1,138 @@
+{
+  "format": "review-only patches; not an importable workflow; no credentials or execution data",
+  "baseMain": "36d3798f151cc9706d4921536e4eda6ad5d5a67a",
+  "BuyCourse": {
+    "workflowId": "6rEQ42XwaLMFcvbB",
+    "addNode": {
+      "name": "GetAuthorShares",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "executeOnce": true,
+      "parameters": {
+        "method": "POST",
+        "url": "https://sb.meetgu.ru/rest/v1/rpc/get_order_author_shares",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {p_order_id: $('CheckPaid').first().json.id} }}",
+        "options": {}
+      },
+      "credentialSource": "existing FulfillAllAccesses"
+    },
+    "updateNode": {
+      "name": "BuildAllAccesses",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "function buildAuthorSharePlan(order, positions, courses, authors, rates) {\n    if (!order?.id || !order.owner || !Array.isArray(order.course_positions) || !order.course_positions.length) throw new Error('Invalid course order');\n    if (new Set(order.course_positions).size !== order.course_positions.length) throw new Error('Duplicate shop position');\n    if (!Array.isArray(rates)) throw new Error('Missing server shares');\n    return order.course_positions.map(id => {\n        const matches = positions.filter(p => p.id === id);\n        if (matches.length !== 1) throw new Error('Missing or ambiguous shop position');\n        const position = matches[0];\n        if (position.owner !== order.owner) throw new Error('Buyer mismatch');\n        const course = courses.find(c => c.id === position.course_id);\n        const author = course && authors.find(a => a.id === course.owner);\n        const found = rates.filter(r => r.course_id === course?.id);\n        if (!course || !author || found.length !== 1 || found[0].author_id !== author.id) throw new Error('Missing or ambiguous author share');\n        const share = found[0];\n        if (!['courses','streams','events'].includes(share.category) || !Number.isFinite(share.percent) || share.percent < 0 || share.percent > 100 || (position.price !== null && !Number.isFinite(position.price))) throw new Error('Invalid financial snapshot');\n        const authorAmount = (position.price * share.percent / 100).toFixed(2);\n        if (!/^-?\\d+\\.\\d{2}$/.test(authorAmount)) throw new Error('Invalid author amount');\n        return { shop_id:id, course_id:course.id, author_id:author.id, price:position.price, author_commission:share.percent, author_amount:authorAmount };\n    });\n}\nconst order=$('CheckPaid').first().json;\nconst plan=buildAuthorSharePlan(order,$('GetPositions').all().map(i=>i.json),$('GetCourse').all().map(i=>i.json),$('UsersCreater').all().map(i=>i.json),$('GetAuthorShares').first().json.rates);\nreturn [{json:{plan},pairedItem:{item:0}}];"
+      }
+    },
+    "replaceConnections": {
+      "UsersBuyer": {
+        "main": [
+          [
+            {
+              "node": "GetAuthorShares",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "GetAuthorShares": {
+        "main": [
+          [
+            {
+              "node": "BuildAllAccesses",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    }
+  },
+  "subscription": {
+    "workflowId": "hnNx3nH9FV0RjMks",
+    "replaceFinancialNodes": [
+      {
+        "name": "Code8",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "parameters": {
+          "method": "POST",
+          "url": "https://sb.meetgu.ru/rest/v1/rpc/settle_club_author_share",
+          "authentication": "predefinedCredentialType",
+          "nodeCredentialType": "supabaseApi",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ {p_order_id: $('Supabase5').first().json.id,p_payment_id: String($('Webhook').first().json.body.order_id || ''),p_club_id: $('GET_CLUB').first().json.id,p_subscription_id: $('GET_SUBS').first().json.id,p_amount: $('Webhook').first().json.body.sum,p_position_id: $('GET_CLUB').first().json.id,p_position_name: $('Code18').first().json.Prolong} }}",
+          "options": {}
+        },
+        "credentialSource": "existing Supabase9 / Supabase11 / Supabase13, checked equal to BuyCourse server credential"
+      },
+      {
+        "name": "Code9",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "parameters": {
+          "method": "POST",
+          "url": "https://sb.meetgu.ru/rest/v1/rpc/settle_club_author_share",
+          "authentication": "predefinedCredentialType",
+          "nodeCredentialType": "supabaseApi",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ {p_order_id: $('UPD_ORDER').first().json.id,p_payment_id: String($('Webhook').first().json.body.order_id || ''),p_club_id: $('GET_CLUB').first().json.id,p_subscription_id: $('Supabase').first().json.id,p_amount: $('Webhook').first().json.body.sum,p_position_id: $('Supabase').first().json.id,p_position_name: $('Webhook').first().json.body['products[0][name]']} }}",
+          "options": {}
+        },
+        "credentialSource": "existing Supabase9 / Supabase11 / Supabase13, checked equal to BuyCourse server credential"
+      },
+      {
+        "name": "Code10",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "parameters": {
+          "method": "POST",
+          "url": "https://sb.meetgu.ru/rest/v1/rpc/settle_club_author_share",
+          "authentication": "predefinedCredentialType",
+          "nodeCredentialType": "supabaseApi",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ {p_order_id: $('UPD_ORDER2').first().json.id,p_payment_id: String($('Webhook').first().json.body.order_id || ''),p_club_id: $('GET_CLUB').first().json.id,p_subscription_id: $('Supabase8').first().json.id,p_amount: $('Webhook').first().json.body.sum,p_position_id: $('Supabase8').first().json.id,p_position_name: $('Webhook').first().json.body['products[0][name]']} }}",
+          "options": {}
+        },
+        "credentialSource": "existing Supabase9 / Supabase11 / Supabase13, checked equal to BuyCourse server credential"
+      }
+    ],
+    "disableNodes": [
+      "Supabase10",
+      "Code15",
+      "Supabase3",
+      "Supabase12",
+      "Code17",
+      "Supabase17",
+      "Supabase14",
+      "Code16",
+      "Supabase7"
+    ],
+    "replaceConnections": {
+      "Code8": {
+        "main": [
+          []
+        ]
+      },
+      "Code9": {
+        "main": [
+          []
+        ]
+      },
+      "Code10": {
+        "main": [
+          []
+        ]
+      }
+    }
+  }
+}
