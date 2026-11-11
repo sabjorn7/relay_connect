@@ -1,0 +1,137 @@
+{
+  "nodes": [
+    {
+      "name": "Code",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "return $json.course_positions.map(id => {\n  return { json: { id } }\n});"
+      }
+    },
+    {
+      "name": "GetPositions",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "parameters": {
+        "operation": "get",
+        "tableId": "shop",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "keyValue": "={{ $json.id }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "GetCourse",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "parameters": {
+        "operation": "get",
+        "tableId": "course",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "keyValue": "={{ $json.course_id }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "UsersCreater",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "parameters": {
+        "operation": "get",
+        "tableId": "users",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "keyValue": "={{ $json.owner }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "UsersBuyer",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "parameters": {
+        "operation": "get",
+        "tableId": "users",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "keyValue": "={{ $('GetPositions').item.json.owner }}"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "GetPositions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GetPositions": {
+      "main": [
+        [
+          {
+            "node": "GetCourse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GetCourse": {
+      "main": [
+        [
+          {
+            "node": "UsersCreater",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "UsersCreater": {
+      "main": [
+        [
+          {
+            "node": "UsersBuyer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "UsersBuyer": {
+      "main": [
+        [
+          {
+            "node": "BuildAllAccesses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

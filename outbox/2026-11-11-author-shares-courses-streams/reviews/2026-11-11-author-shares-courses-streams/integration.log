@@ -1,0 +1,24 @@
+PASS migration preserves old balances, sales, paid orders, accesses and receipts
+PASS both initial shares exactly copy the legacy author percentage
+PASS before-use rollback restores exact original financial RPC inside a rolled-back test transaction
+PASS existing user INSERT initializes both fields without client changes
+PASS admin edits only selected share with atomic audit; event percentage unchanged
+PASS guest/viewer cannot edit or insert financial rates directly or through admin RPC
+PASS events are excluded; bad category/range/missing reason rejected
+PASS course, live backing, standalone recording and event select the correct distinct rates
+PASS legacy event-labelled courses without events linkage retain legacy rate
+PASS four mixed positions and multiple authors receive exactly their own shares
+PASS BuyCourse duplicate callback never repeats money or access
+PASS parallel BuyCourse callback remains idempotent
+PASS stale n8n share plan fails atomically without mismatched credits or access
+PASS financial error still rolls back all BuyCourse sales, credits and access
+PASS historical paid order is not replayed or recalculated
+PASS zero and full author percentages have no truthy-default fallback
+PASS discounted shop price is used without recomputing catalog price or promotion
+PASS existing zero checkout remains compatible with selected category rates
+PASS real PostgREST exposes owner-admin editing and service-only financial rates
+PASS rollback refuses after new rates/credits were used and never undoes financial records
+PASS 1000 course=820, live=900, event=820 legacy, separate recording=820; each access/sale/credit once
+PASS club excluded: no field/RPC/receipt/history marking; club admin category denied
+{"pass": 22, "fail": 0, "results": [{"name": "migration preserves old balances, sales, paid orders, accesses and receipts", "status": "PASS"}, {"name": "both initial shares exactly copy the legacy author percentage", "status": "PASS"}, {"name": "before-use rollback restores exact original financial RPC inside a rolled-back test transaction", "status": "PASS"}, {"name": "existing user INSERT initializes both fields without client changes", "status": "PASS"}, {"name": "admin edits only selected share with atomic audit; event percentage unchanged", "status": "PASS"}, {"name": "guest/viewer cannot edit or insert financial rates directly or through admin RPC", "status": "PASS"}, {"name": "events are excluded; bad category/range/missing reason rejected", "status": "PASS"}, {"name": "course, live backing, standalone recording and event select the correct distinct rates", "status": "PASS"}, {"name": "legacy event-labelled courses without events linkage retain legacy rate", "status": "PASS"}, {"name": "four mixed positions and multiple authors receive exactly their own shares", "status": "PASS"}, {"name": "BuyCourse duplicate callback never repeats money or access", "status": "PASS"}, {"name": "parallel BuyCourse callback remains idempotent", "status": "PASS"}, {"name": "stale n8n share plan fails atomically without mismatched credits or access", "status": "PASS"}, {"name": "financial error still rolls back all BuyCourse sales, credits and access", "status": "PASS"}, {"name": "historical paid order is not replayed or recalculated", "status": "PASS"}, {"name": "zero and full author percentages have no truthy-default fallback", "status": "PASS"}, {"name": "discounted shop price is used without recomputing catalog price or promotion", "status": "PASS"}, {"name": "existing zero checkout remains compatible with selected category rates", "status": "PASS"}, {"name": "real PostgREST exposes owner-admin editing and service-only financial rates", "status": "PASS"}, {"name": "rollback refuses after new rates/credits were used and never undoes financial records", "status": "PASS"}, {"name": "1000 course=820, live=900, event=820 legacy, separate recording=820; each access/sale/credit once", "status": "PASS"}, {"name": "club excluded: no field/RPC/receipt/history marking; club admin category denied", "status": "PASS"}]}
+Temporary PostgreSQL/PostgREST stopped

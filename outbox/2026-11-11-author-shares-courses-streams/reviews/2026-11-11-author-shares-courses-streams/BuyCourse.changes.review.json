@@ -1,0 +1,73 @@
+{
+  "reviewOnly": true,
+  "importable": false,
+  "workflow": "BuyCourse",
+  "changedNodes": [
+    {
+      "id": "payment-build-all-accesses",
+      "name": "BuildAllAccesses",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        600
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "function buildAuthorSharePlan(order, positions, courses, authors, rates) {\n    if (!order?.id || !order.owner || !Array.isArray(order.course_positions) || !order.course_positions.length) throw new Error('Invalid course order');\n    if (new Set(order.course_positions).size !== order.course_positions.length) throw new Error('Duplicate shop position');\n    if (!Array.isArray(rates)) throw new Error('Missing server shares');\n    return order.course_positions.map(id => {\n        const matches = positions.filter(p => p.id === id);\n        if (matches.length !== 1) throw new Error('Missing or ambiguous shop position');\n        const position = matches[0];\n        if (position.owner !== order.owner) throw new Error('Buyer mismatch');\n        const course = courses.find(c => c.id === position.course_id);\n        const author = course && authors.find(a => a.id === course.owner);\n        const found = rates.filter(r => r.course_id === course?.id);\n        if (!course || !author || found.length !== 1 || found[0].author_id !== author.id) throw new Error('Missing or ambiguous author share');\n        const share = found[0];\n        if (!['courses','streams','events'].includes(share.category) || !Number.isFinite(share.percent) || share.percent < 0 || share.percent > 100 || (position.price !== null && !Number.isFinite(position.price))) throw new Error('Invalid financial snapshot');\n        const authorAmount = (position.price * share.percent / 100).toFixed(2);\n        if (!/^-?\\d+\\.\\d{2}$/.test(authorAmount)) throw new Error('Invalid author amount');\n        return { shop_id:id, course_id:course.id, author_id:author.id, price:position.price, author_commission:share.percent, author_amount:authorAmount };\n    });\n}\nconst order=$('CheckPaid').first().json;\nconst plan=buildAuthorSharePlan(order,$('GetPositions').all().map(i=>i.json),$('GetCourse').all().map(i=>i.json),$('UsersCreater').all().map(i=>i.json),$('GetAuthorShares').first().json.rates);\nreturn [{json:{plan},pairedItem:{item:0}}];"
+      }
+    },
+    {
+      "id": "abafdc4b-05ef-43d5-b32b-d008228f1d36",
+      "name": "GetAuthorShares",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1220,
+        600
+      ],
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "EXISTING_SERVER_CREDENTIAL",
+          "name": "PRESERVE_EXISTING"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "https://sb.meetgu.ru/rest/v1/rpc/get_order_author_shares",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {p_order_id: $('CheckPaid').first().json.id} }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "UsersBuyer": {
+      "main": [
+        [
+          {
+            "node": "GetAuthorShares",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GetAuthorShares": {
+      "main": [
+        [
+          {
+            "node": "BuildAllAccesses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "subscription": "UNCHANGED"
+}

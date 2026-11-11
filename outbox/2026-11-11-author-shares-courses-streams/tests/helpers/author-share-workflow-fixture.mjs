@@ -1,0 +1,6 @@
+import fs from 'node:fs';
+export const baseline=JSON.parse(fs.readFileSync(new URL('../../reviews/2026-11-10-author-shares/baseline/financial-nodes.json',import.meta.url)));
+export const credential={supabaseApi:{id:'synthetic-server-id',name:'synthetic-server'}};
+export function fixture(){const out={};for(const name of ['BuyCourse','subscription']){const b=baseline.workflows[name];out[name]={id:b.id,name,active:true,settings:{timezone:'UTC',saveDataErrorExecution:'all'},nodes:b.nodes.map(n=>({...structuredClone(n),id:'id-'+n.name,position:[100,100],credentials:structuredClone(credential)})),connections:structuredClone(b.edges),pinData:{SyntheticOnly:[{json:{fixture:true}}]}};}
+ for(const name of ['Supabase9','Supabase11','Supabase13'])out.subscription.nodes.push({id:name,name,type:'n8n-nodes-base.supabase',typeVersion:1,parameters:{tableId:'users',operation:'get'},credentials:structuredClone(credential)});
+ for(const [w,name] of [[out.BuyCourse,'Webhook'],[out.subscription,'Webhook']])w.nodes.push({id:'synthetic-webhook-id',name,type:'n8n-nodes-base.webhook',webhookId:'synthetic-webhook',parameters:{path:'synthetic-protected-path',responseMode:'onReceived'},credentials:{httpHeaderAuth:{id:'synthetic-auth'}}});return out;}

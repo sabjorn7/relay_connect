@@ -1,0 +1,335 @@
+{
+  "sourceMain": "36d3798f151cc9706d4921536e4eda6ad5d5a67a",
+  "workflows": {
+    "BuyCourse": {
+      "id": "6rEQ42XwaLMFcvbB",
+      "updatedAt": "2026-11-07T09:10:00.059Z",
+      "nodes": [
+        {
+          "name": "BuildAllAccesses",
+          "type": "n8n-nodes-base.code",
+          "typeVersion": 2,
+          "parameters": {
+            "mode": "runOnceForAllItems",
+            "jsCode": "function buildOrderAccessPlan(order, positions, courses, authors) {\n    if (!order?.id || !order.owner || !Array.isArray(order.course_positions) || !order.course_positions.length) {\n        throw new Error('Invalid course order');\n    }\n    if (new Set(order.course_positions).size !== order.course_positions.length) throw new Error('Duplicate shop position');\n    return order.course_positions.map(id => {\n        const matches = positions.filter(p => p.id === id);\n        if (matches.length !== 1) throw new Error('Missing or ambiguous shop position');\n        const position = matches[0];\n        if (position.owner !== order.owner) throw new Error('Buyer mismatch');\n        const course = courses.find(c => c.id === position.course_id);\n        const author = course && authors.find(a => a.id === course.owner);\n        if (!course || !author) throw new Error('Missing course or author');\n        if ((position.price !== null && !Number.isFinite(position.price))\n            || (author.authorCommission !== null && !Number.isFinite(author.authorCommission))) {\n            throw new Error('Invalid financial snapshot');\n        }\n        // EXACT production Create_Sales formula, including JS floating-point/toFixed\n        // rounding and null -> zero. Never replace it silently with SQL round(numeric).\n        const authorAmount = (position.price * author.authorCommission / 100).toFixed(2);\n        if (!/^-?\\d+\\.\\d{2}$/.test(authorAmount)) throw new Error('Invalid author amount');\n        return {\n            shop_id: id, course_id: course.id, author_id: author.id,\n            price: position.price, author_commission: author.authorCommission,\n            author_amount: authorAmount,\n        };\n    });\n}\nconst order = $('CheckPaid').first().json;\nconst plan = buildOrderAccessPlan(order, $('GetPositions').all().map(i => i.json), $('GetCourse').all().map(i => i.json), $('UsersCreater').all().map(i => i.json));\nreturn [{json:{plan},pairedItem:{item:0}}];"
+          }
+        },
+        {
+          "name": "FulfillAllAccesses",
+          "type": "n8n-nodes-base.httpRequest",
+          "typeVersion": 4.2,
+          "parameters": {
+            "method": "POST",
+            "url": "https://sb.meetgu.ru/rest/v1/rpc/fulfill_paid_course_order",
+            "authentication": "predefinedCredentialType",
+            "nodeCredentialType": "supabaseApi",
+            "sendBody": true,
+            "specifyBody": "json",
+            "jsonBody": "={{ {\n  p_order_id: $('CheckPaid').first().json.id,\n  p_payment_id: String($('Shop').first().json.body.order_id || ''),\n  p_proof_id: $('AuditWarn').first().json.id,\n  p_access_plan: $json.plan\n} }}",
+            "options": {}
+          }
+        }
+      ],
+      "edges": {
+        "UsersBuyer": {
+          "main": [
+            [
+              {
+                "node": "BuildAllAccesses",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        }
+      }
+    },
+    "subscription": {
+      "id": "hnNx3nH9FV0RjMks",
+      "updatedAt": "2026-05-07T14:29:10.000Z",
+      "nodes": [
+        {
+          "name": "Code8",
+          "type": "n8n-nodes-base.code",
+          "typeVersion": 2,
+          "parameters": {
+            "jsCode": "const a = $('Webhook').first().json.body.sum;   // первая цифра\nconst mul = 0.82;                         // множитель\nconst b = $input.first().json.Ammount;  // второе число\n\nlet total = a * mul + b;\n\n// округление до 2 знаков после запятой\ntotal = Number(total.toFixed(2));\n\nreturn [\n  {\n    json: {\n      total,\n    },\n  },\n];"
+          }
+        },
+        {
+          "name": "Supabase10",
+          "type": "n8n-nodes-base.supabase",
+          "typeVersion": 1,
+          "parameters": {
+            "operation": "update",
+            "tableId": "users",
+            "filters": {
+              "conditions": [
+                {
+                  "keyName": "id",
+                  "condition": "eq",
+                  "keyValue": "={{ $('Supabase9').item.json.id }}"
+                }
+              ]
+            },
+            "fieldsUi": {
+              "fieldValues": [
+                {
+                  "fieldId": "Ammount",
+                  "fieldValue": "={{ $json.total }}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Code9",
+          "type": "n8n-nodes-base.code",
+          "typeVersion": 2,
+          "parameters": {
+            "jsCode": "const a = $('Webhook').first().json.body.sum;   // первая цифра\nconst mul = 0.82;                         // множитель\nconst b = $input.first().json.Ammount;  // второе число\n\nlet total = a * mul + b;\n\n// округление до 2 знаков после запятой\ntotal = Number(total.toFixed(2));\n\nreturn [\n  {\n    json: {\n      total,\n    },\n  },\n];"
+          }
+        },
+        {
+          "name": "Supabase12",
+          "type": "n8n-nodes-base.supabase",
+          "typeVersion": 1,
+          "parameters": {
+            "operation": "update",
+            "tableId": "users",
+            "filters": {
+              "conditions": [
+                {
+                  "keyName": "id",
+                  "condition": "eq",
+                  "keyValue": "={{ $('Supabase11').item.json.id }}"
+                }
+              ]
+            },
+            "fieldsUi": {
+              "fieldValues": [
+                {
+                  "fieldId": "Ammount",
+                  "fieldValue": "={{ $json.total }}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Code10",
+          "type": "n8n-nodes-base.code",
+          "typeVersion": 2,
+          "parameters": {
+            "jsCode": "const a = $('Webhook').first().json.body.sum;   // первая цифра\nconst mul = 0.82;                         // множитель\nconst b = $input.first().json.Ammount;  // второе число\n\nlet total = a * mul + b;\n\n// округление до 2 знаков после запятой\ntotal = Number(total.toFixed(2));\n\nreturn [\n  {\n    json: {\n      total,\n    },\n  },\n];"
+          }
+        },
+        {
+          "name": "Supabase14",
+          "type": "n8n-nodes-base.supabase",
+          "typeVersion": 1,
+          "parameters": {
+            "operation": "update",
+            "tableId": "users",
+            "filters": {
+              "conditions": [
+                {
+                  "keyName": "id",
+                  "condition": "eq",
+                  "keyValue": "={{ $('Supabase13').item.json.id }}"
+                }
+              ]
+            },
+            "fieldsUi": {
+              "fieldValues": [
+                {
+                  "fieldId": "Ammount",
+                  "fieldValue": "={{ $json.total }}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Code15",
+          "type": "n8n-nodes-base.code",
+          "typeVersion": 2,
+          "parameters": {
+            "jsCode": "const a = $('Webhook').first().json.body.sum;   // первая цифра\nconst mul = 0.82;                         // множитель\n\nlet total = a * mul;\n\n// округление до 2 знаков после запятой\ntotal = Number(total.toFixed(2));\n\nreturn [\n  {\n    json: {\n      total,\n    },\n  },\n];"
+          }
+        },
+        {
+          "name": "Supabase3",
+          "type": "n8n-nodes-base.supabase",
+          "typeVersion": 1,
+          "parameters": {
+            "tableId": "sales",
+            "fieldsUi": {
+              "fieldValues": [
+                {
+                  "fieldId": "user",
+                  "fieldValue": "={{ $('Supabase9').item.json.id }}"
+                },
+                {
+                  "fieldId": "amount",
+                  "fieldValue": "={{ $json.total }}"
+                },
+                {
+                  "fieldId": "price",
+                  "fieldValue": "={{ $('Webhook').item.json.body.sum }}"
+                },
+                {
+                  "fieldId": "position",
+                  "fieldValue": "={{ $('GET_CLUB').item.json.id }}"
+                },
+                {
+                  "fieldId": "position_name",
+                  "fieldValue": "={{ $('Code18').item.json.Prolong }}"
+                },
+                {
+                  "fieldId": "position_category",
+                  "fieldValue": "Подписка"
+                },
+                {
+                  "fieldId": "sub",
+                  "fieldValue": "TRUE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Code16",
+          "type": "n8n-nodes-base.code",
+          "typeVersion": 2,
+          "parameters": {
+            "jsCode": "const a = $('Webhook').first().json.body.sum;   // первая цифра\nconst mul = 0.82;                         // множитель\n\nlet total = a * mul;\n\n// округление до 2 знаков после запятой\ntotal = Number(total.toFixed(2));\n\nreturn [\n  {\n    json: {\n      total,\n    },\n  },\n];"
+          }
+        },
+        {
+          "name": "Supabase7",
+          "type": "n8n-nodes-base.supabase",
+          "typeVersion": 1,
+          "parameters": {
+            "tableId": "sales",
+            "fieldsUi": {
+              "fieldValues": [
+                {
+                  "fieldId": "user",
+                  "fieldValue": "={{ $('Supabase13').item.json.id }}"
+                },
+                {
+                  "fieldId": "amount",
+                  "fieldValue": "={{ $json.total }}"
+                },
+                {
+                  "fieldId": "price",
+                  "fieldValue": "={{ $('Webhook').item.json.body.sum }}"
+                },
+                {
+                  "fieldId": "position",
+                  "fieldValue": "={{ $('Supabase8').item.json.id }}"
+                },
+                {
+                  "fieldId": "position_name",
+                  "fieldValue": "={{ $('Webhook').item.json.body['products[0][name]'] }}"
+                },
+                {
+                  "fieldId": "position_category",
+                  "fieldValue": "Подписка"
+                },
+                {
+                  "fieldId": "sub",
+                  "fieldValue": "TRUE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Code17",
+          "type": "n8n-nodes-base.code",
+          "typeVersion": 2,
+          "parameters": {
+            "jsCode": "const a = $('Webhook').first().json.body.sum;   // первая цифра\nconst mul = 0.82;                         // множитель\n\nlet total = a * mul;\n\n// округление до 2 знаков после запятой\ntotal = Number(total.toFixed(2));\n\nreturn [\n  {\n    json: {\n      total,\n    },\n  },\n];"
+          }
+        },
+        {
+          "name": "Supabase17",
+          "type": "n8n-nodes-base.supabase",
+          "typeVersion": 1,
+          "parameters": {
+            "tableId": "sales",
+            "fieldsUi": {
+              "fieldValues": [
+                {
+                  "fieldId": "user",
+                  "fieldValue": "={{ $('Supabase11').item.json.id }}"
+                },
+                {
+                  "fieldId": "amount",
+                  "fieldValue": "={{ $json.total }}"
+                },
+                {
+                  "fieldId": "price",
+                  "fieldValue": "={{ $('Webhook').item.json.body.sum }}"
+                },
+                {
+                  "fieldId": "position",
+                  "fieldValue": "={{ $('Supabase').item.json.id }}"
+                },
+                {
+                  "fieldId": "position_name",
+                  "fieldValue": "={{ $('Webhook').item.json.body['products[0][name]'] }}"
+                },
+                {
+                  "fieldId": "position_category",
+                  "fieldValue": "Подписка"
+                },
+                {
+                  "fieldId": "sub",
+                  "fieldValue": "TRUE"
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "edges": {
+        "Supabase9": {
+          "main": [
+            [
+              {
+                "node": "Code8",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Supabase11": {
+          "main": [
+            [
+              {
+                "node": "Code9",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Supabase13": {
+          "main": [
+            [
+              {
+                "node": "Code10",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        }
+      }
+    }
+  }
+}
