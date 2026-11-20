@@ -1,0 +1,78 @@
+MeetGuru — минимальный HTML-прелоадер, локальная реализация
+Дата: 20.11.2026
+База: b8dd2f7015bbca40cdb633fbc31be5f008841640.
+Ветка: feat/boot-loader-minimal-20261120.
+Рабочая копия: /private/tmp/mg-boot-loader-minimal-20261120.
+Коммит, push, деплой и изменения production не выполнялись.
+
+Результат: ГОТОВО к отдельному согласованию публикации.
+
+Изменённые файлы:
+1. template.html — встроенный текстовый логотип meetguru. (как в существующей шапке), системный шрифт, подпись «Загружаем платформу», indeterminate CSS-индикатор; reduced motion; status/aria-live, доступное имя логотипа. Кнопка watchdog «Повторить загрузку», видимый фокус, touch target >=44px, блокировка повторного нажатия; при исключении reload кнопка разблокируется. При отключённом JS placeholder скрыт, остаётся существующий noscript.
+2. tests/boot-timeout-diagnostic.browser.mjs — корректный выбор main-*.js вместо первого module helper; скриншоты, мобильная компоновка, reduced motion, фокус, исчезновение loader. Service Workers в стенде заблокированы.
+3. tests/boot-loader-recovery.browser.mjs (новый) — normal, main abort, pending router, late init, ручное восстановление клавиатурой.
+4. tests/boot-loader.unit.mjs (новый) — проверка неизменности watchdog и диагностики, отсутствия добавленных таймеров, double click, исключения reload и удаления overlay после mount.
+Дополнительно: этот отчёт, diff, безопасные логи результатов и PNG в reviews/2026-11-20-boot-loader/.
+
+Что сохранено:
+- Плейсхолдер внутри #app; Vue естественно удаляет его при mount. Нового внешнего overlay/gate/inert нет.
+- Единственный watchdog 15000 мс, прежняя freeze/rearm-логика и boot_timeout. Unit сравнивает соответствующие блоки с HEAD побайтово.
+- CSS render-unblock через 5000 мс и вся стратегия загрузки CSS/JS.
+- Общий транспорт диагностики, выборка, выключатель, лимит попыток и дедупликация.
+- Нет дополнительного JS-таймера, автоматического reload и повторного app.mount.
+- Auth/email/VK, checkout, PeerTube и серверы не менялись.
+
+Проверки:
+Chrome: 8 сценариев основной матрицы + 5 восстановления — PASS.
+WebKit: 8 сценариев основной матрицы + 5 восстановления — PASS.
+Проверены нормальный старт, медленный main >15 секунд, 404, connection reset,
+зависание initFront и router.isReady, поздний mount, ручной reload после исправления сети,
+выключенный сбор, ручная диагностика, 1000 повторов boot() без дубликатов,
+фон/сон (виртуальные часы) и существующая CSS-разблокировка.
+После позднего запуска #mg-boot-loading и #mg-boot-msg отсутствуют.
+Успешный старт — 0 аварийных отчётов. При подтверждённом pre-mount сбое — один boot_timeout.
+Ручное восстановление — ровно 2 загрузки документа, не цикл.
+
+UI в обоих движках:
+- 320, 390 и 1440px: loader виден, горизонтального переполнения нет.
+- reduced motion: computed animationName=none; обычный режим: mg-boot-travel.
+- клавиатура: Chrome Tab + Enter; WebKit Option+Tab + Enter при стандартной политике macOS.
+- focus-visible outline и размер кнопки проверены.
+- Визуально просмотрены мобильный и desktop loader, экран ошибки с фокусом.
+- Никаких новых внешних шрифтов/изображений/CSS для прелоадера.
+
+Регрессии на текущих исходниках с синтетическими API:
+- Auth/email/VK Chrome: 26 PASS.
+- Checkout Chrome: 12 PASS; реальных списаний, заказов и выдачи доступа нет.
+- Email helper unit: 6 PASS.
+- FreezeGuard unit: 11 PASS.
+- Новый boot-loader unit: PASS.
+- node --check тестов, git diff --check и проверка обратной применимости diff: PASS.
+- ./node_modules/.bin/vite build -l warn: PASS. Это сборка приложения без npm postbuild/SEO и без production-запросов.
+
+Уточнения стенда:
+Первый запуск под sandbox не смог открыть localhost; проверки повторены с разрешением.
+Первый WebKit screenshot ждал посторонние шрифты приложения. В тестовом процессе отключено ожидание fonts.ready только для скриншотов независимого system-font loader. Приложение и его загрузка шрифтов не менялись.
+Ожидание фокуса по обычному Tab в WebKit заменено на штатный Option+Tab; искусственное focus() не использовано. Финальные прогоны обеих матриц — PASS.
+
+Накладные расходы:
+Дополнение template.html: 2032 байта, разница gzip около 677 байт.
+Новых сетевых запросов и JS-таймеров нет. Анимация одного небольшого элемента через transform; после mount элемент исчезает. Отдельный CPU benchmark не выполнялся.
+
+Ограничения:
+- WebKit Playwright не заменяет испытание физического iPhone; физический Android также не использовался.
+- Проверка доступности по семантике/клавиатуре; отдельный VoiceOver-прогон не выполнялся.
+- Прежняя задержка first paint блокирующим CSS до render-unblock остаётся: стратегия загрузки не менялась.
+- Прелоадер не исправляет потерю сети/доставки JS или задержку getSession; только делает ожидание понятнее.
+- Тесты используют уже доступную внешнюю установку Playwright; зависимости проекта не менялись.
+
+Скриншоты:
+chrome-loading-320.png, chrome-loading-390.png, chrome-loading-1440.png;
+webkit-loading-320.png, webkit-loading-390.png, webkit-loading-1440.png;
+chrome-reduced-motion.png, webkit-reduced-motion.png;
+chrome-timeout-keyboard.png, webkit-timeout-keyboard.png.
+
+Публикация:
+До неё отдельно согласовать commit/push/Deploy App, сверить актуальный main.
+Из продуктового кода публиковать только template.html; тесты и отчёт — сопутствующие материалы.
+Откат будущей публикации: вернуть template.html из исходного рабочего релиза и выполнить отдельно согласованный штатный frontend-деплой. Сейчас откат production не требуется.
