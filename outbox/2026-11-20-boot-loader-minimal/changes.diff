@@ -1,0 +1,236 @@
+diff --git a/template.html b/template.html
+index b61eccf..cba63aa 100644
+--- a/template.html
++++ b/template.html
+@@ -3,6 +3,20 @@
+     <head>
+         <meta charset="utf-8" />
+         <meta http-equiv="X-UA-Compatible" content="IE=edge" />
++        <style>
++            /* Standalone HTML placeholder; Vue replaces it when #app mounts. */
++            #mg-boot-loading { box-sizing:border-box; min-height:100vh; min-height:100svh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:32px 24px; background:#fff; color:#1f2733; text-align:center; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
++            #mg-boot-loading .mg-boot-logo { font-size:38px; line-height:1.2; font-weight:800; letter-spacing:-.03em; }
++            #mg-boot-loading .mg-boot-logo span { color:#2563eb; }
++            #mg-boot-loading .mg-boot-caption { margin:18px 0 0; color:#526174; font-size:16px; line-height:1.5; }
++            #mg-boot-loading .mg-boot-track { width:80px; height:3px; margin-top:28px; overflow:hidden; border-radius:3px; background:#e2e8f0; }
++            #mg-boot-loading .mg-boot-track::after { content:""; display:block; width:32px; height:100%; border-radius:inherit; background:#2563eb; animation:mg-boot-travel 1.4s ease-in-out infinite alternate; }
++            @keyframes mg-boot-travel { from { transform:translateX(0); } to { transform:translateX(48px); } }
++            #mg-boot-msg button { min-height:44px; max-width:100%; }
++            #mg-boot-msg button:focus-visible { outline:3px solid #1f2733; outline-offset:4px; }
++            #mg-boot-msg button:disabled { opacity:.65; cursor:wait!important; }
++            @media (prefers-reduced-motion:reduce) { #mg-boot-loading .mg-boot-track::after { animation:none; transform:translateX(24px); } }
++        </style>
+         <script>
+         /* boot watchdog: if the app hasn't mounted in 15s (bundle didn't load / auth stalled / white
+            screen), fire a GET beacon to /_l with what loaded — the in-bundle logger can't report a
+@@ -106,15 +120,19 @@
+                 }
+                 // На legacy-браузере (nomodule уже показал «браузер устарел») оверлей НЕ показываем.
+                 // Если уже показан экран ошибки загрузки (#mg-load-error из роутера) — тоже не рисуем,
+-                // чтобы два оверлея не наложились. Иначе — сообщение + кнопка «Обновить» (БЕЗ
++                // чтобы два оверлея не наложились. Иначе — сообщение + кнопка «Повторить загрузку» (БЕЗ
+                 // автоповторов); снять при позднем монтировании (boot_late).
+                 if (!window.__mgLegacy && !document.getElementById('mg-boot-msg') && !document.getElementById('mg-load-error')) {
+                   var box = document.createElement('div'); box.id = 'mg-boot-msg';
+-                  box.setAttribute('style', 'position:fixed;inset:0;z-index:2147483000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:#fff;color:#1f2733;text-align:center;padding:24px;font:16px/1.45 Raleway,system-ui,-apple-system,sans-serif');
+-                  box.innerHTML = '<div>Сайт загружается дольше обычного.<br>Проверьте соединение.</div>';
+-                  var btn = document.createElement('button'); btn.type = 'button'; btn.textContent = 'Обновить';
+-                  btn.setAttribute('style', 'padding:11px 22px;border:none;border-radius:8px;cursor:pointer;color:#fff;background:#2563eb;font:600 16px Raleway,system-ui,sans-serif');
+-                  btn.onclick = function () { location.reload(); };
++                  box.setAttribute('style', 'position:fixed;inset:0;z-index:2147483000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:#fff;color:#1f2733;text-align:center;padding:24px;font:16px/1.45 system-ui,-apple-system,sans-serif');
++                  box.innerHTML = '<div role="alert">Сайт загружается дольше обычного.<br>Проверьте соединение.</div>';
++                  var btn = document.createElement('button'); btn.type = 'button'; btn.textContent = 'Повторить загрузку';
++                  btn.setAttribute('style', 'padding:11px 22px;border:none;border-radius:8px;cursor:pointer;color:#fff;background:#2563eb;font:600 16px system-ui,-apple-system,sans-serif');
++                  btn.onclick = function () {
++                    if (btn.disabled) return;
++                    btn.disabled = true;
++                    try { location.reload(); } catch (e) { btn.disabled = false; }
++                  };
+                   box.appendChild(btn); document.body.appendChild(box);
+                   var poll = setInterval(function () {
+                     if (window.__mgMounted) { clearInterval(poll); var e = document.getElementById('mg-boot-msg'); if (e && e.parentNode) e.parentNode.removeChild(e); }
+@@ -336,12 +354,17 @@
+     </head>
+     <body style="margin: 0; font-family: var(--ww-default-font-family, unset)">
+         <noscript>
++            <style>#mg-boot-loading { display:none; }</style>
+             <strong>
+                 We're sorry but this website doesn't work properly without JavaScript enabled. Please enable it to
+                 continue.
+             </strong>
+         </noscript>
+-        <div id="app"><div id="mg-boot-loading" style="min-height:60vh;display:flex;align-items:center;justify-content:center;color:#94a3b8;font:15px/1.4 Raleway,system-ui,-apple-system,sans-serif">Загрузка…</div></div>
++        <div id="app"><div id="mg-boot-loading" role="status" aria-live="polite" aria-atomic="true">
++            <div class="mg-boot-logo" role="img" aria-label="MeetGuru">meetguru<span aria-hidden="true">.</span></div>
++            <p class="mg-boot-caption">Загружаем платформу</p>
++            <div class="mg-boot-track" aria-hidden="true"></div>
++        </div></div>
+         {{{scripts.body}}}
+         <script type="module" src="/src/_front/main.js"></script>
+         <script nomodule>
+diff --git a/tests/boot-timeout-diagnostic.browser.mjs b/tests/boot-timeout-diagnostic.browser.mjs
+index 2104aac..2bcda0d 100644
+--- a/tests/boot-timeout-diagnostic.browser.mjs
++++ b/tests/boot-timeout-diagnostic.browser.mjs
+@@ -1,9 +1,11 @@
+ // Actual built application + unmodified inline watchdog. Faults injected only in local browser.
+ import fs from 'node:fs';import path from 'node:path';import http from 'node:http';import assert from 'node:assert/strict';
+ import {chromium,webkit} from '/private/tmp/mg-browser-tools-kFSaYv/node_modules/playwright/index.mjs';
++// Capture the independent system-font loader without waiting for unrelated application fonts.
++process.env.PW_TEST_SCREENSHOT_NO_FONTS_READY='1';
+ const root=new URL('../dist/',import.meta.url).pathname;
+ const html=fs.readFileSync(path.join(root,'all_course/index.html'),'utf8');
+-const entry=html.match(/<script\b[^>]*type="module"[^>]*src="([^"]+)"/)[1];
++const entry=[...html.matchAll(/<script\b[^>]*type="module"[^>]*src="([^"]+)"/g)].map(m=>m[1]).find(src=>/\/main-[^/]+\.js$/.test(src));
+ const css=[...html.matchAll(/<link\b[^>]*rel="stylesheet"[^>]*href="([^"]+)"/g)].map(m=>m[1]);
+ assert(entry.includes('/assets/'));assert(css.length);
+ let localFixture;
+@@ -19,9 +21,10 @@ await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.
+ const isWebkit=process.argv.includes('--webkit');
+ const browser=isWebkit?await webkit.launch({headless:true}):await chromium.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});
+ const results=[];
++const artifacts=new URL('../reviews/2026-11-20-boot-loader/',import.meta.url).pathname;fs.mkdirSync(artifacts,{recursive:true});
+ try{
+  for(const kind of ['slow-main-js','failed-main-js','slow-css','pending-init-front','disabled-server','manual-mode'].filter(x=>!process.argv.some(a=>a.startsWith('--case='))||process.argv.includes('--case='+x))){
+-  const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
++  const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,serviceWorkers:'block'});
+   const observations={kind,configRequests:0,automaticReports:0,legacyBoot:0,legacyLate:0};let release;localFixture=observations;
+   const gate=new Promise(r=>release=r);
+   await context.route('**/*',async route=>{
+@@ -41,7 +44,33 @@ try{
+   });
+   const page=await context.newPage();
+   await page.goto(origin+'/all_course/'+(kind==='manual-mode'?'?mg_loading_diag=1':''),{waitUntil:'commit',timeout:10000});
++  if(kind==='slow-main-js') {
++   await page.waitForTimeout(500);
++   assert.equal(await page.locator('#mg-boot-loading').getAttribute('role'),'status');
++   assert.equal(await page.locator('.mg-boot-caption').textContent(),'Загружаем платформу');
++   for(const width of [320,390,1440]) {
++    await page.setViewportSize({width,height:width===1440?900:844});
++    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
++    assert(await page.locator('#mg-boot-loading').isVisible());
++    await page.screenshot({path:path.join(artifacts,`${isWebkit?'webkit':'chrome'}-loading-${width}.png`)});
++   }
++   await page.emulateMedia({reducedMotion:'reduce'});
++   assert.equal(await page.locator('.mg-boot-track').evaluate(el=>getComputedStyle(el,'::after').animationName),'none');
++   await page.screenshot({path:path.join(artifacts,`${isWebkit?'webkit':'chrome'}-reduced-motion.png`)});
++   await page.emulateMedia({reducedMotion:'no-preference'});
++   assert.equal(await page.locator('.mg-boot-track').evaluate(el=>getComputedStyle(el,'::after').animationName),'mg-boot-travel');
++   await page.setViewportSize({width:390,height:844});
++  }
+   await page.waitForTimeout(16500);
++  if(kind==='slow-main-js') {
++   const button=page.locator('#mg-boot-msg button');
++   assert.equal(await button.textContent(),'Повторить загрузку');
++   await page.keyboard.press(isWebkit?'Alt+Tab':'Tab');
++   assert(await button.evaluate(el=>el===document.activeElement));
++   assert.equal(await button.evaluate(el=>getComputedStyle(el).outlineStyle),'solid');
++   assert((await button.boundingBox()).height>=44);
++   await page.screenshot({path:path.join(artifacts,`${isWebkit?'webkit':'chrome'}-timeout-keyboard.png`)});
++  }
+   Object.assign(observations,await page.evaluate(()=>({mounted:window.__mgMounted,fired:window.__mgBootFired,overlay:!!document.getElementById('mg-boot-msg'),message:document.getElementById('mg-boot-msg')?.textContent,readyState:document.readyState,visibility:document.visibilityState,initBlocked:!!window.__fixtureInitBlocked,reattachedCSS:document.querySelectorAll('[data-mg-reattached]').length,transportState:window.__mgSessionTransportV1?(({selected,stopped,attempts,phase,bootObserved,busy})=>({selected,stopped,attempts,phase,bootObserved,busy}))(window.__mgSessionTransportV1.state()):null})));
+   console.log(JSON.stringify({checkpoint:observations}));
+   if(kind!=='slow-css'){assert(observations.overlay);assert(observations.message.includes('Сайт загружается дольше обычного'));assert.equal(observations.legacyBoot,kind==='manual-mode'?1:0);}
+@@ -51,11 +80,11 @@ try{
+   if(kind==='slow-css')assert(observations.reattachedCSS>0);
+   if(kind==='failed-main-js'){await page.evaluate(()=>{for(let i=0;i<1000;i++)window.__mgSessionTransportV1.boot(true);});await page.waitForTimeout(200);assert.equal(observations.automaticReports,1);}
+   delete observations.message;results.push(observations);console.log(JSON.stringify(observations));
+-  release();if(kind==='slow-main-js'){await page.waitForTimeout(2000);assert.equal(await page.evaluate(()=>window.__mgMounted),true);assert.equal(observations.automaticReports,1);assert.equal(observations.legacyLate,0);assert.equal(await page.evaluate(()=>window.__mgSessionTransportV1.state().attempts),1);console.log(JSON.stringify({kind:'late-js',mounted:true,automaticReports:observations.automaticReports,sharedAttempts:1}));}
++  release();if(kind==='slow-main-js'){await page.waitForTimeout(2000);assert.equal(await page.evaluate(()=>window.__mgMounted),true);assert.equal(await page.locator('#mg-boot-loading, #mg-boot-msg').count(),0);assert.equal(observations.automaticReports,1);assert.equal(observations.legacyLate,0);assert.equal(await page.evaluate(()=>window.__mgSessionTransportV1.state().attempts),1);console.log(JSON.stringify({kind:'late-js',mounted:true,automaticReports:observations.automaticReports,sharedAttempts:1}));}
+   await context.close();
+  }
+  for (const mode of ['hidden-resume','sleep-jump']) {
+-  const context=await browser.newContext();localFixture={kind:mode,configRequests:0,automaticReports:0};
++  const context=await browser.newContext({serviceWorkers:'block'});localFixture={kind:mode,configRequests:0,automaticReports:0};
+   await context.addInitScript(()=>{window.__testHidden=false;Object.defineProperty(document,'visibilityState',{get:()=>window.__testHidden?'hidden':'visible'});});
+   await context.route('**/*',route=>{
+    const u=new URL(route.request().url());
+diff --git a/tests/boot-loader-recovery.browser.mjs b/tests/boot-loader-recovery.browser.mjs
+new file mode 100644
+index 0000000..cdf9626
+--- /dev/null
++++ b/tests/boot-loader-recovery.browser.mjs
+@@ -0,0 +1,47 @@
++// Actual built application + unmodified inline watchdog. Faults injected only in local browser.
++import fs from 'node:fs';import path from 'node:path';import http from 'node:http';import assert from 'node:assert/strict';
++import {chromium,webkit} from '/private/tmp/mg-browser-tools-kFSaYv/node_modules/playwright/index.mjs';
++const root=new URL('../dist/',import.meta.url).pathname;
++const html=fs.readFileSync(path.join(root,'all_course/index.html'),'utf8');
++const entry=[...html.matchAll(/<script\b[^>]*type="module"[^>]*src="([^"]+)"/g)].map(m=>m[1]).find(s=>/\/main-[^/]+\.js$/.test(s));
++const css=[...html.matchAll(/<link\b[^>]*rel="stylesheet"[^>]*href="([^"]+)"/g)].map(m=>m[1]);
++assert(entry.includes('/assets/'));assert(css.length);
++let localFixture;
++const server=http.createServer((req,res)=>{
++ const u=new URL(req.url,'http://localhost');
++ if(u.pathname==='/_t/session-diagnostic.json'){localFixture.configRequests++;res.setHeader('Content-Type','application/json');return res.end(JSON.stringify({version:1,enabled:localFixture.kind!=='disabled-server',sampleRate:localFixture.kind==='disabled-server'?0:1,maxReports:3,thresholdMs:{route:15000,auth:10000,http:20000,page:45000}}));}
++ if(u.pathname==='/_l/session-v1'){localFixture.automaticReports++;assert.equal(u.searchParams.get('d').split('.')[2],'7');assert(!/https|token|@|PRIVATE/.test(u.searchParams.get('d')));assert(!req.headers.cookie);assert(!req.headers.referer);res.writeHead(204);return res.end();}
++ let p=path.join(root,u.pathname);if(fs.existsSync(p)&&fs.statSync(p).isDirectory())p=path.join(p,'index.html');
++ if(!p.startsWith(root)||!fs.existsSync(p)){res.writeHead(404);return res.end();}
++ res.setHeader('Content-Type',p.endsWith('.js')?'text/javascript':p.endsWith('.css')?'text/css':p.endsWith('.json')?'application/json':'text/html');res.end(fs.readFileSync(p));
++});
++await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.0.1:'+server.address().port;
++const isWebkit=process.argv.includes('--webkit');
++const browser=isWebkit?await webkit.launch({headless:true}):await chromium.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});
++
++const results=[];
++fs.mkdirSync(new URL('../reviews/2026-11-20-boot-loader/',import.meta.url),{recursive:true});
++try {
++for(const kind of ['normal','aborted-main','pending-router','late-init','manual-retry']){
++ const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,serviceWorkers:'block'});
++ localFixture={kind,configRequests:0,automaticReports:0};const obs=localFixture;let documents=0,allowMain=kind!=='manual-retry';
++ await context.route('**/*',async route=>{const u=new URL(route.request().url());
++  if(u.origin!==origin||route.request().method()!=='GET')return route.fulfill({status:200,contentType:'application/json',body:'[]'});
++  if(route.request().isNavigationRequest()&&route.request().frame()===page.mainFrame())documents++;
++  if(u.pathname===entry&&kind==='aborted-main')return route.abort('connectionreset');
++  if(u.pathname===entry&&!allowMain)return route.fulfill({status:404,body:''});
++  if(u.pathname.startsWith('/sb/')||u.pathname.startsWith('/api/'))return route.fulfill({status:200,contentType:'application/json',body:'[]'});
++  if(u.pathname==='/_l')return route.fulfill({status:204});return route.continue();
++ });
++ if(kind==='pending-router'||kind==='late-init')await context.addInitScript(({kind})=>{let value;Object.defineProperty(window,'wwLib',{configurable:true,get(){return value},set(v){value=v;const orig=v.initFront;v.initFront=async function(args){const result=await orig.call(this,args);if(kind==='pending-router')args.router.isReady=()=>{window.__fixtureRouterBlocked=true;return new Promise(()=>{})};else await new Promise(resolve=>window.__releaseInit=resolve);return result}}})},{kind});
++ const page=await context.newPage();await page.goto(origin+'/all_course/',{waitUntil:'commit'});
++ await page.waitForTimeout(16500);
++ Object.assign(obs,await page.evaluate(()=>({mounted:!!window.__mgMounted,overlay:!!document.getElementById('mg-boot-msg'),placeholder:!!document.getElementById('mg-boot-loading'),routerBlocked:!!window.__fixtureRouterBlocked,phase:window.__mgSessionTransportV1?.state().phase})));
++ if(kind==='normal'){assert(obs.mounted);assert(!obs.overlay);assert.equal(obs.automaticReports,0)}else{assert(obs.overlay);assert.equal(obs.automaticReports,1)}
++ assert.equal(documents,1);
++ if(kind==='late-init'){await page.evaluate(()=>window.__releaseInit());await page.waitForTimeout(1000);assert(await page.evaluate(()=>window.__mgMounted&&!document.getElementById('mg-boot-msg')));assert.equal(obs.automaticReports,1);obs.lateRecovery=true}
++ if(kind==='manual-retry'){allowMain=true;await page.keyboard.press(isWebkit?'Alt+Tab':'Tab');assert(await page.locator('#mg-boot-msg button').evaluate(el=>el===document.activeElement));await page.keyboard.press('Enter');await page.waitForTimeout(2500);assert.equal(documents,2);assert(await page.evaluate(()=>window.__mgMounted&&!document.getElementById('mg-boot-msg')));assert.equal(obs.automaticReports,1);obs.manualRecovery=true}
++ obs.documents=documents;results.push(obs);console.log(JSON.stringify(obs));await context.close();
++}
++fs.writeFileSync(new URL('../reviews/2026-11-20-boot-loader/extra-',import.meta.url).pathname+(isWebkit?'webkit':'chrome')+'.json',JSON.stringify(results,null,2));
++}finally{await browser.close();server.closeAllConnections();await new Promise(r=>server.close(r));}
+diff --git a/tests/boot-loader.unit.mjs b/tests/boot-loader.unit.mjs
+new file mode 100644
+index 0000000..6b37a8c
+--- /dev/null
++++ b/tests/boot-loader.unit.mjs
+@@ -0,0 +1,30 @@
++import assert from 'node:assert/strict';
++import fs from 'node:fs';
++import vm from 'node:vm';
++import {execFileSync} from 'node:child_process';
++const template=fs.readFileSync(new URL('../template.html',import.meta.url),'utf8');
++const baseline=execFileSync('git',['show','HEAD:template.html'],{encoding:'utf8'});
++const script=s=>s.match(/<script>([\s\S]*?)<\/script>/)[1].replace('{{{earlySessionDiagnostic}}}','');
++// Only the watchdog UI may change: timer, freeze accounting and beacon logic remain byte-identical.
++assert.equal(script(template).split('                // Если уже показан')[0],script(baseline).split('                // Если уже показан')[0]);
++assert.equal(script(template).split('                  var poll = setInterval')[1],script(baseline).split('                  var poll = setInterval')[1]);
++const loader=template.match(/<div id="app">([\s\S]*?)\{\{\{scripts.body/)[1];
++assert(!/src=|href=|url\(/.test(loader));
++assert(template.includes('@media (prefers-reduced-motion:reduce)'));
++assert(template.includes('role="status" aria-live="polite" aria-atomic="true"'));
++function fixture(throws=false){
++ let now=0,reloads=0,reports=0;const timers=[],intervals=[],nodes=new Map();
++ const element=()=>({children:[],disabled:false,setAttribute(){},appendChild(el){this.children.push(el);el.parentNode=this;},removeChild(el){nodes.delete(el.id);}});
++ const body=element();body.appendChild=el=>{nodes.set(el.id,el);el.parentNode=body;};
++ const document={visibilityState:'visible',readyState:'interactive',body,addEventListener(){},querySelectorAll:()=>[],createElement:element,getElementById:id=>nodes.get(id)||null};
++ const window={__mgSessionTransportV1:{boot:()=>reports++}};
++ const context={window,document,navigator:{onLine:true},performance:{now:()=>now,getEntriesByType:()=>[]},Date:{now:()=>now},location:{reload(){reloads++;if(throws)throw Error('synthetic');}},setTimeout(fn,ms){timers.push({fn,ms});},setInterval(fn,ms){intervals.push({fn,ms});},clearInterval(){},Image:class{},encodeURIComponent};
++ vm.runInNewContext(script(template),context);
++ assert.deepEqual(timers.map(t=>t.ms),[5000,15000]);now=15000;timers[1].fn();
++ assert.equal(reports,1);assert.equal(intervals.length,1);assert.equal(intervals[0].ms,500);
++ const button=nodes.get('mg-boot-msg').children[0];assert.equal(button.textContent,'Повторить загрузку');
++ button.onclick();button.onclick();assert.equal(reloads,throws?2:1);assert.equal(button.disabled,!throws);
++ window.__mgMounted=true;intervals[0].fn();assert(!nodes.has('mg-boot-msg'));
++}
++fixture();fixture(true);
++console.log('PASS unchanged watchdog/diagnostics/freeze window; inline accessible loader; click dedup; reload exception unlock; late-mount removal; no added timer');
