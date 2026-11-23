@@ -1,0 +1,11 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {clubWorkerEnv} from './club-key-env.mjs';
+const path='/home/deno/functions/checkout-pay-link',secret='synthetic-only';
+test('only checkout receives original key; input environment unchanged',async()=>{const env=[['SUPABASE_URL','fixture']];const got=await clubWorkerEnv(path,env,async p=>{assert.equal(p,path+'/.prodamus-key.json');return JSON.stringify({key:secret});});assert.deepEqual(got,[...env,['PRODAMUS_SECRET_KEY',secret]]);assert.deepEqual(env,[['SUPABASE_URL','fixture']]);});
+test('other workers do not read file or receive key',async()=>{for(const p of ['/home/deno/functions/other',path+'-other',path+'/../other',undefined]){const env=[];assert.equal(await clubWorkerEnv(p,env,()=>{throw Error('must not read')}),env);}});
+test('existing nonempty environment value retains priority',async()=>{const env=[['PRODAMUS_SECRET_KEY',secret]];assert.equal(await clubWorkerEnv(path,env,()=>{throw Error('must not read')}),env);});
+test('empty environment entry replaced without duplicate',async()=>{const got=await clubWorkerEnv(path,[['PRODAMUS_SECRET_KEY','']],async()=>JSON.stringify({key:secret}));assert.deepEqual(got,[['PRODAMUS_SECRET_KEY',secret]]);});
+test('file failure cannot break non-club checkout and leaks no error',async()=>{const env=[];assert.equal(await clubWorkerEnv(path,env,()=>{throw Error(secret)}),env);});
+test('invalid JSON or key leaves environment unchanged',async()=>{for(const value of ['{','null','[]','{}','{"key":1}','{"key":""}','{"key":"  "}']){const env=[];assert.equal(await clubWorkerEnv(path,env,async()=>value),env);}});
+test('trailing slash accepted; no key normalization',async()=>{const got=await clubWorkerEnv(path+'/',[],async()=>JSON.stringify({key:' '+secret+' '}));assert.equal(got[0][1],' '+secret+' ');});
+test('sequential workers cannot inherit injected key from shared environment',async()=>{const env=[];await clubWorkerEnv(path,env,async()=>JSON.stringify({key:secret}));const other=await clubWorkerEnv('/home/deno/functions/other',env,()=>{throw Error('must not read')});assert.deepEqual(other,[]);});
