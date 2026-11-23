@@ -4,6 +4,7 @@ ENV={'PATH':'/usr/sbin:/usr/bin:/sbin:/bin','LANG':'C.UTF-8'}
 BACKUP=Path('/var/lib/mg-deploy/club-key-forwarding/20261124-v1')
 RELEASE_STATE=Path('/var/lib/mg-deploy/club-release/install-20261123T195707Z-161238/state.json')
 class Stop(Exception):pass
+class VerificationPending(Stop):pass
 def need(ok,code):
  if not ok:raise Stop(code)
 def secure_dir(p,create=False):
@@ -69,6 +70,31 @@ def diagnostic_records(raw):
  return records
 
 
+def verify_key_records(cid,since):
+ # Log loss/delay is not evidence that the runtime or key forwarding is broken.
+ # Keep bounded polling. Never turn an inconclusive observation into success.
+ for attempt in range(10):
+  try:raw=docker('logs','--since',since,'--tail','2000',cid)
+  except Exception:raw=b''
+  records=diagnostic_records(raw)
+  if records:
+   need(all(r['env_present'] and r['env_nonempty'] and r['env_error'] is None and r['source']=='env' for r in records),'key_forwarding_not_confirmed')
+   return records
+  if attempt<9:time.sleep(1)
+ raise VerificationPending('worker_diagnostic_unavailable_after_successful_401')
+
+def confirm_key_forwarding(cid):
+ smoke()
+ try:since=docker('inspect','--format','{{.State.StartedAt}}',cid).decode().strip()
+ except Exception:raise VerificationPending('log_time_boundary_unavailable_after_successful_401') from None
+ if not since or since.startswith('0001-'):raise VerificationPending('log_time_boundary_invalid_after_successful_401')
+ return verify_key_records(cid,since)
+
+def pending_notice():
+ print('VERIFICATION_INCONCLUSIVE=True; KEY_FORWARDING_CONFIRMED=False; AUTO_ROLLBACK_NOT_RUN=True; NO_ORDERS_OR_PAYMENTS=True')
+ print('BACKUP='+str(BACKUP))
+
+
 def discover(require_running=True):
  release=json.loads(read(RELEASE_STATE));need(release.get('complete') and not release.get('rolled_back'),'release_not_complete')
  c=json.loads(docker('inspect','supabase-edge-functions'))[0]
@@ -128,7 +154,10 @@ def run():
   need(str(root)==meta['root'] and sha(read(BACKUP/'main.before.ts'))==MAIN_SHA,'backup_mismatch')
   need(sha(read(main))==meta['after_sha'] and sha(read(helper))==HELPER_SHA,'existing_backup_requires_review')
   unchanged(root,meta)
-  print('ALREADY_INSTALLED=True; NO_RESTART=True');return
+  try:records=confirm_key_forwarding(cid)
+  except VerificationPending:pending_notice();raise
+  for r in records[-3:]:print(json.dumps(r,sort_keys=True))
+  print('ALREADY_INSTALLED=True; KEY_FORWARDING_CONFIRMED=True; NO_RESTART=True');return
  source=read(main);need(sha(source)==MAIN_SHA,'main_baseline_mismatch')
  need(sha(read(root/'checkout-pay-link/index.ts'))==CHECKOUT_SHA,'checkout_baseline_mismatch')
  need(not os.path.lexists(helper),'helper_already_exists')
@@ -147,24 +176,19 @@ def run():
   need(sha(read(helper))==HELPER_SHA,'helper_verification_failed')
   replace(main,new_main,meta['main_meta']);need(sha(read(main))==meta['after_sha'],'main_verification_failed')
   docker('restart',cid,timeout=60)
-  since=docker('inspect','--format','{{.State.StartedAt}}',cid).decode().strip()
-  smoke()
-  records=[]
-  for _ in range(4):
-   records=diagnostic_records(docker('logs','--since',since,'--tail','200',cid))
-   if records:break
-   time.sleep(1)
-  need(bool(records),'worker_diagnostic_missing')
-  need(all(r['env_present'] and r['env_nonempty'] and r['env_error'] is None and r['source']=='env' for r in records),'key_forwarding_not_confirmed')
   unchanged(root,meta)
+  records=confirm_key_forwarding(cid)
   for r in records[-3:]:print(json.dumps(r,sort_keys=True))
   print('KEY_FORWARDING_INSTALLED=True; AUTH_SMOKE=401; KEY_UNCHANGED=True; NO_ORDERS_OR_PAYMENTS=True')
   print('MAIN_SHA256='+meta['after_sha']);print('BACKUP='+str(BACKUP))
+ except VerificationPending:
+  pending_notice();raise
  except BaseException:
   try:rollback(cid,root,meta)
   except BaseException:print('AUTO_ROLLBACK_FAILED=True; MANUAL_REVIEW_REQUIRED=True')
   raise
 if __name__=='__main__':
  try:run()
+ except VerificationPending as e:print('STOP='+str(e));sys.exit(2)
  except Stop as e:print('STOP='+str(e));sys.exit(1)
  except BaseException:print('STOP=administrative_operation_failed; raw_details_suppressed');sys.exit(1)

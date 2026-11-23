@@ -5,7 +5,7 @@ parser=(r/'vendor/babel-parser.cjs').read_bytes();patcher=(r/'patcher.cjs').read
 const={'MAIN_SHA':'c0ea2ba6c68ae162f27516b384eaa722665e8b64df839f5a3e4901df55e47d1a','CHECKOUT_SHA':'a1aa4e054a18418568959113d83edd6395a8e3c2480b73222056a93779c2dac5','PARSER_B64':base64.b64encode(parser).decode(),'PATCHER_B64':base64.b64encode(patcher).decode(),'HELPER_B64':base64.b64encode(helper).decode(),'PARSER_SHA':hashlib.sha256(parser).hexdigest(),'PATCHER_SHA':hashlib.sha256(patcher).hexdigest(),'HELPER_SHA':hashlib.sha256(helper).hexdigest(),'BOOTSTRAP':bootstrap}
 rows=[]
 for mode in ['install','rollback']:
- p=r/f'meetguru-club-key-forward-{mode}-20261124.sh';assert not p.exists()
+ p=r/f'meetguru-club-key-forward-{mode}-20261124-r2.sh';assert not p.exists()
  code='\n'.join(k+'='+repr(v) for k,v in {**const,'MODE':mode}.items())+'\n'+admin;ast.parse(code)
  p.write_text("#!/bin/bash\nset -euo pipefail\numask 077\n[ \"${MG_CONFIRM:-}\" = yes ] || { echo 'STOP: use approved mg-deploy'; exit 1; }\ncd /\nexec /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin LANG=C.UTF-8 /usr/bin/python3 -I -S - <<'MG_CLUB_KEY_FORWARD'\n"+code+'\nMG_CLUB_KEY_FORWARD\n');p.chmod(0o700)
  subprocess.run(['bash','-n',str(p)],check=True)
