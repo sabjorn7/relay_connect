@@ -1,0 +1,56 @@
+import { createCheckoutHandler } from './handler.mjs';
+// Temporary worker-start diagnostic. Never log error messages, paths or key material.
+function keyLoadErrorType(error) {
+    const allowed = ['Error', 'TypeError', 'SyntaxError', 'NotFound', 'PermissionDenied', 'NotSupported', 'NotCapable', 'InvalidData', 'UnexpectedEof'];
+    try { return allowed.includes(error?.name) ? error.name : 'Other'; }
+    catch { return 'Other'; }
+}
+const keyLoadState = {
+    event: 'club_key_load_v1',
+    env_present: false, env_nonempty: false, env_error: null,
+    file_read: false, file_error: null,
+    json_valid: false, json_error: null, json_object: false, key_present: false, key_nonempty: false,
+    source: 'none',
+};
+let envKey, fileKey, envFailure;
+try {
+    envKey = Deno.env.get('PRODAMUS_SECRET_KEY');
+    keyLoadState.env_present = envKey !== undefined;
+    keyLoadState.env_nonempty = typeof envKey === 'string' && envKey.trim().length > 0;
+} catch (error) {
+    envFailure = error;
+    keyLoadState.env_error = keyLoadErrorType(error);
+}
+let keyFileText;
+try {
+    keyFileText = Deno.readTextFileSync(new URL('./.prodamus-key.json', import.meta.url));
+    keyLoadState.file_read = true;
+} catch (error) {
+    keyLoadState.file_error = keyLoadErrorType(error);
+}
+if (keyLoadState.file_read) {
+    try {
+        const parsed = JSON.parse(keyFileText);
+        keyLoadState.json_valid = true;
+        keyLoadState.json_object = parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed);
+        keyLoadState.key_present = keyLoadState.json_object && Object.prototype.hasOwnProperty.call(parsed, 'key');
+        fileKey = parsed?.key;
+        keyLoadState.key_nonempty = !!parsed && !Array.isArray(parsed)
+            && typeof fileKey === 'string' && fileKey.trim().length > 0;
+    } catch (error) {
+        keyLoadState.json_error = keyLoadErrorType(error);
+    }
+}
+// Preserve existing environment precedence and key value; do not normalize secrets.
+const clubSigningKey = envKey || fileKey;
+keyLoadState.source = envKey ? 'env' : fileKey ? 'file' : 'none';
+console.info(JSON.stringify(keyLoadState));
+// Keep environment-access failures fatal, but expose no original exception text.
+if (envFailure) throw new Error('club_key_environment_unavailable');
+Deno.serve(createCheckoutHandler({ fetch, env: {
+    SUPABASE_URL: Deno.env.get('SUPABASE_URL'),
+    SUPABASE_ANON_KEY: Deno.env.get('SUPABASE_ANON_KEY'),
+    SUPABASE_SERVICE_ROLE_KEY: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),
+    PRODAMUS_SECRET_KEY: clubSigningKey,
+    SITE_ORIGIN: Deno.env.get('SITE_ORIGIN'),
+} }));
