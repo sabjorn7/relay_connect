@@ -1,0 +1,222 @@
+diff --git a/supabase/migrations/pending_club_subscription_order.sql b/supabase/migrations/pending_club_subscription_order.sql
+new file mode 100644
+--- /dev/null
++++ b/supabase/migrations/pending_club_subscription_order.sql
+@@ -0,0 +1,46 @@
++-- Local preparation only. Review and apply manually before publishing the club page.
++BEGIN;
++CREATE FUNCTION public.club_prepare_subscription_order(p_club_id uuid)
++RETURNS jsonb
++LANGUAGE plpgsql SECURITY DEFINER
++SET search_path = pg_catalog
++AS $function$
++DECLARE
++  v_uid uuid := auth.uid();
++  v_club public.clubs%ROWTYPE;
++  v_order_id uuid;
++  v_marker text;
++BEGIN
++  IF v_uid IS NULL THEN
++    RAISE EXCEPTION 'Authentication required' USING ERRCODE = '42501';
++  END IF;
++  SELECT * INTO v_club FROM public.clubs
++  WHERE id = p_club_id AND active IS TRUE FOR SHARE;
++  IF NOT FOUND THEN
++    RAISE EXCEPTION 'Club unavailable' USING ERRCODE = '22023';
++  END IF;
++  IF v_club.price IS NULL OR v_club.price <= 0
++     OR v_club.price::text IN ('NaN', 'Infinity', '-Infinity')
++     OR nullif(btrim(v_club.sub_id), '') IS NULL THEN
++    RAISE EXCEPTION 'Subscription unavailable' USING ERRCODE = '22023';
++  END IF;
++  -- Same owner and club serialize even across tabs. No client-supplied price or owner.
++  PERFORM pg_advisory_xact_lock(hashtextextended(v_uid::text || ':' || p_club_id::text, 0));
++  v_marker := jsonb_build_object('kind', 'club_subscription_v1',
++    'club_id', p_club_id, 'subscription_id', v_club.sub_id, 'price', v_club.price)::text;
++  SELECT id INTO v_order_id FROM public."order"
++  WHERE owner = v_uid AND subscription IS TRUE AND paid IS NOT TRUE
++    AND logs = v_marker AND summ = v_club.price
++  ORDER BY created_at DESC, id LIMIT 1;
++  IF v_order_id IS NULL THEN
++    INSERT INTO public."order" (owner, summ, subscription, paid, course_positions, logs)
++    VALUES (v_uid, v_club.price, true, false, ARRAY[]::text[], v_marker)
++    RETURNING id INTO v_order_id;
++  END IF;
++  RETURN jsonb_build_object('id', v_order_id, 'club_id', p_club_id,
++    'subscription_id', v_club.sub_id, 'price', v_club.price);
++END;
++$function$;
++REVOKE ALL ON FUNCTION public.club_prepare_subscription_order(uuid) FROM PUBLIC, anon;
++GRANT EXECUTE ON FUNCTION public.club_prepare_subscription_order(uuid) TO authenticated;
++COMMIT;
+diff --git a/supabase/migrations/rollback_club_subscription_order.sql b/supabase/migrations/rollback_club_subscription_order.sql
+new file mode 100644
+--- /dev/null
++++ b/supabase/migrations/rollback_club_subscription_order.sql
+@@ -0,0 +1,4 @@
++-- Restore the previous frontend FIRST. Keep all orders and subscriptions.
++BEGIN;
++DROP FUNCTION public.club_prepare_subscription_order(uuid);
++COMMIT;
+diff --git a/tests/club-subscription-order.integration.py b/tests/club-subscription-order.integration.py
+new file mode 100644
+--- /dev/null
++++ b/tests/club-subscription-order.integration.py
+@@ -0,0 +1,57 @@
++"""Disposable loopback PostgreSQL only. Never reads app credentials."""
++import json
++from concurrent.futures import ThreadPoolExecutor
++from pathlib import Path
++from helpers.checkout_stand import Stand
++s=Stand()
++uid='11111111-1111-4111-8111-111111111111'
++club='22222222-2222-4222-8222-222222222222'
++def call(user=uid):
++ out=s.sql(f"BEGIN; SET LOCAL ROLE authenticated; SELECT set_config('request.jwt.claim.sub','{user}',true); SELECT public.club_prepare_subscription_order('{club}'); COMMIT;")
++ return json.loads(next(line for line in out.splitlines() if line.startswith('{')))
++def denied(sql):
++ try:s.sql(sql)
++ except RuntimeError:return
++ raise AssertionError('operation unexpectedly permitted')
++def check(ok):assert ok
++try:
++ s.start()
++ s.sql("""
++ CREATE ROLE anon; CREATE ROLE authenticated;
++ CREATE SCHEMA auth;
++ CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
++ GRANT USAGE ON SCHEMA auth TO authenticated;
++ CREATE TABLE public.clubs(id uuid PRIMARY KEY, active boolean, price numeric, sub_id text);
++ CREATE TABLE public."order"(id uuid PRIMARY KEY DEFAULT gen_random_uuid(), created_at timestamptz DEFAULT now(), owner uuid, summ numeric, subscription boolean DEFAULT false, paid boolean DEFAULT false, course_positions text[] DEFAULT '{}', logs text);
++ ALTER TABLE public."order" ENABLE ROW LEVEL SECURITY;
++ CREATE TABLE public.club_subs(id uuid, active boolean);
++ CREATE TABLE public.shop(id uuid, status text);
++ CREATE FUNCTION public.update_shop_status_on_order() RETURNS trigger LANGUAGE plpgsql SET search_path TO pg_catalog AS $$ begin update public.shop set status='order' where id::text=any(new.course_positions); return new; end $$;
++ CREATE TRIGGER trg_update_shop_status AFTER INSERT ON public.\"order\" FOR EACH ROW EXECUTE FUNCTION public.update_shop_status_on_order();
++ """)
++ s.sql(Path('supabase/migrations/pending_club_subscription_order.sql').read_text())
++ s.sql(f"INSERT INTO clubs VALUES('{club}',true,3500,'12345');")
++ s.check('anon cannot execute',lambda:denied(f"SET ROLE anon; SELECT club_prepare_subscription_order('{club}');"))
++ s.check('missing session rejected',lambda:denied(f"SET ROLE authenticated; SELECT club_prepare_subscription_order('{club}');"))
++ first=call()
++ s.check('authenticated order uses server fields',lambda:check(first['price']==3500 and first['subscription_id']=='12345'))
++ s.check('repeat reuses unpaid order',lambda:check(call()['id']==first['id']))
++ with ThreadPoolExecutor(max_workers=6) as pool: results=list(pool.map(lambda _:call(),range(12)))
++ s.check('12 concurrent calls create one order',lambda:check(len({r['id'] for r in results})==1 and s.sql('SELECT count(*) FROM public."order"')=='1'))
++ s.check('no early activation',lambda:check(s.sql('SELECT count(*) FROM club_subs')=='0' and s.sql('SELECT paid FROM public."order"')=='f'))
++ s.check('direct insert denied',lambda:denied('SET ROLE authenticated; INSERT INTO public."order" DEFAULT VALUES;'))
++ s.check('direct update denied',lambda:denied('SET ROLE authenticated; UPDATE public."order" SET summ=1;'))
++ s.check('price/owner/subscription overrides rejected',lambda:denied(f"SET ROLE authenticated; SELECT club_prepare_subscription_order('{club}',1,'{uid}','999');"))
++ s.sql('UPDATE clubs SET active=false;')
++ s.check('inactive club rejected',lambda:denied(f"BEGIN; SET LOCAL ROLE authenticated; SELECT set_config('request.jwt.claim.sub','{uid}',true); SELECT club_prepare_subscription_order('{club}');"))
++ s.sql('UPDATE clubs SET active=true;')
++ for price in ['NULL','0','-1',"'NaN'","'Infinity'"]:
++  s.sql('UPDATE clubs SET price='+price)
++  s.check('invalid price '+price,lambda:denied(f"BEGIN; SET LOCAL ROLE authenticated; SELECT set_config('request.jwt.claim.sub','{uid}',true); SELECT club_prepare_subscription_order('{club}');"))
++ s.sql("UPDATE clubs SET price=3500,sub_id='';")
++ s.check('missing subscription rejected',lambda:denied(f"BEGIN; SET LOCAL ROLE authenticated; SELECT set_config('request.jwt.claim.sub','{uid}',true); SELECT club_prepare_subscription_order('{club}');"))
++ s.sql(Path('supabase/migrations/rollback_club_subscription_order.sql').read_text())
++ s.check('rollback retains unpaid order',lambda:check(s.sql('SELECT count(*) FROM public."order"')=='1'))
++ assert all(r['status']=='PASS' for r in s.results)
++ print(str(len(s.results))+' tests PASS')
++finally:s.stop()
+diff --git a/tests/club-subscription-workflow.unit.mjs b/tests/club-subscription-workflow.unit.mjs
+new file mode 100644
+--- /dev/null
++++ b/tests/club-subscription-workflow.unit.mjs
+@@ -0,0 +1,27 @@
++import assert from 'node:assert/strict';
++import fs from 'node:fs';
++import {execFileSync} from 'node:child_process';
++const file='public/data/98342e46-3cd3-48bc-bf0a-f1b60bf63535.json';
++const before=JSON.parse(execFileSync('git',['show','HEAD:'+file],{maxBuffer:20*1024*1024}));
++const after=JSON.parse(fs.readFileSync(file));
++const ids=['7787eb50-0d7a-4449-982b-f41f1bda1ccd','09539750-d3c4-49b0-ac12-b07103065e52','ed6b96a4-a849-4da7-b66c-00287196f0d7','bb3f9590-8a49-40f8-9455-eeed3d72ac23'];
++const create='256f1eb9-180c-4d95-b3c2-f81bbfac9b0f',provider='77a3a9ec-1157-4ef9-902c-24f3a1229e39',update='4380a8dd-e2a6-4ab5-9c44-98723e7f9a6c',redirect='417b8d6f-f0a7-4958-9521-f7f82105c689';
++for(const id of ids){
++ const a=after.wwObjects[id]._state.interactions[0].actions;
++ const b=before.wwObjects[id]._state.interactions[0].actions;
++ assert.equal(a[create].args.functionName,'club_prepare_subscription_order');
++ assert.deepEqual(a[create].args.params.map(p=>p.key),['p_club_id']);
++ assert.equal(a[provider].next,redirect);assert.equal(a[update],undefined);
++ const order={id:'order-fixture',club_id:'club-fixture',subscription_id:'12345',price:3500};
++ const context={workflow:{[create]:{result:order}},component:{variables:{'14d34912-0442-4607-9311-5c9590247a28':{club:{sub_id:'attacker-plan',price:1}}}}};
++ const url=new URL(new Function('context',a[provider].args.url.code)(context));
++ assert.equal(url.hostname,'meetguru.payform.ru');assert.equal(url.searchParams.get('subscription'),'12345');
++ assert.equal(url.searchParams.get('order_id'),order.id);
++ assert.throws(()=>new Function('context',a[provider].args.url.code)({workflow:{[create]:{result:null}}}));
++ // Restore only allowed changed fields, then verify EVERYTHING else (including provider settings) unchanged.
++ a[create]=b[create];a[provider].args.url=b[provider].args.url;a[provider].next=b[provider].next;a[update]=b[update];
++}
++// Do not print object diffs: the legacy file includes credentials.
++assert.ok(JSON.stringify(after)===JSON.stringify(before) || equal(after,before),'Unexpected unrelated changes');
++function equal(a,b){if(a===b)return true;if(!a||!b||typeof a!=='object'||typeof b!=='object')return false;const keys=Object.keys(a);return keys.length===Object.keys(b).length&&keys.every(k=>Object.hasOwn(b,k)&&equal(a[k],b[k]));}
++console.log('PASS four payment workflows; RPC-only parameters, server result URL, missing-result failure, forbidden UPDATE removed; all unrelated fields unchanged');
+diff --git a/tests/club-subscription-workflow.browser.mjs b/tests/club-subscription-workflow.browser.mjs
+new file mode 100644
+--- /dev/null
++++ b/tests/club-subscription-workflow.browser.mjs
+@@ -0,0 +1,34 @@
++// Browser execution of the actual four URL formulas; synthetic RPC/provider, no real orders.
++import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import {spawn} from 'node:child_process';import assert from 'node:assert/strict';
++const data=JSON.parse(fs.readFileSync('public/data/98342e46-3cd3-48bc-bf0a-f1b60bf63535.json'));
++const create='256f1eb9-180c-4d95-b3c2-f81bbfac9b0f',provider='77a3a9ec-1157-4ef9-902c-24f3a1229e39';
++const formulas=Object.values(data.wwObjects).flatMap(o=>(o._state?.interactions||[]).filter(w=>w.actions?.[create]).map(w=>w.actions[provider].args.url.code));
++const dir=fs.mkdtempSync(path.join(os.tmpdir(),'mg-club-browser-'));
++let chrome,ws;
++try{
++ chrome=spawn('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',['--headless=new','--disable-gpu','--no-first-run','--disable-background-networking','--disable-component-update','--disable-sync','--host-resolver-rules=MAP * ~NOTFOUND','--remote-debugging-port=0','--user-data-dir='+dir,'about:blank'],{stdio:['ignore','ignore','pipe']});
++ const address=await new Promise((resolve,reject)=>{let s='';const t=setTimeout(()=>reject(Error('Chrome timeout')),15000);chrome.stderr.on('data',b=>{s+=b;const m=s.match(/DevTools listening on (ws:\/\/[^\s]+)/);if(m){clearTimeout(t);resolve(m[1]);}});chrome.on('exit',()=>reject(Error('Chrome exited')));});
++ ws=new WebSocket(address);await new Promise(r=>ws.addEventListener('open',r,{once:true}));let seq=0;const pending=new Map();
++ ws.addEventListener('message',e=>{const m=JSON.parse(e.data);if(m.id){const p=pending.get(m.id);pending.delete(m.id);m.error?p.reject(Error(m.error.message)):p.resolve(m.result);}});
++ const send=(method,params={},sessionId)=>new Promise((resolve,reject)=>{const id=++seq;pending.set(id,{resolve,reject});ws.send(JSON.stringify({id,method,params,...(sessionId?{sessionId}:{})}));});
++ const {targetId}=await send('Target.createTarget',{url:'about:blank'});const {sessionId}=await send('Target.attachToTarget',{targetId,flatten:true});
++ await send('Network.enable',{},sessionId);await send('Network.setBlockedURLs',{urls:['http://*','https://*','ws://*','wss://*']},sessionId);
++ const expression=`(async()=>{
++ const formulas=${JSON.stringify(formulas)},create=${JSON.stringify(create)};
++ const results=[];
++ for(const code of formulas){
++  let orders=0,redirects=0,providerCalls=0;let saved;
++  const prepare=async()=>saved??=(orders++,{id:'order-fixture',club_id:'club-fixture',subscription_id:'12345'});
++  const click=async({guest=false,fail=false}={})=>{if(guest)return 'login';const order=await prepare();const url=new URL(new Function('context',code)({workflow:{[create]:{result:order}}}));if(url.searchParams.get('subscription')!=='12345')throw Error('wrong plan');providerCalls++;if(fail)throw Error('Synthetic provider error');redirects++;return 'https://meetguru.payform.ru/fixture';};
++  if(await click({guest:true})!=='login'||orders!==0)throw Error('guest wrote');
++  try{await click({fail:true});throw Error('missing failure');}catch(e){if(e.message!=='Synthetic provider error')throw e;}
++  if(redirects!==0||orders!==1)throw Error('failure redirected');
++  await click();await Promise.all([click(),click()]);
++  if(orders!==1||redirects!==3||providerCalls!==4)throw Error('retry failed');
++  results.push('PASS guest / provider error / retry / repeat order / link');
++ }
++ return results;
++})()`;
++ const r=await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true},sessionId);
++ assert.ok(!r.exceptionDetails,'Browser scenario failed');assert.equal(r.result.value.length,4);console.log(r.result.value.join('\n'));console.log('PASS Chrome synthetic boundary; full legacy page and real provider not exercised');
++}finally{if(ws)ws.close();if(chrome)chrome.kill();}
+diff --git a/scripts/apply-club-subscription-payment.py b/scripts/apply-club-subscription-payment.py
+new file mode 100644
+--- /dev/null
++++ b/scripts/apply-club-subscription-payment.py
+@@ -0,0 +1,24 @@
++#!/usr/bin/env python3
++"""Apply only the reviewed legacy club actions; never output the source JSON."""
++import hashlib,json
++from pathlib import Path
++p=Path('public/data/98342e46-3cd3-48bc-bf0a-f1b60bf63535.json')
++raw=p.read_bytes()
++if hashlib.sha256(raw).hexdigest()=='42f788b868d454bf826d143ef82398ac7506ddd0bf58e89e20eafb920f7afb2d':
++    print('Already applied');raise SystemExit(0)
++if hashlib.sha256(raw).hexdigest()!='708f4801b2cb3db21290f8f616ddd1ed528bd096f21920a5de5ac02cb336456b':
++    raise SystemExit('Source differs from reviewed base; stopped without writing')
++data=json.loads(raw)
++ops=json.loads('[{"object": "7787eb50-0d7a-4449-982b-f41f1bda1ccd", "type": "f9ef41c3-1c53-4857-855b-f2f6a40b7186-callPostgresFunction", "args": {"functionName": "club_prepare_subscription_order", "params": [{"key": "p_club_id", "value": {"__wwtype": "f", "code": "context.component?.variables?.[\'14d34912-0442-4607-9311-5c9590247a28\']?.club?.id"}}]}, "url": {"code": "const order = context.workflow[\'256f1eb9-180c-4d95-b3c2-f81bbfac9b0f\'].result;\\nif (!order?.id || !order?.subscription_id || !order?.club_id) throw new Error(\'Subscription order unavailable\');\\nconst baseUrl = \'https://meetguru.payform.ru/?do=link&sys=meetguru\';\\nconst urlSuccess = \'https://app.meetgu.ru/club?club=\' + encodeURIComponent(order.club_id);\\nreturn `${baseUrl}&subscription=${encodeURIComponent(order.subscription_id)}&order_id=${encodeURIComponent(order.id)}&urlSuccess=${encodeURIComponent(urlSuccess)}`;", "__wwtype": "js"}, "next": "417b8d6f-f0a7-4958-9521-f7f82105c689"}, {"object": "09539750-d3c4-49b0-ac12-b07103065e52", "type": "f9ef41c3-1c53-4857-855b-f2f6a40b7186-callPostgresFunction", "args": {"functionName": "club_prepare_subscription_order", "params": [{"key": "p_club_id", "value": {"__wwtype": "f", "code": "context.component?.variables?.[\'14d34912-0442-4607-9311-5c9590247a28\']?.club?.id"}}]}, "url": {"code": "const order = context.workflow[\'256f1eb9-180c-4d95-b3c2-f81bbfac9b0f\'].result;\\nif (!order?.id || !order?.subscription_id || !order?.club_id) throw new Error(\'Subscription order unavailable\');\\nconst baseUrl = \'https://meetguru.payform.ru/?do=link&sys=meetguru\';\\nconst urlSuccess = \'https://app.meetgu.ru/club?club=\' + encodeURIComponent(order.club_id);\\nreturn `${baseUrl}&subscription=${encodeURIComponent(order.subscription_id)}&order_id=${encodeURIComponent(order.id)}&urlSuccess=${encodeURIComponent(urlSuccess)}`;", "__wwtype": "js"}, "next": "417b8d6f-f0a7-4958-9521-f7f82105c689"}, {"object": "ed6b96a4-a849-4da7-b66c-00287196f0d7", "type": "f9ef41c3-1c53-4857-855b-f2f6a40b7186-callPostgresFunction", "args": {"functionName": "club_prepare_subscription_order", "params": [{"key": "p_club_id", "value": {"__wwtype": "f", "code": "context.component?.variables?.[\'14d34912-0442-4607-9311-5c9590247a28\']?.club?.id"}}]}, "url": {"code": "const order = context.workflow[\'256f1eb9-180c-4d95-b3c2-f81bbfac9b0f\'].result;\\nif (!order?.id || !order?.subscription_id || !order?.club_id) throw new Error(\'Subscription order unavailable\');\\nconst baseUrl = \'https://meetguru.payform.ru/?do=link&sys=meetguru\';\\nconst urlSuccess = \'https://app.meetgu.ru/club?club=\' + encodeURIComponent(order.club_id);\\nreturn `${baseUrl}&subscription=${encodeURIComponent(order.subscription_id)}&order_id=${encodeURIComponent(order.id)}&urlSuccess=${encodeURIComponent(urlSuccess)}`;", "__wwtype": "js"}, "next": "417b8d6f-f0a7-4958-9521-f7f82105c689"}, {"object": "bb3f9590-8a49-40f8-9455-eeed3d72ac23", "type": "f9ef41c3-1c53-4857-855b-f2f6a40b7186-callPostgresFunction", "args": {"functionName": "club_prepare_subscription_order", "params": [{"key": "p_club_id", "value": {"__wwtype": "f", "code": "context.component?.variables?.[\'14d34912-0442-4607-9311-5c9590247a28\']?.club?.id"}}]}, "url": {"code": "const order = context.workflow[\'256f1eb9-180c-4d95-b3c2-f81bbfac9b0f\'].result;\\nif (!order?.id || !order?.subscription_id || !order?.club_id) throw new Error(\'Subscription order unavailable\');\\nconst baseUrl = \'https://meetguru.payform.ru/?do=link&sys=meetguru\';\\nconst urlSuccess = \'https://app.meetgu.ru/club?club=\' + encodeURIComponent(order.club_id);\\nreturn `${baseUrl}&subscription=${encodeURIComponent(order.subscription_id)}&order_id=${encodeURIComponent(order.id)}&urlSuccess=${encodeURIComponent(urlSuccess)}`;", "__wwtype": "js"}, "next": "417b8d6f-f0a7-4958-9521-f7f82105c689"}]')
++for op in ops:
++    actions=data['wwObjects'][op['object']]['_state']['interactions'][0]['actions']
++    actions['256f1eb9-180c-4d95-b3c2-f81bbfac9b0f']['type']=op['type']
++    actions['256f1eb9-180c-4d95-b3c2-f81bbfac9b0f']['args']=op['args']
++    actions['77a3a9ec-1157-4ef9-902c-24f3a1229e39']['args']['url']=op['url']
++    actions['77a3a9ec-1157-4ef9-902c-24f3a1229e39']['next']=op['next']
++    del actions['4380a8dd-e2a6-4ab5-9c44-98723e7f9a6c']
++result=json.dumps(data,ensure_ascii=False,separators=(',',':')).encode()
++if hashlib.sha256(result).hexdigest()!='42f788b868d454bf826d143ef82398ac7506ddd0bf58e89e20eafb920f7afb2d':
++    raise SystemExit('Result differs from reviewed patch; stopped without writing')
++p.write_bytes(result)
++print('Applied four club payment actions')
