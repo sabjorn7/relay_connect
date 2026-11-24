@@ -1,0 +1,62 @@
+MeetGuru — frontend клубного чата опубликован, 24.11.2026
+
+Согласованный пакет: e159530/outbox/2026-11-24-club-frontend-ready.
+База main проверена: 123cdab5222d42803adc310f53bdfccfde4cc9a9.
+Релизный коммит: bb6071ad94ce923528c4ba2c77728b562a438e33.
+PR: https://github.com/sabjorn7/meetclone/pull/8
+Squash/main/production: 5313871daba788d8e1f1d67b1c0b116d0560b083.
+Deploy App: SUCCESS, run 440.
+https://github.com/sabjorn7/meetclone/actions/runs/45439446568
+
+Фактическая публикация подтверждена успешным job публикации HTML/ресурсов,
+serviceworker version=440 и cacheVersion=440 опубликованного WeWeb JSON.
+Все проверенные ресурсы главной, /club/ и /chats/ возвращают HTTP 200.
+
+Состав продуктового изменения (ровно согласованные 9 файлов):
+public/data/98342e46-3cd3-48bc-bf0a-f1b60bf63535.json
+src/_front/components/wwElementComponent.vue
+src/_front/components/ClubAttachmentView.vue
+src/_front/components/ClubChatAttachments.vue
+src/_front/components/ClubChatMessage.vue
+src/_front/components/clubChat.css
+src/_front/helpers/clubAttachments.js
+src/_front/helpers/clubChatScroll.js
+src/_front/helpers/clubMessageView.js
+Байты файлов сверены с применением согласованного frontend diff.
+
+PASS:
+- Vite build локально; полная сборка и публикация приложения/лендинга в CI.
+- Локальный клубный маршрут с реальными WeWeb-компонентами: 4 сценария.
+- Регрессия обычного группового чата: 12 локальных сценариев.
+- Опубликованный frontend: Chrome/WebKit, ширина 390 и 1280, 4 сценария.
+  История 16 сообщений, начальная прокрутка вниз, ручная прокрутка,
+  отправка и удаление собственного текста, инициалы/имена/профильные ссылки,
+  фотография и галерея, отсутствие горизонтального переполнения.
+  Ошибок JS и ответов JS/CSS >=400 не обнаружено.
+- Серверные флаги после публикации: attachments=false; оба push trigger=D;
+  объектов в приватном bucket=0. SQL/Storage/Edge не изменялись.
+- Пользователь подтвердил, что видит обновлённый интерфейс.
+
+Границы проверки:
+Браузеры загружали реальный production HTML/JS/CSS/WeWeb JSON, но Auth,
+API, сообщения и изображения были синтетическими и перехватывались.
+Все API-записи и внешние запросы заблокированы/подменены; реальные сообщения
+и пользовательские данные не изменялись. Чтение/запись через настоящую
+авторизованную production-сессию NOT TESTED. Обычные групповые чаты:
+локальная матрица PASS, production HTML/ресурсы PASS, авторизованная
+production-группа NOT TESTED. Дополнительная попытка объединённого smoke
+для группы остановилась на пустом списке в mock-стенде; не засчитана PASS
+и не интерпретирована как продуктовая регрессия. ChatsPage не изменялся.
+Файлы, голосовые и push не включены и не тестировались в production.
+WebKit — локальный движок, не физический iPhone.
+
+Откат (при отдельном разрешении и подтверждённой необходимости):
+Создать ветку от актуального main, выполнить git revert
+5313871daba788d8e1f1d67b1c0b116d0560b083, проверить diff/build, PR и merge
+через существующий Deploy App. Не использовать reset/force push.
+Предыдущая рабочая версия: 123cdab5222d42803adc310f53bdfccfde4cc9a9.
+Серверные SQL/Storage не откатывать: текущий выпуск их не менял.
+attachments=false и выключенные push сохранить. Данные пользователей не удалять.
+
+Следующий этап: отдельное согласование включения файлов/голосовых/push.
+Никаких дополнительных изменений и запусков после этого отчёта.

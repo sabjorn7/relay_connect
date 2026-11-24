@@ -1,0 +1,314 @@
+{
+  "production_sha": "5313871daba788d8e1f1d67b1c0b116d0560b083",
+  "evidence": "successful Deploy App head SHA + matching production CI cacheVersion/serviceworker version + published page args",
+  "run_number": 440,
+  "pages": [
+    {
+      "path": "/",
+      "status": 200,
+      "assets": [
+        {
+          "path": "/assets/_plugin-vue_export-helper-D6098ZHW.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/chunk-BKezJVPF.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/preload-helper-DmQB9LBU.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/browser-Da2-FjT0.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/runtime-core.esm-bundler-BHhrXLbW.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/runtime-dom.esm-bundler-BIZmlyAu.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/StreamDiagnostics-CaLUqcz9.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/marked.esm-9y9htBuT.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/headerAccount-Dt5be9Z1.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/ChatMessageText-C_Unv6TK.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/vue-router-0VwAIWmf.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/VoiceMessagePlayer-xgMBzd_q.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/mp3Encode-HwlCiuVr.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/uploadMetrics-CViw1aP-.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/peertubeUpload-C1iPzAsN.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/uploadQueueState-DE4MV4U0.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/environmentConfig-Bf2EGsCF.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/environmentConfig-iT3cUZ1C.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/main-BmhfaU_5.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/modulepreload-polyfill-DFURTO-d.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/StreamDiagnostics-rSYdb-2n.css",
+          "status": 200
+        },
+        {
+          "path": "/assets/ChatMessageText-CQqC4-XO.css",
+          "status": 200
+        },
+        {
+          "path": "/assets/VoiceMessagePlayer-DBhA2kAF.css",
+          "status": 200
+        },
+        {
+          "path": "/assets/main-6b9lVqDp.css",
+          "status": 200
+        }
+      ]
+    },
+    {
+      "path": "/club/",
+      "status": 200,
+      "assets": [
+        {
+          "path": "/assets/_plugin-vue_export-helper-D6098ZHW.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/chunk-BKezJVPF.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/preload-helper-DmQB9LBU.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/browser-Da2-FjT0.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/runtime-core.esm-bundler-BHhrXLbW.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/runtime-dom.esm-bundler-BIZmlyAu.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/StreamDiagnostics-CaLUqcz9.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/marked.esm-9y9htBuT.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/headerAccount-Dt5be9Z1.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/ChatMessageText-C_Unv6TK.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/vue-router-0VwAIWmf.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/VoiceMessagePlayer-xgMBzd_q.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/mp3Encode-HwlCiuVr.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/uploadMetrics-CViw1aP-.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/peertubeUpload-C1iPzAsN.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/uploadQueueState-DE4MV4U0.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/environmentConfig-Bf2EGsCF.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/environmentConfig-iT3cUZ1C.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/main-BmhfaU_5.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/modulepreload-polyfill-DFURTO-d.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/StreamDiagnostics-rSYdb-2n.css",
+          "status": 200
+        },
+        {
+          "path": "/assets/ChatMessageText-CQqC4-XO.css",
+          "status": 200
+        },
+        {
+          "path": "/assets/VoiceMessagePlayer-DBhA2kAF.css",
+          "status": 200
+        },
+        {
+          "path": "/assets/main-6b9lVqDp.css",
+          "status": 200
+        }
+      ]
+    },
+    {
+      "path": "/chats/",
+      "status": 200,
+      "assets": [
+        {
+          "path": "/assets/_plugin-vue_export-helper-D6098ZHW.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/chunk-BKezJVPF.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/preload-helper-DmQB9LBU.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/browser-Da2-FjT0.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/runtime-core.esm-bundler-BHhrXLbW.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/runtime-dom.esm-bundler-BIZmlyAu.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/StreamDiagnostics-CaLUqcz9.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/marked.esm-9y9htBuT.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/headerAccount-Dt5be9Z1.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/ChatMessageText-C_Unv6TK.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/vue-router-0VwAIWmf.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/VoiceMessagePlayer-xgMBzd_q.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/mp3Encode-HwlCiuVr.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/uploadMetrics-CViw1aP-.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/peertubeUpload-C1iPzAsN.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/uploadQueueState-DE4MV4U0.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/environmentConfig-Bf2EGsCF.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/environmentConfig-iT3cUZ1C.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/main-BmhfaU_5.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/modulepreload-polyfill-DFURTO-d.js",
+          "status": 200
+        },
+        {
+          "path": "/assets/StreamDiagnostics-rSYdb-2n.css",
+          "status": 200
+        },
+        {
+          "path": "/assets/ChatMessageText-CQqC4-XO.css",
+          "status": 200
+        },
+        {
+          "path": "/assets/VoiceMessagePlayer-DBhA2kAF.css",
+          "status": 200
+        },
+        {
+          "path": "/assets/main-6b9lVqDp.css",
+          "status": 200
+        }
+      ]
+    }
+  ],
+  "page_args_match": true
+}
