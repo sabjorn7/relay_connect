@@ -1,0 +1,24 @@
+/* Existing WeWeb desktop/mobile club chat containers ONLY. No /chats selectors. */
+:where(.ww-element-e4cf1cdc-9cca-4169-8cad-5c25d93dda57, .ww-element-e04c7550-06a7-4bea-9108-c77a069a2f20) {
+    background: #f1f6fd; border: 1px solid #e4e9f1; border-radius: 20px;
+    overflow: hidden !important; gap: 0 !important; min-width: 0;
+}
+:where(.ww-element-64185e3b-d0b8-4df2-ba17-4ee099c1b359, .ww-element-160326aa-6464-4cb5-8e2c-1bf81223e023) {
+    flex: 1 1 auto; min-height: 160px; overflow-y: auto !important;
+    overscroll-behavior: contain; padding: 10px; box-sizing: border-box;
+}
+:where(.ww-element-6cd0c16b-3776-40d8-840e-4274d72ceccc, .ww-element-c94d00be-3578-4589-9b5c-b8165a92c0bf) {
+    flex: none; border-radius: 0 !important; box-shadow: none !important;
+    border-top: 1px solid #e4e9f1; padding: 12px 18px !important; box-sizing: border-box;
+}
+:where(.ww-element-74e334e1-62d0-4e61-afdc-4da3aa011fcf, .ww-element-2a3dbfa4-eddc-4a3c-9ec4-02a217620d70) textarea {
+    border: 1px solid #e4e9f1; border-radius: 20px; background: #f1f6fd;
+    font: inherit; padding: 11px 18px; box-sizing: border-box;
+}
+:where(.ww-element-7a962394-cf77-43b1-8606-bd8ddf2a8e03, .ww-element-5cd08dd6-fdfc-463d-95dd-12c41ac3c8fe) {
+    background: #2e70dd !important; border-color: #2e70dd !important;
+}
+@media (max-width: 600px) {
+    .ww-element-e04c7550-06a7-4bea-9108-c77a069a2f20 { max-height: 75dvh; min-height: 320px; }
+    :where(.ww-element-6cd0c16b-3776-40d8-840e-4274d72ceccc, .ww-element-c94d00be-3578-4589-9b5c-b8165a92c0bf) { padding: 10px !important; }
+}

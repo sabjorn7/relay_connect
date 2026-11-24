@@ -1,0 +1,63 @@
+{
+  "base": "123cdab5222d42803adc310f53bdfccfde4cc9a9",
+  "branch": "feat/existing-club-chat-20261124",
+  "status": "LOCAL_REVIEW_ONLY",
+  "tests": [
+    {
+      "name": "club-existing.unit",
+      "status": "PASS",
+      "suites": 13
+    },
+    {
+      "name": "web-push-send logic",
+      "status": "PASS",
+      "checks": 24
+    },
+    {
+      "name": "chat-previews.unit",
+      "status": "PASS",
+      "checks": 57
+    },
+    {
+      "name": "club message component Chrome/WebKit 390/1280",
+      "status": "PASS",
+      "scenarios": 4
+    },
+    {
+      "name": "existing chat links/browser",
+      "status": "PASS",
+      "scenarios": 4
+    },
+    {
+      "name": "existing chat authors/browser",
+      "status": "PASS",
+      "scenarios": 12
+    },
+    {
+      "name": "existing chat previews/browser",
+      "status": "PASS",
+      "scenarios": 12
+    },
+    {
+      "name": "Vite build without postbuild",
+      "status": "PASS"
+    },
+    {
+      "name": "Edge TypeScript parsing",
+      "status": "PASS"
+    },
+    {
+      "name": "full /club + WeWeb composer + popup e2e",
+      "status": "NOT TESTED"
+    },
+    {
+      "name": "real PWA notification delivery",
+      "status": "NOT TESTED"
+    },
+    {
+      "name": "production deploy/SQL/RLS/Storage",
+      "status": "NOT PERFORMED"
+    }
+  ],
+  "production_mutations": 0
+}

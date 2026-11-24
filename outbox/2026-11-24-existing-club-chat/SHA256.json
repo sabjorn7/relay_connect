@@ -1,0 +1,20 @@
+{
+  ".gitattributes": "b5cf5ce5e3ba4a3824be801ed3d8d0c56f033b5c57f6e46144ffc3c2e556ce8d",
+  "README.md": "f54bcc2ead98579489dbddafd8fcfc82ebc90b361d0f6b1787b0940607c179e2",
+  "SECURITY.md": "f3d298dd71ae20a9233e22a1e9eebacca17003c6c91a969baaa7908e16aaa113",
+  "TESTS.json": "f6b440cf881ce341af6fb16ae0a649f4865ea6e82c235092c6569f5adc9c9a6e",
+  "changes.diff": "48391f9bd44d911d3dd587ae7bcc3ec6634ae212a2f337353a21ad303131c71c",
+  "files/src/_front/components/ClubChatMessage.vue": "68c48d6597d1bada83a2646d29558a53765535665563ddc76fc7850fd5ca056b",
+  "files/src/_front/components/clubChat.css": "59fa2389f5ad9984c18bfdb2cec9fad466edfd9ea9d82231b021164579d72e7f",
+  "files/src/_front/components/wwElementComponent.vue": "299ded3ea1b30fc17cbe3dfe07cb944ab6d801a1bd2d0180d028c128c5477f90",
+  "files/src/_front/helpers/clubMessageView.js": "ec32ef1ea0b321fa761471a58a30938e12e509802b26c571e6fcd75888c01ba1",
+  "files/supabase/functions/web-push-send/club.mjs": "f390977de28f863d48d1e6f0c112ff42da51ee1fcab6ec4a6dd427b8218136f7",
+  "files/supabase/functions/web-push-send/index.ts": "91d06ee193a2f9fd38d9d5fec6dac626e92af54fbe135655e3e67a002d3d1d11",
+  "files/tests/club-existing.browser.mjs": "c6c324fb717335d6e805b6d223a83ec8b3869bc0f03a5747dc3eee62105083ba",
+  "files/tests/club-existing.unit.mjs": "611d756916c80ec8cbb26cea613e64884ffc369920d4bb790a8d7093c22e540f",
+  "run-existing-browser-tests.mjs": "2014ad5ad5c43091823a032c99a875b285853010fab6c24d9aa5a55525e6b3f3",
+  "screenshots/Chrome-1280.png": "da955d82f2233bc211f4bd374b9b13705599d90d24e0abe101f111db442de54d",
+  "screenshots/Chrome-390.png": "58900adb89088a17b69db97d7f00470885ee681d6125c9d426ae9928277f9def",
+  "screenshots/WebKit-1280.png": "23852a262baa08fec040842518f4c2a7a58ae82a597d6cac35c177d2a002ed06",
+  "screenshots/WebKit-390.png": "3c8089e167f0ed49ce607f4203504e918334be3b4ea4e21cdf680ca9405dfce1"
+}

@@ -1,0 +1,379 @@
+diff --git a/src/_front/components/wwElementComponent.vue b/src/_front/components/wwElementComponent.vue
+index 9728c96..f2e24ad 100644
+--- a/src/_front/components/wwElementComponent.vue
++++ b/src/_front/components/wwElementComponent.vue
+@@ -26,7 +26,7 @@
+  </template>
+ 
+ <script>
+-import { computed, ref, toRef, reactive, inject, provide, shallowRef, watch, onUnmounted } from 'vue';
++import { computed, ref, toRef, reactive, inject, provide, shallowRef, watch, onUnmounted, defineAsyncComponent } from 'vue';
+ 
+ import {
+     getComponentVueComponentName,
+@@ -47,6 +47,10 @@ import { useElementLocalContext } from '@/_front/use/useElementLocalContext';
+ 
+ import { getBackgroundStyle } from '@/_front/helpers/wwBackgroungStyle';
+ 
++import './clubChat.css';
++import { CLUB_MESSAGE_UIDS } from '@/_front/helpers/clubMessageView.js';
++const ClubChatMessage = defineAsyncComponent(() => import('./ClubChatMessage.vue'));
++
+ let componentId = 1;
+ 
+ export default {
+@@ -270,6 +274,8 @@ export default {
+     },
+     computed: {
+         vueComponentName() {
++            // Only the existing desktop/mobile club message templates; all actions/data stay in WeWeb.
++            if (CLUB_MESSAGE_UIDS.has(this.uid)) return ClubChatMessage;
+             return getComponentVueComponentName('element', this.uid);
+         },
+         /*=============================================m_ÔÔ_m=============================================\
+diff --git a/src/_front/components/ClubChatMessage.vue b/src/_front/components/ClubChatMessage.vue
+new file mode 100644
+index 0000000..a7445df
+--- /dev/null
++++ b/src/_front/components/ClubChatMessage.vue
+@@ -0,0 +1,82 @@
++<template>
++    <article class="mg-club-msg" :class="{ 'is-mine': mine }">
++        <component :is="profileHref ? 'a' : 'span'" :href="profileHref" class="mg-club-msg__avatar" :aria-label="`Профиль: ${name}`">
++            <img v-if="photo" :src="photo" :alt="name" @error="photoFailed = true" />
++            <span v-else>{{ initials }}</span>
++        </component>
++        <div class="mg-club-msg__col">
++            <component :is="profileHref ? 'a' : 'span'" :href="profileHref" class="mg-club-msg__sender">{{ name }}</component>
++            <div class="mg-club-msg__bubble">
++                <span v-if="message.deleted" class="mg-club-msg__deleted">Сообщение удалено</span>
++                <template v-else>
++                    <div v-if="images.length" class="mg-club-msg__images">
++                        <button v-for="(image, index) in images" :key="image" type="button" :aria-label="`Открыть фото ${index + 1}`" @click="openImages">
++                            <img :src="image" alt="Фото в сообщении" loading="lazy" />
++                        </button>
++                    </div>
++                    <span v-if="message.text" class="mg-club-msg__text"><ChatMessageText :text="message.text" /></span>
++                    <ChatLinkPreview v-if="message.text" :text="message.text" :mine="mine" />
++                </template>
++                <time class="mg-club-msg__time" :datetime="message.created_at">{{ time }}</time>
++            </div>
++        </div>
++        <button v-if="mine && !message.deleted" class="mg-club-msg__delete" type="button" aria-label="Удалить своё сообщение" @click="openDelete">
++            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 10v7M14 10v7" /></svg>
++        </button>
++    </article>
++</template>
++<script setup>
++// Presentation adapter for the existing two WeWeb club-chat message templates.
++// No queries, membership rules, new messages or upload paths are introduced here.
++import { computed, inject, ref, watch } from 'vue';
++import ChatMessageText from './ChatMessageText.vue';
++import ChatLinkPreview from './ChatLinkPreview.vue';
++import { readStoredSession } from '../chrome/headerAccount.js';
++import { usePopupStore } from '@/pinia/popup';
++import { clubMessageView } from '../helpers/clubMessageView.js';
++const binding = inject('bindingContext', null);
++const popups = usePopupStore();
++const message = computed(() => binding?.data || {});
++const view = computed(() => clubMessageView(message.value, readStoredSession()?.user?.id));
++const name = computed(() => view.value.name), initials = computed(() => view.value.initials);
++const mine = computed(() => view.value.mine), time = computed(() => view.value.time);
++const profileHref = computed(() => view.value.profileHref), images = computed(() => view.value.images);
++const photoFailed = ref(false);
++const photo = computed(() => photoFailed.value ? null : view.value.photo);
++watch(() => view.value.photo, () => { photoFailed.value = false; });
++function openImages() {
++    if (message.value.deleted || !images.value.length) return;
++    popups.open('bdbce13b-c53c-49c0-90cb-d54f062291c6', { default: { 'dec067db-951e-4696-b622-4a9abfdc6f31': images.value } });
++}
++function openDelete() {
++    if (!mine.value || message.value.deleted) return;
++    // Same confirmation popup and workflow as the existing club message's trash icon.
++    popups.open('44b526d0-6761-4039-896b-7358ae1504c0', { default: { '53525e42-bc4d-43d4-a441-187613868fe2': message.value.id, '6fb2e2db-5a10-4577-bfe3-532ec9d4ccbd': '' } });
++}
++</script>
++<style scoped>
++.mg-club-msg { --blue: #2e70dd; --blue-ink: #1f5fc9; --line: #e4e9f1; --bg-tint: #f1f6fd; --ink: #091747; display: flex; align-items: flex-end; gap: 8px; width: 100%; box-sizing: border-box; padding: 8px; font-family: 'Onest', system-ui, sans-serif; color: var(--ink); }
++.mg-club-msg.is-mine { justify-content: flex-end; }
++.mg-club-msg__avatar { display: block; width: 30px; height: 30px; border-radius: 50%; flex: none; text-decoration: none; }
++.mg-club-msg__avatar img, .mg-club-msg__avatar span { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; }
++.mg-club-msg__avatar span { display: grid; place-items: center; background: #eaf1fe; color: var(--blue-ink); font-size: 11px; font-weight: 700; }
++.is-mine .mg-club-msg__avatar { order: 2; }
++.mg-club-msg__col { display: flex; flex-direction: column; max-width: 74%; min-width: 0; }
++.mg-club-msg__sender { font-size: 12px; font-weight: 600; color: var(--blue-ink); margin: 0 0 3px 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-decoration: none; }
++.is-mine .mg-club-msg__sender { align-self: flex-end; }
++a.mg-club-msg__sender:hover { text-decoration: underline; }
++.mg-club-msg__bubble { background: #fff; border: 1px solid var(--line); border-radius: 16px 16px 16px 5px; padding: 10px 14px 7px; }
++.is-mine .mg-club-msg__bubble { background: var(--blue); border-color: var(--blue); color: #fff; border-radius: 16px 16px 5px 16px; }
++.mg-club-msg__text { display: block; font-size: 16px; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
++.mg-club-msg__text :deep(.pd-msg__link) { color: var(--blue-ink); }
++.is-mine .mg-club-msg__text :deep(.pd-msg__link) { color: #fff; }
++.mg-club-msg__time { display: block; margin-top: 3px; text-align: right; font-size: 12px; color: #5b6472; }
++.is-mine .mg-club-msg__time { color: #fff; }
++.mg-club-msg__images { display: flex; flex-wrap: wrap; gap: 6px; }
++.mg-club-msg__images button { border: 0; background: none; padding: 0; cursor: pointer; max-width: 100%; min-width: 44px; min-height: 44px; display: grid; place-items: center; }
++.mg-club-msg__images img { display: block; max-width: min(240px, 100%); max-height: 280px; border-radius: 10px; }
++.mg-club-msg__delete { border: 0; background: transparent; color: #a82b38; padding: 8px; cursor: pointer; flex: none; }
++.mg-club-msg__delete svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; }
++.mg-club-msg a:focus-visible, .mg-club-msg button:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
++@media (max-width: 600px) { .mg-club-msg__col { max-width: calc(100% - 80px); } }
++</style>
+diff --git a/src/_front/components/clubChat.css b/src/_front/components/clubChat.css
+new file mode 100644
+index 0000000..1b040cb
+--- /dev/null
++++ b/src/_front/components/clubChat.css
+@@ -0,0 +1,24 @@
++/* Existing WeWeb desktop/mobile club chat containers ONLY. No /chats selectors. */
++:where(.ww-element-e4cf1cdc-9cca-4169-8cad-5c25d93dda57, .ww-element-e04c7550-06a7-4bea-9108-c77a069a2f20) {
++    background: #f1f6fd; border: 1px solid #e4e9f1; border-radius: 20px;
++    overflow: hidden !important; gap: 0 !important; min-width: 0;
++}
++:where(.ww-element-64185e3b-d0b8-4df2-ba17-4ee099c1b359, .ww-element-160326aa-6464-4cb5-8e2c-1bf81223e023) {
++    flex: 1 1 auto; min-height: 160px; overflow-y: auto !important;
++    overscroll-behavior: contain; padding: 10px; box-sizing: border-box;
++}
++:where(.ww-element-6cd0c16b-3776-40d8-840e-4274d72ceccc, .ww-element-c94d00be-3578-4589-9b5c-b8165a92c0bf) {
++    flex: none; border-radius: 0 !important; box-shadow: none !important;
++    border-top: 1px solid #e4e9f1; padding: 12px 18px !important; box-sizing: border-box;
++}
++:where(.ww-element-74e334e1-62d0-4e61-afdc-4da3aa011fcf, .ww-element-2a3dbfa4-eddc-4a3c-9ec4-02a217620d70) textarea {
++    border: 1px solid #e4e9f1; border-radius: 20px; background: #f1f6fd;
++    font: inherit; padding: 11px 18px; box-sizing: border-box;
++}
++:where(.ww-element-7a962394-cf77-43b1-8606-bd8ddf2a8e03, .ww-element-5cd08dd6-fdfc-463d-95dd-12c41ac3c8fe) {
++    background: #2e70dd !important; border-color: #2e70dd !important;
++}
++@media (max-width: 600px) {
++    .ww-element-e04c7550-06a7-4bea-9108-c77a069a2f20 { max-height: 75dvh; min-height: 320px; }
++    :where(.ww-element-6cd0c16b-3776-40d8-840e-4274d72ceccc, .ww-element-c94d00be-3578-4589-9b5c-b8165a92c0bf) { padding: 10px !important; }
++}
+diff --git a/src/_front/helpers/clubMessageView.js b/src/_front/helpers/clubMessageView.js
+new file mode 100644
+index 0000000..31d8ddc
+--- /dev/null
++++ b/src/_front/helpers/clubMessageView.js
+@@ -0,0 +1,20 @@
++export const CLUB_MESSAGE_UIDS = new Set(['05f4fc6d-d561-4c9f-9f57-4af63724f675', '2a3ed957-42b8-46a1-8551-58018509e747']);
++const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
++export function clubMediaUrl(value) {
++    if (typeof value !== 'string') return null;
++    try { const u = new URL(value); return u.protocol === 'https:' && !u.username && !u.password ? u.href : null; } catch { return null; }
++}
++export function clubMessageView(row, userId) {
++    const owner = row?.owner && typeof row.owner === 'object' ? row.owner : {};
++    const id = typeof row?.owner === 'string' ? row.owner : owner.id;
++    const name = typeof owner.Name === 'string' && owner.Name.trim() ? owner.Name : 'Участник';
++    const d = new Date(row?.created_at), pad = n => String(n).padStart(2, '0');
++    return {
++        name, initials: owner.Name ? owner.Name.trim().split(/\s+/).slice(0, 2).map(s => s[0]).join('').toUpperCase() || '·' : '·',
++        mine: !!userId && userId === id,
++        profileHref: UUID.test(id || '') ? `/profile_page?user=${id}` : undefined,
++        photo: clubMediaUrl(owner.Photo),
++        images: row?.deleted ? [] : [...new Set((Array.isArray(row?.img) ? row.img : []).map(clubMediaUrl).filter(Boolean))],
++        time: row?.created_at && !isNaN(d) ? `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()} · ${pad(d.getHours())}:${pad(d.getMinutes())}` : '',
++    };
++}
+diff --git a/supabase/functions/web-push-send/index.ts b/supabase/functions/web-push-send/index.ts
+index fd8e96c..265f005 100644
+--- a/supabase/functions/web-push-send/index.ts
++++ b/supabase/functions/web-push-send/index.ts
+@@ -18,6 +18,7 @@
+ // Деплой — вручную (копия папки в volumes/functions/ + пересоздание), как cheatsheet-import.
+ 
+ import webpush from 'npm:web-push@3.6.7';
++import { validateClubPayload, handleClubEvent } from './club.mjs';
+ import { SUPABASE_URL as SB_URL_CONST } from '../_shared/og.mjs';
+ 
+ const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? SB_URL_CONST;
+@@ -31,6 +32,9 @@ const ALLOW_RAW = (Deno.env.get('PUSH_ALLOWLIST') ?? '').trim();
+ const ALLOW_ALL = ALLOW_RAW === '*';
+ const ALLOWLIST = new Set(ALLOW_RAW.split(',').map((s) => s.trim()).filter((x) => x && x !== '*'));
+ 
++// Separate fail-closed switch: do not enable before the event source/access review is approved.
++const PUSH_CLUB_ENABLED = Deno.env.get('PUSH_CLUB_ENABLED') === 'true';
++
+ const RATE_MIN = 5;
+ const CONCURRENCY = 20;
+ const TIME_BUDGET_MS = 25000;
+@@ -246,11 +250,15 @@ export async function handler(req: Request): Promise<Response> {
+ 
+   let payload: any;
+   try { payload = await req.json(); } catch { return json({ error: 'bad_json' }, 400); }
+-  const v = validatePayload(payload);
++  const v = validateClubPayload(payload) || validatePayload(payload);
+   if ((v as any).error) return json({ error: (v as any).error }, 400);
+   const { event, streamId, messageId } = v as any;
+ 
+   try {
++    if (event === 'club_message' || event === 'club_post') {
++      if (!PUSH_CLUB_ENABLED) return json({ ok: true, event, disabled: true, counts: zero });
++      return await handleClubEvent(event, (v as any).clubEventId, zero, { dbGet, fetchSubs, deliver, json, pickDmRecipients, allowAll: ALLOW_ALL, allowlist: ALLOWLIST });
++    }
+     if (event === 'direct_message') return await handleDirectMessage(messageId, zero);
+ 
+     // --- Ветка эфира (stream_start / chat_message) ---
+diff --git a/supabase/functions/web-push-send/club.mjs b/supabase/functions/web-push-send/club.mjs
+new file mode 100644
+index 0000000..0521888
+--- /dev/null
++++ b/supabase/functions/web-push-send/club.mjs
+@@ -0,0 +1,48 @@
++// Club extension of the existing web-push sender. Never put club content in lock-screen payloads.
++const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
++export function validateClubPayload(p) {
++    if (p?.event !== 'club_message' && p?.event !== 'club_post') return null;
++    const id = String((p.event === 'club_message' ? p.message_id : p.post_id) || '');
++    return UUID.test(id) ? { event: p.event, clubEventId: id } : { error: 'bad_club_event_id' };
++}
++export function clubNotification(event, clubId) {
++    if (!UUID.test(clubId) || !['club_message', 'club_post'].includes(event)) throw new Error('invalid_club_event');
++    return { title: 'МитГуру', body: event === 'club_message' ? 'Новое сообщение в клубе' : 'Новый пост в клубе', event,
++        // Existing /club route. Do not claim automatic tab selection: legacy page ignores such a query.
++        data: { url: `/club/?club=${clubId}` } };
++}
++export async function handleClubEvent(event, id, zero, deps) {
++    const { dbGet, fetchSubs, deliver, json, pickDmRecipients, allowAll, allowlist } = deps;
++    const skip = reason => json({ ok: true, event, skipped: reason, counts: zero });
++    const table = event === 'club_message' ? 'club_chat' : 'club_posts';
++    const cols = event === 'club_message' ? 'id,club,owner,deleted' : 'id,club,date_send';
++    const [record] = await dbGet(`${table}?id=eq.${id}&select=${cols}`, table);
++    if (!record || !UUID.test(record.club || '') || record.deleted === true || (event === 'club_post' && record.date_send !== null)) return skip('not_published');
++    const [club] = await dbGet(`clubs?id=eq.${record.club}&select=id,owner`, 'club');
++    if (!club || !UUID.test(club.owner || '')) return skip('club_not_found');
++    // Same date predicate as get_club_bundle.subers. active is renewal status, not paid access.
++    // No subscription rows are written or reinterpreted by this feature.
++    const ids = new Set([club.owner]);
++    let complete = false;
++    for (let page = 0; page < 10; page++) {
++        const rows = await dbGet(`club_subs?club=eq.${record.club}&end_date=gt.today&select=id,suber&order=id.asc&limit=1000&offset=${page * 1000}`, 'club_members');
++        for (const row of rows) if (UUID.test(row.suber || '')) ids.add(row.suber);
++        if (rows.length < 1000) { complete = true; break; }
++    }
++    if (!complete) return skip('membership_limit');
++    const sender = event === 'club_message' ? record.owner : club.owner;
++    if (!ids.has(sender)) return skip('sender_not_member');
++    const optedOut = new Set(), users = [...ids];
++    for (let i = 0; i < users.length; i += 100) {
++        const part = users.slice(i, i + 100);
++        const rows = await dbGet(`users?id=in.(${part.join(',')})&select=id,send_notif`, 'club_opt_out');
++        const present = new Set(rows.map(r => r.id));
++        for (const uid of part) if (!present.has(uid)) optedOut.add(uid);
++        for (const row of rows) if (row.send_notif === false) optedOut.add(row.id);
++    }
++    const recipients = [...pickDmRecipients({ users, senderId: sender, optedOut, allowAll, allowlist })];
++    if (!recipients.length) return json({ ok: true, event, counts: zero });
++    const subs = await fetchSubs(recipients);
++    const result = subs.length ? await deliver(subs, JSON.stringify(clubNotification(event, record.club)), 'normal') : { sent: 0, failed: 0, pruned: 0, codes: {} };
++    return json({ ok: true, event, counts: { ...zero, recipients: recipients.length, subs: subs.length, ...result } });
++}
+diff --git a/tests/club-existing.unit.mjs b/tests/club-existing.unit.mjs
+new file mode 100644
+index 0000000..a415044
+--- /dev/null
++++ b/tests/club-existing.unit.mjs
+@@ -0,0 +1,39 @@
++import assert from 'node:assert/strict';
++import { readFileSync } from 'node:fs';
++import { clubMessageView, CLUB_MESSAGE_UIDS } from '../src/_front/helpers/clubMessageView.js';
++import { validateClubPayload, clubNotification, handleClubEvent } from '../supabase/functions/web-push-send/club.mjs';
++const A='11111111-1111-4111-8111-111111111111',B='22222222-2222-4222-8222-222222222222',C='33333333-3333-4333-8333-333333333333';
++let cases=0;function test(name,fn){return Promise.resolve().then(fn).then(()=>{cases++;console.log('PASS',name)})}
++await test('view: safe profile links, placeholders, local date, same own/other split',()=>{
++ const row={owner:{id:A,Name:'Иван Иванов'},created_at:'2026-11-24T12:00:00Z',img:['https://example.test/a.png','javascript:alert(1)','https://example.test/a.png']};
++ const v=clubMessageView(row,A);assert.equal(v.mine,true);assert.equal(v.initials,'ИИ');assert.equal(v.profileHref,`/profile_page?user=${A}`);assert.equal(v.images.length,1);assert.match(v.time,/24\.11\.2026 · \d{2}:00/);
++ assert.equal(clubMessageView(row,B).mine,false);assert.equal(clubMessageView({owner:{id:'javascript:1'}},A).profileHref,undefined);assert.equal(clubMessageView({owner:{id:A}},B).name,'Участник');
++ assert.deepEqual(clubMessageView({...row,deleted:true},A).images,[]);
++});
++await test('only two existing message templates replaced; source controls and workflow unchanged',()=>{
++ const d=JSON.parse(readFileSync(new URL('../public/data/98342e46-3cd3-48bc-bf0a-f1b60bf63535.json',import.meta.url)));
++ for(const id of CLUB_MESSAGE_UIDS) assert.equal(d.wwObjects[id].parentLibraryComponentId,'61fb1d5b-929d-431f-97ce-4c1685f94a02');
++ assert.equal(CLUB_MESSAGE_UIDS.size,2);
++ const component=readFileSync(new URL('../src/_front/components/ClubChatMessage.vue',import.meta.url),'utf8');assert(!component.includes('v-html'));assert(!component.includes('.from('));
++ assert(component.includes('44b526d0-6761-4039-896b-7358ae1504c0'));assert(component.includes('bdbce13b-c53c-49c0-90cb-d54f062291c6'));
++});
++await test('club payload validation and non-disclosing notifications',()=>{
++ assert.equal(validateClubPayload({event:'direct_message',message_id:A}),null);
++ assert.deepEqual(validateClubPayload({event:'club_post',post_id:'bad'}),{error:'bad_club_event_id'});
++ for(const event of ['club_message','club_post']){assert.equal(validateClubPayload({event,message_id:A,post_id:A}).clubEventId,A);const n=clubNotification(event,C);assert.equal(n.title,'МитГуру');assert.deepEqual(Object.keys(n).sort(),['body','data','event','title']);assert.equal(n.data.url,`/club/?club=${C}`)}
++});
++const source=readFileSync(new URL('../supabase/functions/web-push-send/index.ts',import.meta.url),'utf8');
++const pure=source.match(/=== PURE LOGIC[\s\S]*?\n([\s\S]*?)\/\/ === \/PURE LOGIC/)[1].replace(/export function/g,'function');
++const pickDmRecipients=new Function(`${pure};return pickDmRecipients`)();
++const zero={recipients:0,subs:0,sent:0,failed:0,pruned:0,skippedRate:0,codes:{}};
++async function run(opts={}){
++ const calls=[],deliveries=[];const event=opts.event||'club_message';
++ const dbGet=async(path)=>{calls.push(path);if(opts.fail)throw Error('db_error');if(path.startsWith('club_chat?'))return opts.missing?[]:[{id:A,club:C,owner:opts.sender||B,deleted:opts.deleted}];if(path.startsWith('club_posts?'))return [{id:A,club:C,date_send:opts.scheduled?'2027-01-01':null}];if(path.startsWith('clubs?'))return [{id:C,owner:A}];if(path.startsWith('club_subs?'))return [{id:C,suber:B},{id:B,suber:B}];if(path.startsWith('users?'))return [{id:A,send_notif:!opts.optOut},{id:B,send_notif:!opts.optOut}];throw Error('unexpected_table')};
++ const result=await handleClubEvent(event,A,zero,{dbGet,json:x=>x,pickDmRecipients,allowAll:opts.allowAll!==false,allowlist:new Set(),fetchSubs:async(ids)=>ids.map(user_id=>({user_id})),deliver:async(s,p)=>{deliveries.push({s,p});return {sent:s.length,failed:0,pruned:0,codes:{}}}});return {result,calls,deliveries};
++}
++await test('message: owner notified, sender excluded, only metadata queried',async()=>{const r=await run();assert.equal(r.result.counts.sent,1);assert.equal(r.deliveries[0].s[0].user_id,A);assert(r.calls.every(p=>!/[?,]text|photos|customer|Name/.test(p)));assert(r.calls.some(p=>p.includes('end_date=gt.today')))});
++await test('post: current members notified; no publisher notification',async()=>{const r=await run({event:'club_post'});assert.equal(r.deliveries[0].s[0].user_id,B)});
++for(const opts of [{missing:true},{deleted:true},{scheduled:true,event:'club_post'},{optOut:true},{allowAll:false},{sender:C}])await test('no send '+JSON.stringify(opts),async()=>{assert.equal((await run(opts)).deliveries.length,0)});
++await test('DB failure never becomes broadcast',async()=>{await assert.rejects(run({fail:true}),/db_error/)});
++await test('club extension is off by default and existing events preserved',()=>{assert(source.includes("Deno.env.get('PUSH_CLUB_ENABLED') === 'true'"));assert(source.includes("if (event === 'direct_message') return await handleDirectMessage"));assert(source.indexOf('await keyOk')<source.indexOf('await handleClubEvent'))});
++console.log(JSON.stringify({pass:cases,fail:0,productionWrites:0}));
+diff --git a/tests/club-existing.browser.mjs b/tests/club-existing.browser.mjs
+new file mode 100644
+index 0000000..48f09b0
+--- /dev/null
++++ b/tests/club-existing.browser.mjs
+@@ -0,0 +1,58 @@
++import fs from 'node:fs';
++import path from 'node:path';
++import os from 'node:os';
++import http from 'node:http';
++import assert from 'node:assert/strict';
++import { build } from 'vite';
++import vue from '@vitejs/plugin-vue';
++const {chromium,webkit}=await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
++const root=path.resolve(new URL('..',import.meta.url).pathname);
++const work=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'mg-club-ui-')));
++fs.symlinkSync(path.join(root,'node_modules'),path.join(work,'node_modules'),'dir');
++const put=(n,s)=>{const p=path.join(work,n);fs.writeFileSync(p,s);return p};
++const aliases=[
++ {find:'@/_front/chrome/headerAccount.js',replacement:put('account.js',`export const readStoredSession=()=>window.fixture.identity.uid?{user:{id:window.fixture.identity.uid}}:null;`)},
++ {find:path.join(root,'src/_front/chrome/headerAccount.js'),replacement:path.join(work,'account.js')},
++ {find:'@/_front/helpers/chatPreviewData.js',replacement:put('preview.js',`export const loadChatPreview=async()=>({type:'course',title:'Тестовый курс',description:'Публичное описание курса',href:'/course/33333333-3333-4333-8333-333333333333'});`)},
++ {find:'@',replacement:path.join(root,'src')},
++];
++// Relative headerAccount import is matched by Vite after resolution via a tiny test plugin.
++put('index.html','<html lang="ru"><meta name="viewport" content="width=device-width,initial-scale=1"><div id="app"></div><script type="module" src="/main.js"></script></html>');
++put('main.js',`
++import {createApp,reactive,provide,h} from 'vue';import {createPinia} from 'pinia';import {usePopupStore} from ${JSON.stringify(path.join(root,'src/pinia/popup.js'))};import Message from ${JSON.stringify(path.join(root,'src/_front/components/ClubChatMessage.vue'))};
++const A='11111111-1111-4111-8111-111111111111',B='22222222-2222-4222-8222-222222222222';
++const identity=reactive({uid:A});const rows=reactive([
++{id:'one',owner:{id:B,Name:'Анна Смирнова'},text:'Привет! https://example.org/?a=1&b=2,\\nСохраняем  пробелы и переносы.',created_at:'2026-11-24T12:00:00Z'},
++{id:'two',owner:{id:A,Name:'Иван Петров'},text:'Вот материал: https://app.meetgu.ru/course/33333333-3333-4333-8333-333333333333',created_at:'2026-11-24T12:01:00Z'},
++{id:'three',owner:{id:B},text:'<img src=x onerror="window.pwned=1"> javascript:alert(1)',img:['https://fixture.test/image.png','javascript:alert(1)'],created_at:'2026-11-24T12:02:00Z'},
++{id:'four',owner:{id:B},text:'SECRET DELETED',img:['https://fixture.test/deleted.png'],deleted:true,created_at:'2026-11-24T12:03:00Z'}]);
++window.fixture={identity,rows};window.wwLib={$store:{getters:{'libraries/getLibrary':{id:'test'},'libraries/getComponents':{}}}};
++const Row={props:['row'],setup(p){provide('bindingContext',reactive({get data(){return p.row}}));return()=>h(Message)}};
++createApp({setup(){window.fixture.popups=usePopupStore();return()=>h('main',{style:'max-width:940px;margin:auto;background:#f1f6fd;border-radius:16px;padding:8px'},[h('h1',{style:'font:600 20px system-ui;padding:12px'},'Чат клуба'),...rows.map(row=>h(Row,{row,key:row.id}))])}}).use(createPinia()).mount('#app');
++`);
++await build({root:work,configFile:false,logLevel:'silent',plugins:[{name:'test-account',enforce:'pre',resolveId(id,importer){if(id==='../helpers/chatPreviewData.js'&&importer?.endsWith('ChatLinkPreview.vue'))return path.join(work,'preview.js');if(id==='../chrome/headerAccount.js'&&importer?.endsWith('ClubChatMessage.vue'))return path.join(work,'account.js')}},vue({template:{transformAssetUrls:false}})],resolve:{alias:aliases},build:{outDir:'dist'}});
++const server=http.createServer((req,res)=>{const url=new URL(req.url,'http://local');const p=path.join(work,'dist',url.pathname==='/'?'index.html':url.pathname);if(!p.startsWith(work+'/dist/')||!fs.existsSync(p)){res.writeHead(404);return res.end()}res.setHeader('Content-Type',p.endsWith('.js')?'text/javascript':p.endsWith('.css')?'text/css':'text/html');res.end(fs.readFileSync(p))});
++await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.0.1:'+server.address().port,results=[];
++try{for(const engine of ['Chrome','WebKit']){
++ const browser=engine==='Chrome'?await chromium.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true}):await webkit.launch({headless:true});
++ try{for(const width of [390,1280]){
++ const c=await browser.newContext({viewport:{width,height:900},timezoneId:'Europe/Moscow',serviceWorkers:'block'});
++ await c.route('**/*',r=>new URL(r.request().url()).origin===origin?r.continue():r.fulfill({status:200,body:fs.readFileSync(path.join(root,'public/images/apple-touch-180.png')),contentType:'image/png'}));
++ const page=await c.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto(origin);await page.locator('.mg-club-msg').nth(3).waitFor();
++ assert.equal(await page.locator('.mg-club-msg').count(),4);assert.equal(await page.locator('.mg-club-msg__text').first().textContent(),'Привет! https://example.org/?a=1&b=2,\nСохраняем  пробелы и переносы.');
++ assert.equal(await page.locator('.mg-club-msg__time').first().textContent(),'24.11.2026 · 15:00');
++ assert.equal(await page.locator('.is-mine').count(),1);assert.equal(await page.locator('.mg-club-msg__delete').count(),1);
++ assert.equal(await page.locator('.mg-club-msg__sender').first().getAttribute('href'),'/profile_page?user=22222222-2222-4222-8222-222222222222');
++ assert.equal(await page.locator('.mg-club-msg__sender').nth(2).textContent(),'Участник');
++ assert.equal(await page.locator('.mg-club-msg__text img, .mg-club-msg__text script').count(),0);assert.equal(await page.evaluate(()=>window.pwned),undefined);
++ assert.equal(await page.getByText('SECRET DELETED').count(),0);assert.equal(await page.locator('.mg-club-msg__images button').count(),1);
++ await page.getByRole('button',{name:'Открыть фото 1'}).click();assert.equal(await page.evaluate(()=>Object.values(fixture.popups.instances)[0].libraryComponentBaseId),'bdbce13b-c53c-49c0-90cb-d54f062291c6');
++ await page.getByRole('button',{name:'Удалить своё сообщение'}).click();assert.equal(await page.evaluate(()=>Object.values(fixture.popups.instances).at(-1).content.default['53525e42-bc4d-43d4-a441-187613868fe2']),'two');
++ await page.locator('.pd-preview').waitFor();
++ assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
++ await page.screenshot({path:path.join(work,engine+'-'+width+'.png'),fullPage:true});
++ await page.evaluate(()=>fixture.identity.uid=null);assert.equal(await page.locator('.is-mine').count(),0);assert.equal(await page.locator('.mg-club-msg__delete').count(),0);
++ assert.deepEqual(errors,[]);results.push({engine,width,links:true,preview:true,legacyGallery:true,legacyDeletePopup:true,logout:true,xssSafe:true,noOverflow:true});await c.close();
++ }}finally{await browser.close()}
++}}finally{server.closeAllConnections();await new Promise(r=>server.close(r))}
++console.log(JSON.stringify({pass:results.length,results,screenshots:work}));

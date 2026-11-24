@@ -1,0 +1,3 @@
+# Preserve literal patch context and the existing exported WeWeb source snapshot.
+changes.diff -whitespace
+files/src/_front/components/wwElementComponent.vue -whitespace
