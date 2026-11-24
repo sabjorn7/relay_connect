@@ -1,0 +1,34 @@
+--- a/src/_front/helpers/clubAttachments.js
++++ b/src/_front/helpers/clubAttachments.js
+@@ -5,8 +5,9 @@
+     if(![club,uid,id].every(x=>UUID.test(x||''))||!/^\w{2,5}$/.test(ext))throw Error('invalid_attachment');
+     return `${club}/${uid}/${id}.${ext}`;
+ }
+-export async function clubAttachmentsEnabled(sb){
+-    try{const {data,error}=await sb.rpc('club_chat_capabilities');return !error&&data?.attachments===true;}catch{return false}
++export async function clubAttachmentsEnabled(sb,club){
++    if(!UUID.test(club||''))return false;
++    try{const {data,error}=await sb.rpc('club_chat_capabilities',{p_club:club});return !error&&data?.attachments===true;}catch{return false}
+ }
+ export function prepareClubAttachment(file,club,uid){
+     const v=validateFile(file);if(!v.ok)throw Error(v.error);
+@@ -14,7 +15,7 @@
+ }
+ export async function sendClubAttachment(sb,item,current){
+     if(!current(item.uid))throw Error('session_changed');
+-    if(!await clubAttachmentsEnabled(sb))throw Error('attachments_disabled');
++    if(!await clubAttachmentsEnabled(sb,item.club))throw Error('attachments_disabled');
+     if(!current(item.uid))throw Error('session_changed');
+     if(!item.uploaded){
+         const {error}=await sb.storage.from(CLUB_ATTACHMENT_BUCKET).upload(item.path,item.file,{upsert:false,contentType:item.mime});
+--- a/src/_front/components/ClubChatAttachments.vue
++++ b/src/_front/components/ClubChatAttachments.vue
+@@ -37,7 +37,7 @@
+  recorder.start();recording.value=true;timeout=setTimeout(()=>stop(false),300000);
+  }catch{cleanup();error.value='Не удалось начать запись. Проверьте микрофон и разрешение браузера.'}finally{requesting.value=false}}
+ async function send(){const item=pending.value;if(!item||busy.value)return;busy.value=true;error.value='';try{await sendClubAttachment(getSupabase(),item,current);if(current(item.uid)&&club.value===item.club){clear();await ctx?.component?.methods?.executeWorkflow('b9817663-75ec-436b-b985-ac4399e3fd9f')}}catch{if(!dead)error.value='Не удалось отправить. Вложение сохранено для повторной попытки.'}finally{busy.value=false}}
+-async function capability(){enabled.value=false;const generation=++rev;const result=await clubAttachmentsEnabled(getSupabase());if(!dead&&generation===rev)enabled.value=result}
++async function capability(){enabled.value=false;const generation=++rev;const result=await clubAttachmentsEnabled(getSupabase(),club.value);if(!dead&&generation===rev)enabled.value=result}
+ watch(()=>readStoredSession()?.user?.id,()=>{rev++;stop(true);clear();enabled.value=false;if(readStoredSession()?.user?.id)capability()});
+ watch(club,()=>{rev++;stop(true);clear();capability()});onMounted(capability);onBeforeUnmount(()=>{dead=true;rev++;stop(true);cleanup();clear()});
+ </script>

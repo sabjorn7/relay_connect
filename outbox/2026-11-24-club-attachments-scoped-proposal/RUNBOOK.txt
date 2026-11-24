@@ -1,0 +1,48 @@
+DO NOT EXECUTE IN PRODUCTION under current authorization.
+
+Required separate approval:
+1. Two narrowly scoped Storage INSERT policy call-site changes.
+2. Explicit test-club UUID and existing test-account identities.
+3. Server installation, frontend release and limited activation.
+
+After approval:
+1. Read and compare live function definitions and two policies with package
+   baseline. Stop on differences. Save definitions/ACLs/ownership and checksums
+   for zero-arg capability, send RPC and the two policies. Confirm no existing
+   uuid overload. Preserve backup outside Git. Do not dump secrets/user rows.
+2. Verify capabilities=false and push triggers disabled. Apply entire
+   install.REQUIRES-APPROVAL.sql via approved admin mechanism, psql -X
+   -v ON_ERROR_STOP=1. It is transactional and leaves attachments disabled.
+   Never apply baseline.sql to production.
+3. Repeat candidate Vite and browser checks, then publish frontend.diff via
+   Deploy App only after release approval. Old frontend stays disabled.
+4. Select approved test club, verify existing account has access. Execute:
+   psql -X -v ON_ERROR_STOP=1 -v pilot_club=APPROVED_UUID -f enable-one-club.sql
+   Use existing protected connection configuration; no credentials in command.
+5. Check new capability with confirmed test session for target and another
+   club (true/false), guest false, legacy RPC false. Check image/document/voice
+   upload and open/play; direct other-club upload/send denied. Verify text,
+   legacy photographs and deletion. No messages in other users' clubs.
+   Keep push disabled. Record physical Safari as NOT TESTED if unavailable.
+
+Immediate disable:
+   psql -X -v ON_ERROR_STOP=1 -f disable.sql
+This denies new uploads and sends for every club through the scoped overload.
+Existing attachments remain readable according to unchanged read policies;
+previously issued signed URLs retain their existing lifetime. Do not delete
+messages, objects, subscriptions or orders. Already running transactions may
+finish against their snapshot; verify after disable.
+
+Full rollback (separate approval):
+Disable first; verify definitions unchanged since install, restore exact
+backed-up policy/RPC definitions. rollback.sql is provided for the confirmed
+baseline and restores the two zero-argument policy calls and send RPC, then
+drops the scoped overload in one transaction. It preserves data. Revert only
+the two frontend changes via PR/Deploy App if approved. New UI fails closed
+if scoped overload is absent. Do not touch push, Auth or memberships.
+
+Local reproduction:
+node scoped.unit.mjs
+python3 scoped.postgres.py
+Requires existing Node with File API and local PostgreSQL tools; creates an
+isolated temporary cluster, Unix socket only, no production connection.

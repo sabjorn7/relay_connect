@@ -1,0 +1,57 @@
+MeetGuru — scoped attachments proposal, 24.11.2026
+STATUS: BLOCKED FOR INSTALLATION — separate approval of two Storage policy
+expressions is required. Local combined proposal tests PASS.
+No production access or changes performed in this task. No deployment.
+
+Baseline: published frontend 5313871; package e159530, installed definitions
+read during preceding scope check. Existing dirty main workspace untouched.
+
+Frontend diff: only clubAttachments.js and ClubChatAttachments.vue.
+Pass p_club to capability from existing context and again before upload/send.
+Invalid/missing ID and RPC errors fail closed. No UI/template changes.
+Existing generation guard ignores delayed capability results after club switch.
+
+SQL:
+- Keep zero-argument capability disabled for old clients.
+- Add overload club_chat_capabilities(p_club uuid), initially disabled.
+- When approved, configure exactly one literal UUID in that function; no
+  new configuration table or caller-controlled switch. UUID cast and format %L
+  avoid injection; unknown club fails before changing capability.
+- Preserve existing club_chat_has_access without any alteration.
+- Send RPC changes only its capability invocation to pass p_club.
+
+Constraint conflict (confirmed from existing package and preceding live read):
+Storage INSERT policies club_private_upload and club_private_upload_guard
+currently call zero-argument capability. Leaving them untouched keeps uploads
+blocked everywhere; enabling that function globally would permit uploads in
+all clubs where the user has access. Frontend checks cannot enforce scope.
+Therefore 02-storage-policy.REQUIRES-APPROVAL.sql is a SEPARATE PROPOSAL,
+not authorized for installation: only change these two call sites to pass
+club_chat_path_club(name). Keep all ownership, access, restrictive behavior and
+all SELECT/UPDATE/DELETE policies unchanged. No club-table RLS changes.
+Do not route this through a membership helper change to evade the RLS limit.
+
+PASS:
+- Node helper tests: ID forwarded, missing/invalid/other-club denied, offline
+  fail closed, session mismatch, image/document/audio upload and send.
+- Vue SFC script/template compilation.
+- Isolated PostgreSQL: compile SQL and proposed two Storage expressions;
+  selected club member allowed, other club member and outsider/anon denied;
+  no-argument RPC remains false; direct Storage upload denied outside pilot
+  even with legacy permissive policy; send denied outside pilot;
+  image/file/audio paths; idempotent retry; disable and rollback preserve
+  all three messages, objects and two subscription rows.
+- No club-table RLS changes in local fixture.
+
+NOT TESTED:
+Real browser recording, physical Safari, production sending/playback,
+full Vite build and full browser regression of this candidate. This task
+stopped short of installation approval due to explicit prohibition on RLS.
+The audio test checks upload/send, not microphone capture or playback.
+
+Files:
+frontend.diff + candidate (two changed files and unchanged local helper test
+fixture); 01-functions-disabled.sql; enable-one-club.sql; disable.sql;
+rollback.sql; separately gated 02-storage-policy.REQUIRES-APPROVAL.sql and
+atomic install wrapper; baseline.sql (local test fixture ONLY, never install);
+scoped.unit.mjs; scoped.postgres.py; logs and SHA256SUMS.

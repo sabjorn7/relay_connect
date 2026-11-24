@@ -1,0 +1,1 @@
+PASS: scoped capability, member/outsider/anon, legacy disabled, direct upload denied outside pilot despite broad legacy policy, image/file/audio send, duplicate request, disable and rollback preserve data. LOCAL POSTGRES ONLY; proposed Storage policy changes included for this test.
