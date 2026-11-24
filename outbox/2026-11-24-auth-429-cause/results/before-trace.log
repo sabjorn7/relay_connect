@@ -1,0 +1,12 @@
+{"engine":"Chrome","mode":"two-tabs-error","count":2,"states":[{"authenticated":true,"uid":"A","view":"A","guest":false,"ready":true,"stored":true,"trace":[{"t":28,"type":"refreshAuthUser","epoch":0},{"t":29,"type":"get-start","n":1},{"t":29,"type":"get-start","n":2},{"t":30,"type":"get-start","n":3},{"t":237,"type":"event","event":"TOKEN_REFRESHED","uid":"A"},{"t":237,"type":"clearAuthView","epoch":1,"request":1},{"t":238,"type":"event","event":"INITIAL_SESSION","uid":"A"},{"t":238,"type":"clearAuthView","epoch":2,"request":1},{"t":238,"type":"get-end","n":1,"uid":"A","error":null,"status":null},{"t":238,"type":"get-end","n":2,"uid":"A","error":null,"status":null},{"t":238,"type":"get-end","n":3,"uid":"A","error":null,"status":null},{"t":238,"type":"refreshAuthUser","epoch":2,"request":1},{"t":238,"type":"get-start","n":4},{"t":238,"type":"get-end","n":4,"uid":"A","error":null,"status":null},{"t":238,"type":"get-start","n":5},{"t":238,"type":"get-end","n":5,"uid":"A","error":null,"status":null},{"t":238,"type":"refreshAuthUser","epoch":2,"request":2},{"t":238,"type":"get-start","n":6},{"t":238,"type":"get-end","n":6,"uid":"A","error":null,"status":null}]},{"authenticated":false,"uid":null,"view":null,"guest":true,"ready":true,"stored":true,"trace":[{"t":25,"type":"refreshAuthUser","epoch":0},{"t":25,"type":"get-start","n":1},{"t":25,"type":"get-start","n":2},{"t":26,"type":"get-start","n":3},{"t":187,"type":"event","event":"TOKEN_REFRESHED","uid":"A"},{"t":187,"type":"clearAuthView","epoch":1,"request":1},{"t":187,"type":"refreshAuthUser","epoch":1,"request":1},{"t":187,"type":"get-start","n":4},{"t":3027,"type":"markAuthPending","epoch":1,"request":2},{"t":3027,"type":"clearAuthView","epoch":1,"request":2},{"t":8428,"type":"get-start","n":5},{"t":17229,"type":"get-start","n":6}]}]}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+page.waitForFunction: Timeout 20000ms exceeded.
+    at /private/tmp/mg-auth-429-20261124/candidate/tests/auth-session-recovery.browser.mjs:45:156 {
+  log: [],
+  name: 'TimeoutError'
+}
+
+Node.js v24.14.0

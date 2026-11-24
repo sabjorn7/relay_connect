@@ -1,0 +1,51 @@
+--- a/src/GoTrueClient.ts
++++ b/src/GoTrueClient.ts
+@@ -4849,7 +4849,10 @@
+    * Generates a new JWT.
+    * @param refreshToken A valid refresh token that was returned on login.
+    */
+-  private async _refreshAccessToken(refreshToken: string): Promise<AuthResponse> {
++  private async _refreshAccessToken(
++    refreshToken: string,
++    storedAtStart: Session | null
++  ): Promise<AuthResponse> {
+     // Refresh tokens are long-lived bearer credentials; do NOT include any
+     // fragment of the token in the debug tag, even when `debug: true` is
+     // enabled (logs may be forwarded to third-party services).
+@@ -4864,6 +4867,13 @@
+         async (attempt) => {
+           if (attempt > 0) {
+             await sleep(200 * Math.pow(2, attempt - 1)) // 200, 400, 800, ...
++          }
++
++          // A retry belongs to the captured session generation, not to whichever
++          // user happens to occupy storage now. Check after backoff, before I/O.
++          const current = (await getItemAsync(this.storage, this.storageKey)) as Session | null
++          if (current?.refresh_token !== storedAtStart?.refresh_token) {
++            throw new AuthRefreshDiscardedError()
+           }
+ 
+           this._debug(debugName, 'refreshing attempt', attempt)
+@@ -5137,7 +5147,7 @@
+       // snapshots*, not when the input token disagrees with what's stored.
+       const storedAtStart = (await getItemAsync(this.storage, this.storageKey)) as Session | null
+ 
+-      const { data, error } = await this._refreshAccessToken(refreshToken)
++      const { data, error } = await this._refreshAccessToken(refreshToken, storedAtStart)
+       if (error) throw error
+       if (!data.session) throw new AuthSessionMissingError()
+ 
+@@ -5194,6 +5204,13 @@
+ 
+       if (isAuthError(error)) {
+         const result = { data: null, error }
++
++        // Supersession is neither a server rejection nor a transient transport
++        // failure. Do not clean up or cache a failure against a newer session.
++        if (isAuthRefreshDiscardedError(error)) {
++          this.refreshingDeferred?.resolve(result)
++          return result
++        }
+ 
+         if (!isAuthRetryableFetchError(error)) {
+           // Proactive vs reactive distinction: a refresh fires whenever
