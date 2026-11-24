@@ -1,0 +1,38 @@
+[
+  {
+    "bucket": {
+      "mime": [
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "image/gif",
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.ms-powerpoint",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "text/plain",
+        "application/zip",
+        "audio/webm",
+        "audio/ogg",
+        "audio/mp4",
+        "audio/mpeg"
+      ],
+      "limit": 26214400,
+      "private": true
+    },
+    "checked_at": "2026-11-24T16:16:27.306256+00:00",
+    "capabilities": {
+      "attachments": false
+    },
+    "new_triggers": {
+      "trg_push_web_club_post": "D",
+      "trg_push_web_club_message": "D"
+    },
+    "queued_posts": 0,
+    "queued_messages": 0,
+    "attachments_count": 0
+  }
+]

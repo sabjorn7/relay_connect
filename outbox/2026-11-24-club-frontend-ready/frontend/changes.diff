@@ -1,0 +1,346 @@
+diff --git a/src/_front/components/wwElementComponent.vue b/src/_front/components/wwElementComponent.vue
+index 9728c96..917e4c2 100644
+--- a/src/_front/components/wwElementComponent.vue
++++ b/src/_front/components/wwElementComponent.vue
+@@ -5,6 +5,7 @@
+         :is="vueComponentName"
+         v-if="isRendering"
+         ref="component"
++        v-club-chat-scroll="uid"
+         :style="elementStyle"
+         class="ww-element"
+         :class="[state.class || '', `ww-element-${uid}`]"
+@@ -22,11 +23,12 @@
+     >
+         <slot></slot
+     ></component>
++    <ClubChatAttachments v-if="isRendering && ['6cd0c16b-3776-40d8-840e-4274d72ceccc', 'c94d00be-3578-4589-9b5c-b8165a92c0bf'].includes(uid)" />
+     <!-- wwFront:end -->
+  </template>
+ 
+ <script>
+-import { computed, ref, toRef, reactive, inject, provide, shallowRef, watch, onUnmounted } from 'vue';
++import { computed, ref, toRef, reactive, inject, provide, shallowRef, watch, onUnmounted, defineAsyncComponent } from 'vue';
+ 
+ import {
+     getComponentVueComponentName,
+@@ -47,11 +49,17 @@ import { useElementLocalContext } from '@/_front/use/useElementLocalContext';
+ 
+ import { getBackgroundStyle } from '@/_front/helpers/wwBackgroungStyle';
+ 
++import './clubChat.css';
++import { clubChatScroll } from '../helpers/clubChatScroll.js';
++import { CLUB_MESSAGE_UIDS } from '@/_front/helpers/clubMessageView.js';
++const ClubChatAttachments = defineAsyncComponent(() => import('./ClubChatAttachments.vue'));
++const ClubChatMessage = defineAsyncComponent(() => import('./ClubChatMessage.vue'));
++
+ let componentId = 1;
+ 
+ export default {
+-    components: {
+-     },
++    components: { ClubChatAttachments },
++    directives: { clubChatScroll },
+     inject: {
+         parentId: { from: '_wwElementUid', default: null },
+         wwIsInStretchedSection: { from: '__wwIsInStretchedSection', default: false },
+@@ -270,6 +278,8 @@ export default {
+     },
+     computed: {
+         vueComponentName() {
++            // Only the existing desktop/mobile club message templates; all actions/data stay in WeWeb.
++            if (CLUB_MESSAGE_UIDS.has(this.uid)) return ClubChatMessage;
+             return getComponentVueComponentName('element', this.uid);
+         },
+         /*=============================================m_ÔÔ_m=============================================\
+diff --git a/src/_front/components/ClubChatMessage.vue b/src/_front/components/ClubChatMessage.vue
+new file mode 100644
+index 0000000..2bd6422
+--- /dev/null
++++ b/src/_front/components/ClubChatMessage.vue
+@@ -0,0 +1,84 @@
++<template>
++    <article class="mg-club-msg" :class="{ 'is-mine': mine }">
++        <component :is="profileHref ? 'a' : 'span'" :href="profileHref" class="mg-club-msg__avatar" :aria-label="`Профиль: ${name}`">
++            <img v-if="photo" :src="photo" :alt="name" @error="photoFailed = true" />
++            <span v-else>{{ initials }}</span>
++        </component>
++        <div class="mg-club-msg__col">
++            <component :is="profileHref ? 'a' : 'span'" :href="profileHref" class="mg-club-msg__sender">{{ name }}</component>
++            <div class="mg-club-msg__bubble">
++                <span v-if="message.deleted" class="mg-club-msg__deleted">Сообщение удалено</span>
++                <template v-else>
++                    <div v-if="images.length" class="mg-club-msg__images">
++                        <button v-for="(image, index) in images" :key="image" type="button" :aria-label="`Открыть фото ${index + 1}`" @click="openImages">
++                            <img :src="image" alt="Фото в сообщении" loading="lazy" />
++                        </button>
++                    </div>
++                    <span v-if="message.text" class="mg-club-msg__text"><ChatMessageText :text="message.text" /></span>
++                    <ClubAttachmentView v-if="message.attachment_path" :message="message" :mine="mine" />
++                    <ChatLinkPreview v-if="message.text" :text="message.text" :mine="mine" />
++                </template>
++                <time class="mg-club-msg__time" :datetime="message.created_at">{{ time }}</time>
++            </div>
++        </div>
++        <button v-if="mine && !message.deleted" class="mg-club-msg__delete" type="button" aria-label="Удалить своё сообщение" @click="openDelete">
++            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 10v7M14 10v7" /></svg>
++        </button>
++    </article>
++</template>
++<script setup>
++// Presentation adapter for the existing two WeWeb club-chat message templates.
++// No queries, membership rules, new messages or upload paths are introduced here.
++import { computed, inject, ref, watch } from 'vue';
++import ClubAttachmentView from './ClubAttachmentView.vue';
++import ChatMessageText from './ChatMessageText.vue';
++import ChatLinkPreview from './ChatLinkPreview.vue';
++import { readStoredSession } from '../chrome/headerAccount.js';
++import { usePopupStore } from '@/pinia/popup';
++import { clubMessageView } from '../helpers/clubMessageView.js';
++const binding = inject('bindingContext', null);
++const popups = usePopupStore();
++const message = computed(() => binding?.data || {});
++const view = computed(() => clubMessageView(message.value, readStoredSession()?.user?.id));
++const name = computed(() => view.value.name), initials = computed(() => view.value.initials);
++const mine = computed(() => view.value.mine), time = computed(() => view.value.time);
++const profileHref = computed(() => view.value.profileHref), images = computed(() => view.value.images);
++const photoFailed = ref(false);
++const photo = computed(() => photoFailed.value ? null : view.value.photo);
++watch(() => view.value.photo, () => { photoFailed.value = false; });
++function openImages() {
++    if (message.value.deleted || !images.value.length) return;
++    popups.open('bdbce13b-c53c-49c0-90cb-d54f062291c6', { default: { 'dec067db-951e-4696-b622-4a9abfdc6f31': images.value } });
++}
++function openDelete() {
++    if (!mine.value || message.value.deleted) return;
++    // Same confirmation popup and workflow as the existing club message's trash icon.
++    popups.open('44b526d0-6761-4039-896b-7358ae1504c0', { default: { '53525e42-bc4d-43d4-a441-187613868fe2': message.value.id, '6fb2e2db-5a10-4577-bfe3-532ec9d4ccbd': '' } });
++}
++</script>
++<style scoped>
++.mg-club-msg { --blue: #2e70dd; --blue-ink: #1f5fc9; --line: #e4e9f1; --bg-tint: #f1f6fd; --ink: #091747; display: flex; align-items: flex-end; gap: 8px; width: 100%; box-sizing: border-box; padding: 8px; font-family: 'Onest', system-ui, sans-serif; color: var(--ink); }
++.mg-club-msg.is-mine { justify-content: flex-end; }
++.mg-club-msg__avatar { display: block; width: 30px; height: 30px; border-radius: 50%; flex: none; text-decoration: none; }
++.mg-club-msg__avatar img, .mg-club-msg__avatar span { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; }
++.mg-club-msg__avatar span { display: grid; place-items: center; background: #eaf1fe; color: var(--blue-ink); font-size: 11px; font-weight: 700; }
++.is-mine .mg-club-msg__avatar { order: 2; }
++.mg-club-msg__col { display: flex; flex-direction: column; max-width: 74%; min-width: 0; }
++.mg-club-msg__sender { font-size: 12px; font-weight: 600; color: var(--blue-ink); margin: 0 0 3px 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-decoration: none; }
++.is-mine .mg-club-msg__sender { align-self: flex-end; }
++a.mg-club-msg__sender:hover { text-decoration: underline; }
++.mg-club-msg__bubble { background: #fff; border: 1px solid var(--line); border-radius: 16px 16px 16px 5px; padding: 10px 14px 7px; }
++.is-mine .mg-club-msg__bubble { background: var(--blue); border-color: var(--blue); color: #fff; border-radius: 16px 16px 5px 16px; }
++.mg-club-msg__text { display: block; font-size: 16px; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
++.mg-club-msg__text :deep(.pd-msg__link) { color: var(--blue-ink); }
++.is-mine .mg-club-msg__text :deep(.pd-msg__link) { color: #fff; }
++.mg-club-msg__time { display: block; margin-top: 3px; text-align: right; font-size: 12px; color: #5b6472; }
++.is-mine .mg-club-msg__time { color: #fff; }
++.mg-club-msg__images { display: flex; flex-wrap: wrap; gap: 6px; }
++.mg-club-msg__images button { border: 0; background: none; padding: 0; cursor: pointer; width: 240px; height: 180px; max-width: 100%; min-width: 44px; min-height: 44px; display: grid; place-items: center; }
++.mg-club-msg__images img { display: block; max-width: min(240px, 100%); max-height: 180px; object-fit: contain; border-radius: 10px; }
++.mg-club-msg__delete { border: 0; background: transparent; color: #a82b38; padding: 8px; cursor: pointer; flex: none; }
++.mg-club-msg__delete svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; }
++.mg-club-msg a:focus-visible, .mg-club-msg button:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
++@media (max-width: 600px) { .mg-club-msg__col { max-width: calc(100% - 80px); } }
++</style>
+diff --git a/src/_front/components/ClubChatAttachments.vue b/src/_front/components/ClubChatAttachments.vue
+new file mode 100644
+index 0000000..607c8f5
+--- /dev/null
++++ b/src/_front/components/ClubChatAttachments.vue
+@@ -0,0 +1,44 @@
++<template>
++    <div v-if="enabled" class="club-attachments">
++        <input ref="picker" type="file" :accept="ACCEPT_ATTR" hidden @change="pick" />
++        <button type="button" :disabled="busy || recording || requesting || !!pending" @click="picker.click()">Прикрепить файл</button>
++        <button v-if="audioSupported && !recording" type="button" :disabled="busy || requesting || !!pending" @click="start">Записать голосовое</button>
++        <template v-if="recording"><span role="status">Идёт запись</span><button type="button" @click="stop(false)">Стоп</button><button type="button" @click="stop(true)">Отмена</button></template>
++        <div v-if="pending">
++            <VoiceMessagePlayer v-if="preview" :src="preview" />
++            <span v-else>{{ pending.file.name }} · {{ formatBytes(pending.file.size) }}</span>
++            <button type="button" :disabled="busy" @click="send">{{ busy ? 'Отправка…' : 'Отправить вложение' }}</button>
++            <button type="button" :disabled="busy" @click="clear">Убрать</button>
++        </div>
++        <p v-if="error" role="alert">{{ error }}</p>
++    </div>
++</template>
++<script setup>
++// Add-on to the existing club composer, not a new chat or a replacement send workflow.
++import {computed,inject,ref,onMounted,onBeforeUnmount,watch} from 'vue';
++import {getSupabase,readStoredSession} from '../chrome/headerAccount.js';
++import {ACCEPT_ATTR,formatBytes,pickAudioFormat,audioRecordingSupported} from '../helpers/chatAttachments.js';
++import {encodeBlobToMp3} from '../helpers/mp3Encode.js';
++import {clubAttachmentsEnabled,prepareClubAttachment,sendClubAttachment} from '../helpers/clubAttachments.js';
++import VoiceMessagePlayer from './VoiceMessagePlayer.vue';
++const ctx=inject('_wwLibraryComponentContext',null);
++const club=computed(()=>ctx?.component?.variables?.['14d34912-0442-4607-9311-5c9590247a28']?.club?.id);
++const picker=ref(null),enabled=ref(false),pending=ref(null),preview=ref(''),busy=ref(false),recording=ref(false),requesting=ref(false),error=ref('');
++const audioSupported=audioRecordingSupported();let recorder,stream,timeout,rev=0,dead=false,cancelled=false;
++const current=uid=>!dead&&readStoredSession()?.user?.id===uid;
++function clear(){if(preview.value)URL.revokeObjectURL(preview.value);preview.value='';pending.value=null;error.value=''}
++function select(file){clear();const uid=readStoredSession()?.user?.id;try{pending.value=prepareClubAttachment(file,club.value,uid);if(pending.value.kind==='audio')preview.value=URL.createObjectURL(file)}catch(e){error.value=e.message}}
++function pick(e){const file=e.target.files?.[0];e.target.value='';if(file)select(file)}
++function cleanup(){clearTimeout(timeout);stream?.getTracks().forEach(t=>t.stop());stream=null;recording.value=false}
++function stop(cancel){cancelled=cancel;if(recorder?.state==='recording')recorder.stop();else cleanup()}
++async function start(){if(busy.value||recording.value||requesting.value||pending.value)return;const generation=++rev,uid=readStoredSession()?.user?.id;const fmt=pickAudioFormat();if(!uid||!fmt)return;error.value='';requesting.value=true;
++ try{const captured=await navigator.mediaDevices.getUserMedia({audio:true});if(dead||generation!==rev||!current(uid)){captured.getTracks().forEach(t=>t.stop());return}stream=captured;const chunks=[];cancelled=false;recorder=new MediaRecorder(stream,{mimeType:fmt.mimeType});recorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
++ recorder.onstop=async()=>{cleanup();if(cancelled||dead||generation!==rev||!current(uid))return;if(!chunks.length){error.value='Запись пуста. Попробуйте записать ещё раз.';return}busy.value=true;const blob=new Blob(chunks,{type:fmt.mimeType});let file;try{file=new File([await encodeBlobToMp3(blob)],'voice-message.mp3',{type:'audio/mpeg'})}catch{file=new File([blob],`voice-message.${fmt.ext}`,{type:fmt.mimeType})}finally{busy.value=false}if(!dead&&generation===rev&&current(uid))select(file)};
++ recorder.start();recording.value=true;timeout=setTimeout(()=>stop(false),300000);
++ }catch{cleanup();error.value='Не удалось начать запись. Проверьте микрофон и разрешение браузера.'}finally{requesting.value=false}}
++async function send(){const item=pending.value;if(!item||busy.value)return;busy.value=true;error.value='';try{await sendClubAttachment(getSupabase(),item,current);if(current(item.uid)&&club.value===item.club){clear();await ctx?.component?.methods?.executeWorkflow('b9817663-75ec-436b-b985-ac4399e3fd9f')}}catch{if(!dead)error.value='Не удалось отправить. Вложение сохранено для повторной попытки.'}finally{busy.value=false}}
++async function capability(){enabled.value=false;const generation=++rev;const result=await clubAttachmentsEnabled(getSupabase());if(!dead&&generation===rev)enabled.value=result}
++watch(()=>readStoredSession()?.user?.id,()=>{rev++;stop(true);clear();enabled.value=false;if(readStoredSession()?.user?.id)capability()});
++watch(club,()=>{rev++;stop(true);clear();capability()});onMounted(capability);onBeforeUnmount(()=>{dead=true;rev++;stop(true);cleanup();clear()});
++</script>
++<style scoped>.club-attachments{padding:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:#fff;border-top:1px solid #e4e9f1;font-family:inherit}.club-attachments button{font:inherit;color:#1f5fc9;background:#f1f6fd;border:1px solid #e4e9f1;border-radius:12px;padding:9px 12px;cursor:pointer}.club-attachments button:disabled{opacity:.5;cursor:default}.club-attachments>div{width:100%;display:flex;gap:8px;align-items:center;flex-wrap:wrap}.club-attachments p{color:#a82b38;margin:0}</style>
+diff --git a/src/_front/components/ClubAttachmentView.vue b/src/_front/components/ClubAttachmentView.vue
+new file mode 100644
+index 0000000..d6c27d2
+--- /dev/null
++++ b/src/_front/components/ClubAttachmentView.vue
+@@ -0,0 +1,23 @@
++<template>
++    <div v-if="message.attachment_path" class="club-file">
++        <button v-if="!url" type="button" :disabled="busy" @click="open">{{ busy ? 'Загрузка…' : message.attachment_type === 'audio' ? 'Открыть голосовое' : 'Открыть вложение' }}</button>
++        <VoiceMessagePlayer v-else-if="message.attachment_type === 'audio'" :src="url" :mine="mine" />
++        <a v-else-if="message.attachment_type === 'image'" :href="url" target="_blank" rel="noopener noreferrer" :aria-label="message.attachment_name || 'Открыть фото'"><img :src="url" :alt="message.attachment_name || 'Фото в сообщении'" /></a>
++        <a v-else :href="url" target="_blank" rel="noopener noreferrer" download>{{ message.attachment_name || 'Файл' }} · {{ formatBytes(message.attachment_size) }}</a>
++        <button v-if="url" type="button" @click="open">Обновить доступ</button>
++        <span v-if="error" role="alert">Не удалось открыть. Проверьте подключение и доступ к клубу.</span>
++    </div>
++</template>
++<script setup>
++import {ref,watch,onBeforeUnmount} from 'vue';
++import VoiceMessagePlayer from './VoiceMessagePlayer.vue';
++import {getSupabase,readStoredSession} from '../chrome/headerAccount.js';
++import {clubAttachmentUrl} from '../helpers/clubAttachments.js';
++import {formatBytes} from '../helpers/chatAttachments.js';
++const props=defineProps({message:Object,mine:Boolean});const url=ref(''),busy=ref(false),error=ref(false);let rev=0,timer;
++async function open(){const n=++rev,uid=readStoredSession()?.user?.id;url.value='';clearTimeout(timer);busy.value=true;error.value=false;
++ try{if(!uid)throw Error();const result=await clubAttachmentUrl(getSupabase(),props.message.attachment_path);if(n===rev&&uid===readStoredSession()?.user?.id){url.value=result;timer=setTimeout(()=>{url.value=''},55000)}}catch{if(n===rev)error.value=true}finally{if(n===rev)busy.value=false}}
++watch(()=>readStoredSession()?.user?.id,()=>{rev++;url.value='';busy.value=false;clearTimeout(timer)});
++watch(()=>props.message.attachment_path,()=>{rev++;url.value='';clearTimeout(timer)});onBeforeUnmount(()=>{rev++;clearTimeout(timer)});
++</script>
++<style scoped>.club-file{display:flex;flex-direction:column;gap:8px;max-width:260px;overflow-wrap:anywhere}.club-file img{display:block;width:100%;max-height:240px;object-fit:contain;border-radius:10px}.club-file a,.club-file button{color:inherit}.club-file button{font:inherit;cursor:pointer;padding:8px;border:1px solid currentColor;border-radius:8px;background:transparent}.club-file span{font-size:12px}</style>
+diff --git a/src/_front/components/clubChat.css b/src/_front/components/clubChat.css
+new file mode 100644
+index 0000000..1b040cb
+--- /dev/null
++++ b/src/_front/components/clubChat.css
+@@ -0,0 +1,24 @@
++/* Existing WeWeb desktop/mobile club chat containers ONLY. No /chats selectors. */
++:where(.ww-element-e4cf1cdc-9cca-4169-8cad-5c25d93dda57, .ww-element-e04c7550-06a7-4bea-9108-c77a069a2f20) {
++    background: #f1f6fd; border: 1px solid #e4e9f1; border-radius: 20px;
++    overflow: hidden !important; gap: 0 !important; min-width: 0;
++}
++:where(.ww-element-64185e3b-d0b8-4df2-ba17-4ee099c1b359, .ww-element-160326aa-6464-4cb5-8e2c-1bf81223e023) {
++    flex: 1 1 auto; min-height: 160px; overflow-y: auto !important;
++    overscroll-behavior: contain; padding: 10px; box-sizing: border-box;
++}
++:where(.ww-element-6cd0c16b-3776-40d8-840e-4274d72ceccc, .ww-element-c94d00be-3578-4589-9b5c-b8165a92c0bf) {
++    flex: none; border-radius: 0 !important; box-shadow: none !important;
++    border-top: 1px solid #e4e9f1; padding: 12px 18px !important; box-sizing: border-box;
++}
++:where(.ww-element-74e334e1-62d0-4e61-afdc-4da3aa011fcf, .ww-element-2a3dbfa4-eddc-4a3c-9ec4-02a217620d70) textarea {
++    border: 1px solid #e4e9f1; border-radius: 20px; background: #f1f6fd;
++    font: inherit; padding: 11px 18px; box-sizing: border-box;
++}
++:where(.ww-element-7a962394-cf77-43b1-8606-bd8ddf2a8e03, .ww-element-5cd08dd6-fdfc-463d-95dd-12c41ac3c8fe) {
++    background: #2e70dd !important; border-color: #2e70dd !important;
++}
++@media (max-width: 600px) {
++    .ww-element-e04c7550-06a7-4bea-9108-c77a069a2f20 { max-height: 75dvh; min-height: 320px; }
++    :where(.ww-element-6cd0c16b-3776-40d8-840e-4274d72ceccc, .ww-element-c94d00be-3578-4589-9b5c-b8165a92c0bf) { padding: 10px !important; }
++}
+diff --git a/src/_front/helpers/clubMessageView.js b/src/_front/helpers/clubMessageView.js
+new file mode 100644
+index 0000000..31d8ddc
+--- /dev/null
++++ b/src/_front/helpers/clubMessageView.js
+@@ -0,0 +1,20 @@
++export const CLUB_MESSAGE_UIDS = new Set(['05f4fc6d-d561-4c9f-9f57-4af63724f675', '2a3ed957-42b8-46a1-8551-58018509e747']);
++const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
++export function clubMediaUrl(value) {
++    if (typeof value !== 'string') return null;
++    try { const u = new URL(value); return u.protocol === 'https:' && !u.username && !u.password ? u.href : null; } catch { return null; }
++}
++export function clubMessageView(row, userId) {
++    const owner = row?.owner && typeof row.owner === 'object' ? row.owner : {};
++    const id = typeof row?.owner === 'string' ? row.owner : owner.id;
++    const name = typeof owner.Name === 'string' && owner.Name.trim() ? owner.Name : 'Участник';
++    const d = new Date(row?.created_at), pad = n => String(n).padStart(2, '0');
++    return {
++        name, initials: owner.Name ? owner.Name.trim().split(/\s+/).slice(0, 2).map(s => s[0]).join('').toUpperCase() || '·' : '·',
++        mine: !!userId && userId === id,
++        profileHref: UUID.test(id || '') ? `/profile_page?user=${id}` : undefined,
++        photo: clubMediaUrl(owner.Photo),
++        images: row?.deleted ? [] : [...new Set((Array.isArray(row?.img) ? row.img : []).map(clubMediaUrl).filter(Boolean))],
++        time: row?.created_at && !isNaN(d) ? `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()} · ${pad(d.getHours())}:${pad(d.getMinutes())}` : '',
++    };
++}
+diff --git a/src/_front/helpers/clubAttachments.js b/src/_front/helpers/clubAttachments.js
+new file mode 100644
+index 0000000..b032e7f
+--- /dev/null
++++ b/src/_front/helpers/clubAttachments.js
+@@ -0,0 +1,35 @@
++import { validateFile } from './chatAttachments.js';
++export const CLUB_ATTACHMENT_BUCKET = 'club-chat-private';
++const UUID=/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
++export function attachmentPath(club,uid,id,ext){
++    if(![club,uid,id].every(x=>UUID.test(x||''))||!/^\w{2,5}$/.test(ext))throw Error('invalid_attachment');
++    return `${club}/${uid}/${id}.${ext}`;
++}
++export async function clubAttachmentsEnabled(sb){
++    try{const {data,error}=await sb.rpc('club_chat_capabilities');return !error&&data?.attachments===true;}catch{return false}
++}
++export function prepareClubAttachment(file,club,uid){
++    const v=validateFile(file);if(!v.ok)throw Error(v.error);
++    const id=crypto.randomUUID();return {file,club,uid,id,path:attachmentPath(club,uid,id,v.ext),kind:v.kind,mime:v.mime,uploaded:false};
++}
++export async function sendClubAttachment(sb,item,current){
++    if(!current(item.uid))throw Error('session_changed');
++    if(!await clubAttachmentsEnabled(sb))throw Error('attachments_disabled');
++    if(!current(item.uid))throw Error('session_changed');
++    if(!item.uploaded){
++        const {error}=await sb.storage.from(CLUB_ATTACHMENT_BUCKET).upload(item.path,item.file,{upsert:false,contentType:item.mime});
++        // UUID remains stable across a retry whose first HTTP response was lost.
++        if(error&&String(error.statusCode||error.status)!=='409')throw Error('upload_failed');
++        item.uploaded=true;
++    }
++    if(!current(item.uid))throw Error('session_changed');
++    const {data,error}=await sb.rpc('club_chat_send_attachment',{p_club:item.club,p_request_id:item.id,p_path:item.path,p_kind:item.kind,p_name:item.file.name.slice(0,240),p_size:item.file.size});
++    if(error)throw Error('send_failed');return data;
++}
++export async function clubAttachmentUrl(sb,path){
++    if(typeof path!=='string'||!/^([0-9a-f-]{36}\/){2}[0-9a-f-]{36}\.\w{2,5}$/i.test(path))throw Error('invalid_path');
++    const {data,error}=await sb.storage.from(CLUB_ATTACHMENT_BUCKET).createSignedUrl(path,60);
++    if(error||!data?.signedUrl)throw Error('attachment_unavailable');
++    const url=new URL(data.signedUrl,location.origin);if(!['https:','http:'].includes(url.protocol))throw Error('invalid_url');
++    return url.href;
++}
+diff --git a/src/_front/helpers/clubChatScroll.js b/src/_front/helpers/clubChatScroll.js
+new file mode 100644
+index 0000000..7d8e398
+--- /dev/null
++++ b/src/_front/helpers/clubChatScroll.js
+@@ -0,0 +1,19 @@
++// Only the two existing club history lists. Keep the bottom anchored during async layout.
++const ids = new Set(['64185e3b-d0b8-4df2-ba17-4ee099c1b359','160326aa-6464-4cb5-8e2c-1bf81223e023']);
++const cleanup = new WeakMap();
++export const clubChatScroll = {
++ mounted(el,{value}) {
++  if(!ids.has(value)||!el?.addEventListener)return;
++  let pinned=true,frame=0;
++  const bottom=()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(()=>{if(pinned&&el.clientHeight)el.scrollTop=el.scrollHeight})};
++  const intent=()=>{pinned=false};
++  const scroll=()=>{if(el.scrollHeight-el.clientHeight-el.scrollTop<4)pinned=true};
++  const resize=new ResizeObserver(bottom);
++  const observe=()=>{resize.disconnect();resize.observe(el);for(const child of el.children)resize.observe(child);bottom()};
++  const mutation=new MutationObserver(observe);mutation.observe(el,{childList:true,subtree:true});observe();
++  for(const event of ['wheel','touchstart','pointerdown','keydown'])el.addEventListener(event,intent,{passive:true});
++  el.addEventListener('scroll',scroll,{passive:true});
++  cleanup.set(el,()=>{cancelAnimationFrame(frame);resize.disconnect();mutation.disconnect();el.removeEventListener('scroll',scroll);for(const event of ['wheel','touchstart','pointerdown','keydown'])el.removeEventListener(event,intent)});
++ },
++ unmounted(el){cleanup.get(el)?.();cleanup.delete(el)}
++};

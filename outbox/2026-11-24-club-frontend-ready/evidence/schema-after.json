@@ -1,0 +1,493 @@
+{
+  "counts": {
+    "posts": 43,
+    "messages": 25
+  },
+  "tables": [
+    {
+      "acl": [
+        "supabase_admin=arwdDxt/supabase_admin",
+        "postgres=arwdDxt/supabase_admin",
+        "anon=r/supabase_admin",
+        "authenticated=arwd/supabase_admin",
+        "service_role=arwdDxt/supabase_admin",
+        "claude_readonly=r/supabase_admin"
+      ],
+      "rls": false,
+      "name": "chats",
+      "schema": "public"
+    },
+    {
+      "acl": [
+        "supabase_admin=arwdDxt/supabase_admin",
+        "postgres=arwdDxt/supabase_admin",
+        "anon=r/supabase_admin",
+        "authenticated=arwd/supabase_admin",
+        "service_role=arwdDxt/supabase_admin",
+        "claude_readonly=r/supabase_admin"
+      ],
+      "rls": false,
+      "name": "club_chat",
+      "schema": "public"
+    },
+    {
+      "acl": [
+        "supabase_admin=arwdDxt/supabase_admin",
+        "postgres=arwdDxt/supabase_admin",
+        "anon=r/supabase_admin",
+        "authenticated=arwd/supabase_admin",
+        "service_role=arwdDxt/supabase_admin",
+        "claude_readonly=r/supabase_admin"
+      ],
+      "rls": false,
+      "name": "club_posts",
+      "schema": "public"
+    },
+    {
+      "acl": [
+        "supabase_admin=arwdDxt/supabase_admin",
+        "postgres=arwdDxt/supabase_admin",
+        "anon=r/supabase_admin",
+        "authenticated=arwd/supabase_admin",
+        "service_role=arwdDxt/supabase_admin",
+        "claude_readonly=r/supabase_admin"
+      ],
+      "rls": false,
+      "name": "club_subs",
+      "schema": "public"
+    },
+    {
+      "acl": [
+        "supabase_admin=arwdDxt/supabase_admin",
+        "postgres=arwdDxt/supabase_admin",
+        "anon=r/supabase_admin",
+        "authenticated=arwd/supabase_admin",
+        "service_role=arwdDxt/supabase_admin",
+        "claude_readonly=r/supabase_admin"
+      ],
+      "rls": false,
+      "name": "clubs",
+      "schema": "public"
+    },
+    {
+      "acl": [
+        "supabase_admin=arwdDxt/supabase_admin",
+        "postgres=arwdDxt/supabase_admin",
+        "anon=r/supabase_admin",
+        "authenticated=arwd/supabase_admin",
+        "service_role=arwdDxt/supabase_admin",
+        "claude_readonly=r/supabase_admin"
+      ],
+      "rls": false,
+      "name": "messages",
+      "schema": "public"
+    }
+  ],
+  "columns": [
+    {
+      "type": "int8",
+      "table": "club_chat",
+      "column": "attachment_size",
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "club_chat",
+      "column": "attachment_request_id",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamptz",
+      "table": "club_chat",
+      "column": "web_push_queued_at",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamptz",
+      "table": "club_posts",
+      "column": "web_push_queued_at",
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "club_chat",
+      "column": "attachment_type",
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "club_chat",
+      "column": "attachment_name",
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "club_chat",
+      "column": "attachment_path",
+      "nullable": "YES"
+    }
+  ],
+  "policies": [
+    {
+      "cmd": "SELECT",
+      "qual": "(bucket_id = 'profile'::text)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "objects",
+      "permissive": "PERMISSIVE",
+      "policyname": "Uplado_File 1twvzjd_0",
+      "schemaname": "storage",
+      "with_check": null
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "public"
+      ],
+      "tablename": "objects",
+      "permissive": "PERMISSIVE",
+      "policyname": "Uplado_File 1twvzjd_1",
+      "schemaname": "storage",
+      "with_check": "(bucket_id = 'profile'::text)"
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "(bucket_id = 'profile'::text)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "objects",
+      "permissive": "PERMISSIVE",
+      "policyname": "Uplado_File 1twvzjd_2",
+      "schemaname": "storage",
+      "with_check": null
+    },
+    {
+      "cmd": "DELETE",
+      "qual": "(bucket_id = 'profile'::text)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "objects",
+      "permissive": "PERMISSIVE",
+      "policyname": "Uplado_File 1twvzjd_3",
+      "schemaname": "storage",
+      "with_check": null
+    },
+    {
+      "cmd": "DELETE",
+      "qual": "(bucket_id = 'chat'::text)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "objects",
+      "permissive": "PERMISSIVE",
+      "policyname": "chat_delete 1tf88_0",
+      "schemaname": "storage",
+      "with_check": null
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "public"
+      ],
+      "tablename": "objects",
+      "permissive": "PERMISSIVE",
+      "policyname": "chat_insert 1tf88_0",
+      "schemaname": "storage",
+      "with_check": "(bucket_id = 'chat'::text)"
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(bucket_id = 'chat'::text)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "objects",
+      "permissive": "PERMISSIVE",
+      "policyname": "chat_select 1tf88_0",
+      "schemaname": "storage",
+      "with_check": null
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "(bucket_id = 'chat'::text)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "objects",
+      "permissive": "PERMISSIVE",
+      "policyname": "chat_update 1tf88_0",
+      "schemaname": "storage",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(bucket_id = 'club'::text)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "objects",
+      "permissive": "PERMISSIVE",
+      "policyname": "club_all 1tinq_0",
+      "schemaname": "storage",
+      "with_check": null
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "public"
+      ],
+      "tablename": "objects",
+      "permissive": "PERMISSIVE",
+      "policyname": "club_all 1tinq_1",
+      "schemaname": "storage",
+      "with_check": "(bucket_id = 'club'::text)"
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "(bucket_id = 'club'::text)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "objects",
+      "permissive": "PERMISSIVE",
+      "policyname": "club_all 1tinq_2",
+      "schemaname": "storage",
+      "with_check": null
+    },
+    {
+      "cmd": "DELETE",
+      "qual": "(bucket_id = 'club'::text)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "objects",
+      "permissive": "PERMISSIVE",
+      "policyname": "club_all 1tinq_3",
+      "schemaname": "storage",
+      "with_check": null
+    },
+    {
+      "cmd": "DELETE",
+      "qual": "(bucket_id <> 'club-chat-private'::text)",
+      "roles": [
+        "anon",
+        "authenticated"
+      ],
+      "tablename": "objects",
+      "permissive": "RESTRICTIVE",
+      "policyname": "club_private_no_delete",
+      "schemaname": "storage",
+      "with_check": null
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "(bucket_id <> 'club-chat-private'::text)",
+      "roles": [
+        "anon",
+        "authenticated"
+      ],
+      "tablename": "objects",
+      "permissive": "RESTRICTIVE",
+      "policyname": "club_private_no_overwrite",
+      "schemaname": "storage",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "((bucket_id = 'club-chat-private'::text) AND club_chat_has_access(club_chat_path_club(name), auth.uid()) AND ((split_part(name, '/'::text, 2) = (auth.uid())::text) OR (EXISTS ( SELECT 1\n   FROM club_chat m\n  WHERE ((m.attachment_path = objects.name) AND (m.deleted IS NOT TRUE))))))",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "objects",
+      "permissive": "PERMISSIVE",
+      "policyname": "club_private_read",
+      "schemaname": "storage",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "((bucket_id <> 'club-chat-private'::text) OR ((auth.uid() IS NOT NULL) AND club_chat_has_access(club_chat_path_club(name), auth.uid()) AND ((split_part(name, '/'::text, 2) = (auth.uid())::text) OR (EXISTS ( SELECT 1\n   FROM club_chat m\n  WHERE ((m.attachment_path = objects.name) AND (m.deleted IS NOT TRUE)))))))",
+      "roles": [
+        "anon",
+        "authenticated"
+      ],
+      "tablename": "objects",
+      "permissive": "RESTRICTIVE",
+      "policyname": "club_private_read_guard",
+      "schemaname": "storage",
+      "with_check": null
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "objects",
+      "permissive": "PERMISSIVE",
+      "policyname": "club_private_upload",
+      "schemaname": "storage",
+      "with_check": "((bucket_id = 'club-chat-private'::text) AND ((club_chat_capabilities() ->> 'attachments'::text))::boolean AND (split_part(name, '/'::text, 2) = (auth.uid())::text) AND club_chat_has_access(club_chat_path_club(name), auth.uid()))"
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "anon",
+        "authenticated"
+      ],
+      "tablename": "objects",
+      "permissive": "RESTRICTIVE",
+      "policyname": "club_private_upload_guard",
+      "schemaname": "storage",
+      "with_check": "((bucket_id <> 'club-chat-private'::text) OR (((club_chat_capabilities() ->> 'attachments'::text))::boolean AND (split_part(name, '/'::text, 2) = (auth.uid())::text) AND club_chat_has_access(club_chat_path_club(name), auth.uid())))"
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "(bucket_id = 'courses'::text)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "objects",
+      "permissive": "PERMISSIVE",
+      "policyname": "courses fuc62g_2",
+      "schemaname": "storage",
+      "with_check": null
+    }
+  ],
+  "triggers": [
+    {
+      "name": "trg_add_chat_to_users",
+      "table": "chats",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER trg_add_chat_to_users AFTER INSERT ON public.chats FOR EACH ROW EXECUTE FUNCTION add_chat_to_users()"
+    },
+    {
+      "name": "trg_remove_chat_from_users",
+      "table": "chats",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER trg_remove_chat_from_users BEFORE DELETE ON public.chats FOR EACH ROW EXECUTE FUNCTION remove_chat_from_users()"
+    },
+    {
+      "name": "trg_update_chat_sort_date_on_message",
+      "table": "messages",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER trg_update_chat_sort_date_on_message AFTER INSERT ON public.messages FOR EACH ROW EXECUTE FUNCTION update_chat_sort_date_on_message()"
+    },
+    {
+      "name": "trg_reset_chat_read_on_message",
+      "table": "messages",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER trg_reset_chat_read_on_message AFTER INSERT ON public.messages FOR EACH ROW EXECUTE FUNCTION reset_chat_read_on_message()"
+    },
+    {
+      "name": "on_message_notify",
+      "table": "messages",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER on_message_notify AFTER INSERT ON public.messages FOR EACH ROW EXECUTE FUNCTION tg_notify_push('chat_message')"
+    },
+    {
+      "name": "on_club_post_notify",
+      "table": "club_posts",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER on_club_post_notify AFTER INSERT ON public.club_posts FOR EACH ROW EXECUTE FUNCTION tg_notify_push('club_post')"
+    },
+    {
+      "name": "on_club_chat_notify",
+      "table": "club_chat",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER on_club_chat_notify AFTER INSERT ON public.club_chat FOR EACH ROW WHEN ((new.deleted IS NOT TRUE)) EXECUTE FUNCTION tg_notify_push('club_chat')"
+    },
+    {
+      "name": "trg_push_web_message_ins",
+      "table": "messages",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER trg_push_web_message_ins AFTER INSERT ON public.messages FOR EACH ROW EXECUTE FUNCTION trg_push_web_message()"
+    },
+    {
+      "name": "trg_push_web_club_message",
+      "table": "club_chat",
+      "enabled": "D",
+      "definition": "CREATE TRIGGER trg_push_web_club_message BEFORE INSERT OR UPDATE ON public.club_chat FOR EACH ROW EXECUTE FUNCTION trg_push_web_club()"
+    },
+    {
+      "name": "trg_push_web_club_post",
+      "table": "club_posts",
+      "enabled": "D",
+      "definition": "CREATE TRIGGER trg_push_web_club_post BEFORE INSERT OR UPDATE ON public.club_posts FOR EACH ROW EXECUTE FUNCTION trg_push_web_club()"
+    }
+  ],
+  "functions": [
+    {
+      "acl": [
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "name": "club_chat_capabilities",
+      "signature": "club_chat_capabilities()",
+      "definition": "CREATE OR REPLACE FUNCTION public.club_chat_capabilities()\n RETURNS jsonb\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$ SELECT jsonb_build_object('attachments',false) $function$\n"
+    },
+    {
+      "acl": [
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin",
+        "anon=X/supabase_admin"
+      ],
+      "name": "club_chat_has_access",
+      "signature": "club_chat_has_access(uuid,uuid)",
+      "definition": "CREATE OR REPLACE FUNCTION public.club_chat_has_access(p_club uuid, p_user uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n SELECT p_user IS NOT NULL AND p_user=auth.uid() AND (\n EXISTS(SELECT 1 FROM public.clubs c WHERE c.id=p_club AND c.owner=p_user)\n OR COALESCE((SELECT s.end_date IS NULL OR s.end_date>current_date FROM public.club_subs s\n WHERE s.club=p_club AND s.suber=p_user ORDER BY s.created_at DESC,s.id DESC LIMIT 1),false));\n$function$\n"
+    },
+    {
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "name": "club_chat_path_club",
+      "signature": "club_chat_path_club(text)",
+      "definition": "CREATE OR REPLACE FUNCTION public.club_chat_path_club(p_path text)\n RETURNS uuid\n LANGUAGE plpgsql\n IMMUTABLE\n SET search_path TO 'pg_catalog'\nAS $function$\nBEGIN\n IF p_path !~* '^[0-9a-f-]{36}/[0-9a-f-]{36}/[0-9a-f-]{36}\\.[a-z0-9]{2,5}$' THEN RETURN NULL; END IF;\n RETURN split_part(p_path,'/',1)::uuid;\nEXCEPTION WHEN invalid_text_representation THEN RETURN NULL;\nEND;$function$\n"
+    },
+    {
+      "acl": [
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "name": "club_chat_send_attachment",
+      "signature": "club_chat_send_attachment(uuid,uuid,text,text,text,bigint)",
+      "definition": "CREATE OR REPLACE FUNCTION public.club_chat_send_attachment(p_club uuid, p_request_id uuid, p_path text, p_kind text, p_name text, p_size bigint)\n RETURNS uuid\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nDECLARE uid uuid:=auth.uid(); result uuid; obj jsonb; ext text; expected text;\nBEGIN\n IF uid IS NULL OR NOT COALESCE((public.club_chat_capabilities()->>'attachments')::boolean,false) OR NOT public.club_chat_has_access(p_club,uid) THEN RAISE EXCEPTION 'club_access_denied' USING ERRCODE='42501'; END IF;\n IF p_request_id IS NULL OR p_path IS NULL OR p_kind IS NULL OR p_size IS NULL OR p_name IS NULL THEN RAISE EXCEPTION 'invalid_attachment'; END IF;\n -- Serialize retries of this user's single request; parallel tabs with different requests remain independent.\n PERFORM pg_advisory_xact_lock(hashtextextended(uid::text||p_request_id::text,0));\n SELECT id INTO result FROM public.club_chat WHERE owner=uid AND attachment_request_id=p_request_id AND club=p_club AND attachment_path=p_path;\n IF result IS NOT NULL THEN RETURN result; END IF;\n ext:=lower(substring(p_path from '\\.([a-z0-9]+)$'));\n expected:=CASE WHEN ext=ANY(ARRAY['jpg','jpeg','png','webp','gif']) THEN 'image' WHEN ext=ANY(ARRAY['mp3','webm','ogg','mp4','m4a']) THEN 'audio' WHEN ext=ANY(ARRAY['pdf','doc','docx','xls','xlsx','ppt','pptx','txt','zip']) THEN 'file' END;\n IF expected IS NULL OR p_kind<>expected OR p_path<>p_club::text||'/'||uid::text||'/'||p_request_id::text||'.'||ext OR length(p_name)>240 OR p_size<1 OR p_size>(CASE WHEN expected='image' THEN 10485760 ELSE 26214400 END) THEN RAISE EXCEPTION 'invalid_attachment'; END IF;\n SELECT metadata INTO obj FROM storage.objects WHERE bucket_id='club-chat-private' AND name=p_path;\n IF obj IS NULL OR (obj->>'size') IS NULL OR (obj->>'size')::bigint<>p_size THEN RAISE EXCEPTION 'attachment_not_uploaded'; END IF;\n INSERT INTO public.club_chat(club,owner,text,img,attachment_path,attachment_type,attachment_name,attachment_size,attachment_request_id)\n VALUES(p_club,uid,NULL,ARRAY[]::text[],p_path,p_kind,p_name,p_size,p_request_id) RETURNING id INTO result;\n RETURN result;\nEND;$function$\n"
+    },
+    {
+      "acl": [
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "name": "trg_push_web_club",
+      "signature": "trg_push_web_club()",
+      "definition": "CREATE OR REPLACE FUNCTION public.trg_push_web_club()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nDECLARE secret text; payload jsonb;\nBEGIN\n -- Client-provided/reset markers never bypass or repeat enqueue.\n IF TG_OP='UPDATE' THEN NEW.web_push_queued_at:=OLD.web_push_queued_at; ELSE NEW.web_push_queued_at:=NULL; END IF;\n IF NEW.web_push_queued_at IS NOT NULL THEN RETURN NEW; END IF;\n IF TG_TABLE_NAME='club_chat' THEN\n  IF TG_OP<>'INSERT' OR NEW.deleted IS TRUE THEN RETURN NEW; END IF;\n  payload:=jsonb_build_object('event','club_message','message_id',NEW.id);\n ELSE\n  IF NEW.date_send IS NOT NULL THEN RETURN NEW; END IF;\n  IF TG_OP='UPDATE' THEN IF OLD.date_send IS NULL THEN RETURN NEW; END IF; END IF;\n  payload:=jsonb_build_object('event','club_post','post_id',NEW.id);\n END IF;\n secret:=public.push_send_key();IF secret IS NULL OR secret='' THEN RETURN NEW; END IF;\n PERFORM net.http_post(url:='https://app.meetgu.ru/sb/functions/v1/web-push-send',headers:=jsonb_build_object('content-type','application/json','x-push-key',secret),body:=payload,timeout_milliseconds:=30000);\n NEW.web_push_queued_at:=clock_timestamp();RETURN NEW;\nEXCEPTION WHEN OTHERS THEN\n IF TG_OP='UPDATE' THEN NEW.web_push_queued_at:=OLD.web_push_queued_at; ELSE NEW.web_push_queued_at:=NULL; END IF;\n RAISE LOG 'club_push_enqueue_failed';RETURN NEW;\nEND;$function$\n"
+    }
+  ],
+  "permissions": {
+    "chat_read": true,
+    "chat_delete": true,
+    "chat_insert": true,
+    "post_insert": true,
+    "post_update": true
+  }
+}

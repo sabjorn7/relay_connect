@@ -1,0 +1,10 @@
+{
+  "main": "123cdab5222d42803adc310f53bdfccfde4cc9a9",
+  "installed_function_bodies_match": 5,
+  "old_acl_rls_triggers_unchanged": true,
+  "frontend_apply_matches_tested_files": true,
+  "vite_exit_code": 0,
+  "production_writes_performed": false,
+  "deploy_started": false,
+  "production_live_send_delete_publish": "NOT TESTED"
+}

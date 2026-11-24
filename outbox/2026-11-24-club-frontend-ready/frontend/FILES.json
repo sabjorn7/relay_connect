@@ -1,0 +1,16 @@
+{
+  "base": "123cdab5222d42803adc310f53bdfccfde4cc9a9",
+  "files": [
+    "src/_front/components/wwElementComponent.vue",
+    "src/_front/components/ClubChatMessage.vue",
+    "src/_front/components/ClubChatAttachments.vue",
+    "src/_front/components/ClubAttachmentView.vue",
+    "src/_front/components/clubChat.css",
+    "src/_front/helpers/clubMessageView.js",
+    "src/_front/helpers/clubAttachments.js",
+    "src/_front/helpers/clubChatScroll.js",
+    "public/data/98342e46-3cd3-48bc-bf0a-f1b60bf63535.json"
+  ],
+  "application_commit": null,
+  "deployed": false
+}
