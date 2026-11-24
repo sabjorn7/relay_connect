@@ -1,0 +1,93 @@
+diff --git a/supabase/functions/web-push-send/index.ts b/supabase/functions/web-push-send/index.ts
+index fd8e96c..265f005 100644
+--- a/supabase/functions/web-push-send/index.ts
++++ b/supabase/functions/web-push-send/index.ts
+@@ -18,6 +18,7 @@
+ // Деплой — вручную (копия папки в volumes/functions/ + пересоздание), как cheatsheet-import.
+ 
+ import webpush from 'npm:web-push@3.6.7';
++import { validateClubPayload, handleClubEvent } from './club.mjs';
+ import { SUPABASE_URL as SB_URL_CONST } from '../_shared/og.mjs';
+ 
+ const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? SB_URL_CONST;
+@@ -31,6 +32,9 @@ const ALLOW_RAW = (Deno.env.get('PUSH_ALLOWLIST') ?? '').trim();
+ const ALLOW_ALL = ALLOW_RAW === '*';
+ const ALLOWLIST = new Set(ALLOW_RAW.split(',').map((s) => s.trim()).filter((x) => x && x !== '*'));
+ 
++// Separate fail-closed switch: do not enable before the event source/access review is approved.
++const PUSH_CLUB_ENABLED = Deno.env.get('PUSH_CLUB_ENABLED') === 'true';
++
+ const RATE_MIN = 5;
+ const CONCURRENCY = 20;
+ const TIME_BUDGET_MS = 25000;
+@@ -246,11 +250,15 @@ export async function handler(req: Request): Promise<Response> {
+ 
+   let payload: any;
+   try { payload = await req.json(); } catch { return json({ error: 'bad_json' }, 400); }
+-  const v = validatePayload(payload);
++  const v = validateClubPayload(payload) || validatePayload(payload);
+   if ((v as any).error) return json({ error: (v as any).error }, 400);
+   const { event, streamId, messageId } = v as any;
+ 
+   try {
++    if (event === 'club_message' || event === 'club_post') {
++      if (!PUSH_CLUB_ENABLED) return json({ ok: true, event, disabled: true, counts: zero });
++      return await handleClubEvent(event, (v as any).clubEventId, zero, { dbGet, fetchSubs, deliver, json, pickDmRecipients, allowAll: ALLOW_ALL, allowlist: ALLOWLIST });
++    }
+     if (event === 'direct_message') return await handleDirectMessage(messageId, zero);
+ 
+     // --- Ветка эфира (stream_start / chat_message) ---
+diff --git a/supabase/functions/web-push-send/club.mjs b/supabase/functions/web-push-send/club.mjs
+new file mode 100644
+index 0000000..728d603
+--- /dev/null
++++ b/supabase/functions/web-push-send/club.mjs
+@@ -0,0 +1,48 @@
++// Club extension of the existing web-push sender. Never put club content in lock-screen payloads.
++const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
++export function validateClubPayload(p) {
++    if (p?.event !== 'club_message' && p?.event !== 'club_post') return null;
++    const id = String((p.event === 'club_message' ? p.message_id : p.post_id) || '');
++    return UUID.test(id) ? { event: p.event, clubEventId: id } : { error: 'bad_club_event_id' };
++}
++export function clubNotification(event, clubId) {
++    if (!UUID.test(clubId) || !['club_message', 'club_post'].includes(event)) throw new Error('invalid_club_event');
++    return { title: 'МитГуру', body: event === 'club_message' ? 'Новое сообщение в клубе' : 'Новый пост в клубе', event,
++        // Existing /club route. Do not claim automatic tab selection: legacy page ignores such a query.
++        data: { url: `/club/?club=${clubId}` } };
++}
++export async function handleClubEvent(event, id, zero, deps) {
++    const { dbGet, fetchSubs, deliver, json, pickDmRecipients, allowAll, allowlist } = deps;
++    const skip = reason => json({ ok: true, event, skipped: reason, counts: zero });
++    const table = event === 'club_message' ? 'club_chat' : 'club_posts';
++    const cols = event === 'club_message' ? 'id,club,owner,deleted' : 'id,club,date_send';
++    const [record] = await dbGet(`${table}?id=eq.${id}&select=${cols}`, table);
++    if (!record || !UUID.test(record.club || '') || record.deleted === true || (event === 'club_post' && record.date_send !== null)) return skip('not_published');
++    const [club] = await dbGet(`clubs?id=eq.${record.club}&select=id,owner`, 'club');
++    if (!club || !UUID.test(club.owner || '')) return skip('club_not_found');
++    // Preserve the existing push_targets_club_chat / push_targets_club_post recipient predicate.
++    // No subscription rows are written or reinterpreted by this feature.
++    const ids = new Set();
++    let complete = false;
++    for (let page = 0; page < 10; page++) {
++        const rows = await dbGet(`club_subs?club=eq.${record.club}&active=eq.true&or=(end_date.is.null,end_date.gte.today)&select=id,suber&order=id.asc&limit=1000&offset=${page * 1000}`, 'club_members');
++        for (const row of rows) if (UUID.test(row.suber || '')) ids.add(row.suber);
++        if (rows.length < 1000) { complete = true; break; }
++    }
++    if (!complete) return skip('membership_limit');
++    const sender = event === 'club_message' ? record.owner : club.owner;
++    if (sender !== club.owner && !ids.has(sender)) return skip('sender_not_member');
++    const optedOut = new Set(), users = [...ids];
++    for (let i = 0; i < users.length; i += 100) {
++        const part = users.slice(i, i + 100);
++        const rows = await dbGet(`users?id=in.(${part.join(',')})&select=id,send_notif`, 'club_opt_out');
++        const present = new Set(rows.map(r => r.id));
++        for (const uid of part) if (!present.has(uid)) optedOut.add(uid);
++        for (const row of rows) if (row.send_notif === false) optedOut.add(row.id);
++    }
++    const recipients = [...pickDmRecipients({ users, senderId: sender, optedOut, allowAll, allowlist })];
++    if (!recipients.length) return json({ ok: true, event, counts: zero });
++    const subs = await fetchSubs(recipients);
++    const result = subs.length ? await deliver(subs, JSON.stringify(clubNotification(event, record.club)), 'normal') : { sent: 0, failed: 0, pruned: 0, codes: {} };
++    return json({ ok: true, event, counts: { ...zero, recipients: recipients.length, subs: subs.length, ...result } });
++}

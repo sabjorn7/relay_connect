@@ -1,0 +1,1 @@
+{"pass":2,"results":[{"engine":"Chrome","disabledGate":true,"privateBucket":true,"retrySameRequest":true,"nativeSyntheticVoice":"PASS","logoutClears":true},{"engine":"WebKit","disabledGate":true,"privateBucket":true,"retrySameRequest":true,"nativeSyntheticVoice":"NOT TESTED: synthetic capture rejected","logoutClears":true}]}

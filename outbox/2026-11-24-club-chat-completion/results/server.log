@@ -1,0 +1,2 @@
+PASS: SQL compilation; disabled gates; untrusted membership fail-closed; upload+send; idempotency; forged owner/outsider denial; restrictive Storage vs broad legacy policy; publication triggers; dedup; disable; subscription rows unchanged. Synthetic PostgreSQL only.
+LOCAL_ARTIFACTS=/private/tmp/mg-club-pg-p82f3k0_

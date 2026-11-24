@@ -1,0 +1,3 @@
+# Literal unified diff context contains space-only lines from unchanged source.
+frontend/changes.diff -whitespace
+server/edge.diff -whitespace

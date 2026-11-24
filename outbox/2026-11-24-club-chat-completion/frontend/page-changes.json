@@ -1,0 +1,46 @@
+{
+  "file": "public/data/98342e46-3cd3-48bc-bf0a-f1b60bf63535.json",
+  "base_sha256": "b095b26df9ac5ec65e352345d2b61918c1d1d6efc019ca13d7e93e3cf22e08c6",
+  "changes": [
+    {
+      "path": [
+        "libraryComponents",
+        3,
+        "inner",
+        "workflows",
+        "b9817663-75ec-436b-b985-ac4399e3fd9f",
+        "actions",
+        "aff63e95-8a51-487f-a981-036ff3a17a9d",
+        "args",
+        "dataFieldsAdvanced"
+      ],
+      "old": "id,created_at,text,img,owner: owner(id,Photo,Name),deleted",
+      "new": "id,created_at,text,img,owner: owner(id,Photo,Name),deleted,attachment_path,attachment_type,attachment_name,attachment_size"
+    },
+    {
+      "path": [
+        "libraryComponents",
+        3,
+        "inner",
+        "workflows",
+        "b9817663-75ec-436b-b985-ac4399e3fd9f",
+        "actions",
+        "aff63e95-8a51-487f-a981-036ff3a17a9d",
+        "args",
+        "filters"
+      ],
+      "old": null,
+      "new": [
+        {
+          "fn": "eq",
+          "column": "club",
+          "value": {
+            "code": "context.component?.variables?.['14d34912-0442-4607-9311-5c9590247a28']?.club?.id",
+            "__wwtype": "f"
+          },
+          "isEnabled": true
+        }
+      ]
+    }
+  ]
+}

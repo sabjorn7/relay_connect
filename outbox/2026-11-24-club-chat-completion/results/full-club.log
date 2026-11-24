@@ -1,0 +1,9 @@
+{"engine":"Chrome","width":390,"scrollState":{"height":700,"total":2033,"top":1333}}
+{"stage":"rendered","engine":"Chrome","width":390,"messageCount":16,"textareas":1,"buttons":["","ТУ","","","","","","","","","",""],"errors":[]}
+{"engine":"Chrome","width":1280,"scrollState":{"height":601,"total":1674,"top":1073}}
+{"stage":"rendered","engine":"Chrome","width":1280,"messageCount":16,"textareas":1,"buttons":["","ТУ","","","","","","","","","",""],"errors":[]}
+{"engine":"WebKit","width":390,"scrollState":{"height":700,"total":2033,"top":1333}}
+{"stage":"rendered","engine":"WebKit","width":390,"messageCount":16,"textareas":1,"buttons":["","ТУ","","","","","","","","","",""],"errors":[]}
+{"engine":"WebKit","width":1280,"scrollState":{"height":601,"total":1674,"top":1073}}
+{"stage":"rendered","engine":"WebKit","width":1280,"messageCount":16,"textareas":1,"buttons":["","ТУ","","","","","","","","","",""],"errors":[]}
+{"results":[{"engine":"Chrome","width":390,"history":true,"sent":true,"deleted":true,"photoOpened":true,"errors":[]},{"engine":"Chrome","width":1280,"history":true,"sent":true,"deleted":true,"photoOpened":true,"errors":[]},{"engine":"WebKit","width":390,"history":true,"sent":true,"deleted":true,"photoOpened":true,"errors":[]},{"engine":"WebKit","width":1280,"history":true,"sent":true,"deleted":true,"photoOpened":true,"errors":[]}],"out":"/var/folders/cw/swgj93gd6tb9gm_2cnmccf280000gn/T/mg-club-full-GyOnYB"}
