@@ -1,0 +1,18 @@
+{
+  "base_relay": "03e44e2",
+  "node": "24.14.0",
+  "sdk": "2.119.2-mg.isolation-test.1",
+  "sdk_build": "CJS + ESM PASS",
+  "production_changed": false,
+  "ci_changed": false,
+  "release_ready": false,
+  "sha256": {
+    "sdk/src/GoTrueClient.ts": "90d5032b62c466b6931f126ee2a07d4f35ffa5f07263cddcbd5821b1f12dff45",
+    "sdk/dist/main/GoTrueClient.js": "01bd5c4b70c4d6d4be33c695acc7f8401bca09a0ef092f1d7d91eea0c8a453dd",
+    "sdk/dist/module/GoTrueClient.js": "44f6bdd3cf96109367d88f668a88fcea4b770de7264aaa0d8773e1e50c8f3488",
+    "sdk/supabase-auth-js-2.119.2-mg.isolation-test.1.tgz": "ac036c61cfda7071c1b974812c952b493addc77a82ca87b20581f83283749375"
+  },
+  "lock_entries_changed": [
+    "node_modules/@supabase/supabase-js/node_modules/@supabase/auth-js"
+  ]
+}

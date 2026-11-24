@@ -1,0 +1,49 @@
+--- a/src/GoTrueClient.ts
++++ b/src/GoTrueClient.ts
+@@ -4102,6 +4102,15 @@
+    * ```
+    */
+   async signOut(options: SignOut = { scope: 'global' }): Promise<{ error: AuthError | null }> {
++    // Unsupported shared-storage coordination: permit only explicit destructive
++    // logout. No refresh or session write may run through this branch.
++    if (isBrowser() && !globalThis.navigator?.locks?.request && options.scope !== 'others') {
++      const current = (await getItemAsync(this.storage, this.storageKey)) as Session | null
++      await this._removeSession()
++      // Local removal is confirmed; server revocation failures remain visible.
++      if (current?.access_token) return await this.admin.signOut(current.access_token, options.scope ?? 'global')
++      return { error: null }
++    }
+     await this.initializePromise
+ 
+     if (this.lock != null) {
+@@ -5066,6 +5075,9 @@
+   }
+ 
+   private async _callRefreshToken(refreshToken: string): Promise<CallRefreshTokenResult> {
++    if (isBrowser() && !globalThis.navigator?.locks?.request) {
++      return { data: null, error: new AuthUnknownError('Session write coordination unavailable', null) }
++    }
+     if (!refreshToken) {
+       throw new AuthSessionMissingError()
+     }
+@@ -5379,7 +5391,7 @@
+ 
+   private async _removeSession(expectedRefreshToken?: string): Promise<boolean> {
+     let notification: Promise<void> | undefined
+-    const removed = await this._withSessionWriteLock(async () => {
++    const remove = async () => {
+       if (expectedRefreshToken !== undefined) {
+         const current = (await getItemAsync(this.storage, this.storageKey)) as Session | null
+         if (!current || current.refresh_token !== expectedRefreshToken) return false
+@@ -5405,7 +5417,10 @@
+       notification = this._notifyAllSubscribers('SIGNED_OUT', null)
+       notification.catch(() => {})
+       return true
+-    })
++    }
++    const removed = expectedRefreshToken === undefined && isBrowser() && !globalThis.navigator?.locks?.request
++      ? await remove()
++      : await this._withSessionWriteLock(remove)
+     await notification
+     return removed
+   }

@@ -1,0 +1,11 @@
+{"engine":"Chrome","mode":"mixed-400","before":"B","after":"B","status":"PASS","critical":false}
+{"engine":"Chrome","mode":"mixed-401","before":"B","after":"B","status":"PASS","critical":false}
+{"engine":"Chrome","mode":"no-locks","error":null,"user":null,"status":"PASS","critical":false}
+{"engine":"Chrome","mode":"closed-holder","blocked":true,"user":"B","status":"PASS"}
+{"engine":"Chrome","mode":"legacy-header","sdkUser":"B","headerUser":"A","after":null,"status":"FAIL","critical":true}
+{"engine":"WebKit","mode":"mixed-400","before":"B","after":"B","status":"PASS","critical":false}
+{"engine":"WebKit","mode":"mixed-401","before":"B","after":"B","status":"PASS","critical":false}
+{"engine":"WebKit","mode":"no-locks","error":null,"user":null,"status":"PASS","critical":false}
+{"engine":"WebKit","mode":"closed-holder","blocked":true,"user":"B","status":"PASS"}
+{"engine":"WebKit","mode":"legacy-header","sdkUser":"B","headerUser":"A","after":null,"status":"FAIL","critical":true}
+{"results":[{"engine":"Chrome","mode":"mixed-400","before":"B","after":"B","status":"PASS","critical":false},{"engine":"Chrome","mode":"mixed-401","before":"B","after":"B","status":"PASS","critical":false},{"engine":"Chrome","mode":"no-locks","error":null,"user":null,"status":"PASS","critical":false},{"engine":"Chrome","mode":"closed-holder","blocked":true,"user":"B","status":"PASS"},{"engine":"Chrome","mode":"legacy-header","sdkUser":"B","headerUser":"A","after":null,"status":"FAIL","critical":true},{"engine":"WebKit","mode":"mixed-400","before":"B","after":"B","status":"PASS","critical":false},{"engine":"WebKit","mode":"mixed-401","before":"B","after":"B","status":"PASS","critical":false},{"engine":"WebKit","mode":"no-locks","error":null,"user":null,"status":"PASS","critical":false},{"engine":"WebKit","mode":"closed-holder","blocked":true,"user":"B","status":"PASS"},{"engine":"WebKit","mode":"legacy-header","sdkUser":"B","headerUser":"A","after":null,"status":"FAIL","critical":true}],"releaseReady":false}

@@ -1,0 +1,11 @@
+--- a/src/components/plugins/plugin-1fa0dd68-5069-436c-9a7d-3b54c340f1fa/src/wwPlugin.js
++++ b/src/components/plugins/plugin-1fa0dd68-5069-436c-9a7d-3b54c340f1fa/src/wwPlugin.js
+@@ -82,7 +82,7 @@
+ 
+             this._authSubscription?.unsubscribe();
+             this._stopRecovery?.();
+-            this.publicInstance = createClient(runtimeProjectUrl, effectivePublicKey, authRecoveryOptions(runtimeProjectUrl, wwLib.wwWebsiteData.getInfo().id));
++            this.publicInstance = createClient(runtimeProjectUrl, effectivePublicKey, authRecoveryOptions(runtimeProjectUrl, `${wwLib.wwWebsiteData.getInfo().id}:auth-v2`));
+             instrumentAuth(this.publicInstance);
+ 
+             // The same public instance must be shared between supabase and supabase auth
