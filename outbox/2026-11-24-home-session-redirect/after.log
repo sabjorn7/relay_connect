@@ -1,0 +1,8 @@
+{"engine":"Chrome","mode":"user","pass":true}
+{"engine":"Chrome","mode":"guest","pass":true}
+{"engine":"Chrome","mode":"error","pass":true}
+{"engine":"Chrome","mode":"leave","pass":true}
+{"engine":"WebKit","mode":"user","pass":true}
+{"engine":"WebKit","mode":"guest","pass":true}
+{"engine":"WebKit","mode":"error","pass":true}
+{"engine":"WebKit","mode":"leave","pass":true}

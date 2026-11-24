@@ -1,0 +1,4 @@
+{"engine":"Chrome","before":"REPRODUCED: valid SDK session, empty profile -> catalog"}
+{"engine":"Chrome","mode":"user","pass":true}
+{"engine":"WebKit","before":"REPRODUCED: valid SDK session, empty profile -> catalog"}
+{"engine":"WebKit","mode":"user","pass":true}
