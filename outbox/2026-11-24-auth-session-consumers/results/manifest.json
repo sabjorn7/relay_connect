@@ -1,0 +1,11 @@
+{
+  "base_relay": "b720606",
+  "production_changed": false,
+  "ci_changed": false,
+  "product_files": [
+    "src/_front/chrome/headerAccount.js"
+  ],
+  "payment_section_unchanged": true,
+  "sha256": "0ac5470162df7378ae9dc430304da3b1d96507fe9dbd7e9a1cbe5a86486dfa6b",
+  "release_ready": false
+}
