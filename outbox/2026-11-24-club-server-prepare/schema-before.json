@@ -1,0 +1,943 @@
+{
+  "bucket": null,
+  "tables": [
+    {
+      "acl": [
+        "supabase_admin=arwdDxt/supabase_admin",
+        "postgres=arwdDxt/supabase_admin",
+        "anon=r/supabase_admin",
+        "authenticated=arwd/supabase_admin",
+        "service_role=arwdDxt/supabase_admin",
+        "claude_readonly=r/supabase_admin"
+      ],
+      "rls": false,
+      "name": "chats",
+      "owner": "supabase_admin",
+      "schema": "public",
+      "force_rls": false
+    },
+    {
+      "acl": [
+        "supabase_storage_admin=arwdDxt/supabase_storage_admin",
+        "anon=arwdDxt/supabase_storage_admin",
+        "authenticated=arwdDxt/supabase_storage_admin",
+        "service_role=arwdDxt/supabase_storage_admin",
+        "postgres=arwdDxt/supabase_storage_admin"
+      ],
+      "rls": true,
+      "name": "buckets",
+      "owner": "supabase_storage_admin",
+      "schema": "storage",
+      "force_rls": false
+    },
+    {
+      "acl": [
+        "supabase_admin=arwdDxt/supabase_admin",
+        "postgres=arwdDxt/supabase_admin",
+        "anon=r/supabase_admin",
+        "authenticated=arwd/supabase_admin",
+        "service_role=arwdDxt/supabase_admin",
+        "claude_readonly=r/supabase_admin"
+      ],
+      "rls": false,
+      "name": "clubs",
+      "owner": "supabase_admin",
+      "schema": "public",
+      "force_rls": false
+    },
+    {
+      "acl": [
+        "supabase_storage_admin=arwdDxt/supabase_storage_admin",
+        "anon=arwdDxt/supabase_storage_admin",
+        "authenticated=arwdDxt/supabase_storage_admin",
+        "service_role=arwdDxt/supabase_storage_admin",
+        "postgres=arwdDxt/supabase_storage_admin"
+      ],
+      "rls": true,
+      "name": "objects",
+      "owner": "supabase_storage_admin",
+      "schema": "storage",
+      "force_rls": false
+    },
+    {
+      "acl": [
+        "supabase_admin=arwdDxt/supabase_admin",
+        "postgres=arwdDxt/supabase_admin",
+        "anon=r/supabase_admin",
+        "authenticated=arwd/supabase_admin",
+        "service_role=arwdDxt/supabase_admin",
+        "claude_readonly=r/supabase_admin"
+      ],
+      "rls": false,
+      "name": "club_chat",
+      "owner": "supabase_admin",
+      "schema": "public",
+      "force_rls": false
+    },
+    {
+      "acl": [
+        "supabase_admin=arwdDxt/supabase_admin",
+        "postgres=arwdDxt/supabase_admin",
+        "anon=r/supabase_admin",
+        "authenticated=arwd/supabase_admin",
+        "service_role=arwdDxt/supabase_admin",
+        "claude_readonly=r/supabase_admin"
+      ],
+      "rls": false,
+      "name": "club_posts",
+      "owner": "supabase_admin",
+      "schema": "public",
+      "force_rls": false
+    },
+    {
+      "acl": [
+        "supabase_admin=arwdDxt/supabase_admin",
+        "postgres=arwdDxt/supabase_admin",
+        "anon=r/supabase_admin",
+        "authenticated=arwd/supabase_admin",
+        "service_role=arwdDxt/supabase_admin",
+        "claude_readonly=r/supabase_admin"
+      ],
+      "rls": false,
+      "name": "messages",
+      "owner": "supabase_admin",
+      "schema": "public",
+      "force_rls": false
+    },
+    {
+      "acl": [
+        "supabase_admin=arwdDxt/supabase_admin",
+        "postgres=arwdDxt/supabase_admin",
+        "anon=r/supabase_admin",
+        "authenticated=arwd/supabase_admin",
+        "service_role=arwdDxt/supabase_admin",
+        "claude_readonly=r/supabase_admin"
+      ],
+      "rls": false,
+      "name": "club_subs",
+      "owner": "supabase_admin",
+      "schema": "public",
+      "force_rls": false
+    }
+  ],
+  "columns": [
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "club_chat",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "table_schema": "public",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "club_chat",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "table_schema": "public",
+      "column_default": "now()"
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "club_chat",
+      "column_name": "text",
+      "is_nullable": "YES",
+      "table_schema": "public",
+      "column_default": null
+    },
+    {
+      "udt_name": "_text",
+      "data_type": "ARRAY",
+      "table_name": "club_chat",
+      "column_name": "img",
+      "is_nullable": "YES",
+      "table_schema": "public",
+      "column_default": "'{}'::text[]"
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "club_chat",
+      "column_name": "owner",
+      "is_nullable": "YES",
+      "table_schema": "public",
+      "column_default": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "club_chat",
+      "column_name": "club",
+      "is_nullable": "YES",
+      "table_schema": "public",
+      "column_default": null
+    },
+    {
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "table_name": "club_chat",
+      "column_name": "deleted",
+      "is_nullable": "YES",
+      "table_schema": "public",
+      "column_default": "false"
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "club_posts",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "table_schema": "public",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "club_posts",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "table_schema": "public",
+      "column_default": "now()"
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "club_posts",
+      "column_name": "club",
+      "is_nullable": "YES",
+      "table_schema": "public",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "club_posts",
+      "column_name": "text",
+      "is_nullable": "YES",
+      "table_schema": "public",
+      "column_default": null
+    },
+    {
+      "udt_name": "jsonb",
+      "data_type": "jsonb",
+      "table_name": "club_posts",
+      "column_name": "comments",
+      "is_nullable": "YES",
+      "table_schema": "public",
+      "column_default": "'[]'::jsonb"
+    },
+    {
+      "udt_name": "jsonb",
+      "data_type": "jsonb",
+      "table_name": "club_posts",
+      "column_name": "likes",
+      "is_nullable": "YES",
+      "table_schema": "public",
+      "column_default": "'[]'::jsonb"
+    },
+    {
+      "udt_name": "_text",
+      "data_type": "ARRAY",
+      "table_name": "club_posts",
+      "column_name": "photos",
+      "is_nullable": "YES",
+      "table_schema": "public",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "club_posts",
+      "column_name": "video",
+      "is_nullable": "YES",
+      "table_schema": "public",
+      "column_default": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "club_posts",
+      "column_name": "date_send",
+      "is_nullable": "YES",
+      "table_schema": "public",
+      "column_default": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "club_subs",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "table_schema": "public",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "club_subs",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "table_schema": "public",
+      "column_default": "now()"
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "club_subs",
+      "column_name": "club",
+      "is_nullable": "YES",
+      "table_schema": "public",
+      "column_default": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "club_subs",
+      "column_name": "suber",
+      "is_nullable": "YES",
+      "table_schema": "public",
+      "column_default": null
+    },
+    {
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "table_name": "club_subs",
+      "column_name": "active",
+      "is_nullable": "YES",
+      "table_schema": "public",
+      "column_default": "false"
+    },
+    {
+      "udt_name": "date",
+      "data_type": "date",
+      "table_name": "club_subs",
+      "column_name": "end_date",
+      "is_nullable": "YES",
+      "table_schema": "public",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "club_subs",
+      "column_name": "customer_phone",
+      "is_nullable": "YES",
+      "table_schema": "public",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "club_subs",
+      "column_name": "customer_email",
+      "is_nullable": "YES",
+      "table_schema": "public",
+      "column_default": null
+    },
+    {
+      "udt_name": "jsonb",
+      "data_type": "jsonb",
+      "table_name": "club_subs",
+      "column_name": "logs",
+      "is_nullable": "YES",
+      "table_schema": "public",
+      "column_default": "'[]'::jsonb"
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "club_subs",
+      "column_name": "customer_id",
+      "is_nullable": "YES",
+      "table_schema": "public",
+      "column_default": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "clubs",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "table_schema": "public",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "clubs",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "table_schema": "public",
+      "column_default": "now()"
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "clubs",
+      "column_name": "owner",
+      "is_nullable": "YES",
+      "table_schema": "public",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "clubs",
+      "column_name": "title",
+      "is_nullable": "YES",
+      "table_schema": "public",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "clubs",
+      "column_name": "short_descr",
+      "is_nullable": "YES",
+      "table_schema": "public",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "clubs",
+      "column_name": "descr",
+      "is_nullable": "YES",
+      "table_schema": "public",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "clubs",
+      "column_name": "label",
+      "is_nullable": "YES",
+      "table_schema": "public",
+      "column_default": null
+    },
+    {
+      "udt_name": "_text",
+      "data_type": "ARRAY",
+      "table_name": "clubs",
+      "column_name": "subs",
+      "is_nullable": "YES",
+      "table_schema": "public",
+      "column_default": null
+    },
+    {
+      "udt_name": "numeric",
+      "data_type": "numeric",
+      "table_name": "clubs",
+      "column_name": "price",
+      "is_nullable": "YES",
+      "table_schema": "public",
+      "column_default": "'0'::numeric"
+    },
+    {
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "table_name": "clubs",
+      "column_name": "active",
+      "is_nullable": "YES",
+      "table_schema": "public",
+      "column_default": "false"
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "clubs",
+      "column_name": "sub_id",
+      "is_nullable": "YES",
+      "table_schema": "public",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "buckets",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "table_schema": "storage",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "buckets",
+      "column_name": "name",
+      "is_nullable": "NO",
+      "table_schema": "storage",
+      "column_default": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "buckets",
+      "column_name": "owner",
+      "is_nullable": "YES",
+      "table_schema": "storage",
+      "column_default": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "buckets",
+      "column_name": "created_at",
+      "is_nullable": "YES",
+      "table_schema": "storage",
+      "column_default": "now()"
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "buckets",
+      "column_name": "updated_at",
+      "is_nullable": "YES",
+      "table_schema": "storage",
+      "column_default": "now()"
+    },
+    {
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "table_name": "buckets",
+      "column_name": "public",
+      "is_nullable": "YES",
+      "table_schema": "storage",
+      "column_default": "false"
+    },
+    {
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "table_name": "buckets",
+      "column_name": "avif_autodetection",
+      "is_nullable": "YES",
+      "table_schema": "storage",
+      "column_default": "false"
+    },
+    {
+      "udt_name": "int8",
+      "data_type": "bigint",
+      "table_name": "buckets",
+      "column_name": "file_size_limit",
+      "is_nullable": "YES",
+      "table_schema": "storage",
+      "column_default": null
+    },
+    {
+      "udt_name": "_text",
+      "data_type": "ARRAY",
+      "table_name": "buckets",
+      "column_name": "allowed_mime_types",
+      "is_nullable": "YES",
+      "table_schema": "storage",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "buckets",
+      "column_name": "owner_id",
+      "is_nullable": "YES",
+      "table_schema": "storage",
+      "column_default": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "objects",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "table_schema": "storage",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "objects",
+      "column_name": "bucket_id",
+      "is_nullable": "YES",
+      "table_schema": "storage",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "objects",
+      "column_name": "name",
+      "is_nullable": "YES",
+      "table_schema": "storage",
+      "column_default": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "objects",
+      "column_name": "owner",
+      "is_nullable": "YES",
+      "table_schema": "storage",
+      "column_default": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "objects",
+      "column_name": "created_at",
+      "is_nullable": "YES",
+      "table_schema": "storage",
+      "column_default": "now()"
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "objects",
+      "column_name": "updated_at",
+      "is_nullable": "YES",
+      "table_schema": "storage",
+      "column_default": "now()"
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "objects",
+      "column_name": "last_accessed_at",
+      "is_nullable": "YES",
+      "table_schema": "storage",
+      "column_default": "now()"
+    },
+    {
+      "udt_name": "jsonb",
+      "data_type": "jsonb",
+      "table_name": "objects",
+      "column_name": "metadata",
+      "is_nullable": "YES",
+      "table_schema": "storage",
+      "column_default": null
+    },
+    {
+      "udt_name": "_text",
+      "data_type": "ARRAY",
+      "table_name": "objects",
+      "column_name": "path_tokens",
+      "is_nullable": "YES",
+      "table_schema": "storage",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "objects",
+      "column_name": "version",
+      "is_nullable": "YES",
+      "table_schema": "storage",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "objects",
+      "column_name": "owner_id",
+      "is_nullable": "YES",
+      "table_schema": "storage",
+      "column_default": null
+    },
+    {
+      "udt_name": "jsonb",
+      "data_type": "jsonb",
+      "table_name": "objects",
+      "column_name": "user_metadata",
+      "is_nullable": "YES",
+      "table_schema": "storage",
+      "column_default": null
+    },
+    {
+      "udt_name": "int4",
+      "data_type": "integer",
+      "table_name": "objects",
+      "column_name": "level",
+      "is_nullable": "YES",
+      "table_schema": "storage",
+      "column_default": null
+    }
+  ],
+  "indexes": [
+    {
+      "indexdef": "CREATE UNIQUE INDEX club_chat_pkey ON public.club_chat USING btree (id)",
+      "indexname": "club_chat_pkey",
+      "tablename": "club_chat",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX club_posts_pkey ON public.club_posts USING btree (id)",
+      "indexname": "club_posts_pkey",
+      "tablename": "club_posts",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE INDEX idx_club_posts_club_created_at ON public.club_posts USING btree (club, created_at)",
+      "indexname": "idx_club_posts_club_created_at",
+      "tablename": "club_posts",
+      "schemaname": "public",
+      "tablespace": null
+    }
+  ],
+  "policies": [
+    {
+      "cmd": "SELECT",
+      "qual": "(bucket_id = 'profile'::text)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "objects",
+      "permissive": "PERMISSIVE",
+      "policyname": "Uplado_File 1twvzjd_0",
+      "schemaname": "storage",
+      "with_check": null
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "public"
+      ],
+      "tablename": "objects",
+      "permissive": "PERMISSIVE",
+      "policyname": "Uplado_File 1twvzjd_1",
+      "schemaname": "storage",
+      "with_check": "(bucket_id = 'profile'::text)"
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "(bucket_id = 'profile'::text)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "objects",
+      "permissive": "PERMISSIVE",
+      "policyname": "Uplado_File 1twvzjd_2",
+      "schemaname": "storage",
+      "with_check": null
+    },
+    {
+      "cmd": "DELETE",
+      "qual": "(bucket_id = 'profile'::text)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "objects",
+      "permissive": "PERMISSIVE",
+      "policyname": "Uplado_File 1twvzjd_3",
+      "schemaname": "storage",
+      "with_check": null
+    },
+    {
+      "cmd": "DELETE",
+      "qual": "(bucket_id = 'chat'::text)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "objects",
+      "permissive": "PERMISSIVE",
+      "policyname": "chat_delete 1tf88_0",
+      "schemaname": "storage",
+      "with_check": null
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "public"
+      ],
+      "tablename": "objects",
+      "permissive": "PERMISSIVE",
+      "policyname": "chat_insert 1tf88_0",
+      "schemaname": "storage",
+      "with_check": "(bucket_id = 'chat'::text)"
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(bucket_id = 'chat'::text)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "objects",
+      "permissive": "PERMISSIVE",
+      "policyname": "chat_select 1tf88_0",
+      "schemaname": "storage",
+      "with_check": null
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "(bucket_id = 'chat'::text)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "objects",
+      "permissive": "PERMISSIVE",
+      "policyname": "chat_update 1tf88_0",
+      "schemaname": "storage",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(bucket_id = 'club'::text)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "objects",
+      "permissive": "PERMISSIVE",
+      "policyname": "club_all 1tinq_0",
+      "schemaname": "storage",
+      "with_check": null
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "public"
+      ],
+      "tablename": "objects",
+      "permissive": "PERMISSIVE",
+      "policyname": "club_all 1tinq_1",
+      "schemaname": "storage",
+      "with_check": "(bucket_id = 'club'::text)"
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "(bucket_id = 'club'::text)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "objects",
+      "permissive": "PERMISSIVE",
+      "policyname": "club_all 1tinq_2",
+      "schemaname": "storage",
+      "with_check": null
+    },
+    {
+      "cmd": "DELETE",
+      "qual": "(bucket_id = 'club'::text)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "objects",
+      "permissive": "PERMISSIVE",
+      "policyname": "club_all 1tinq_3",
+      "schemaname": "storage",
+      "with_check": null
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "(bucket_id = 'courses'::text)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "objects",
+      "permissive": "PERMISSIVE",
+      "policyname": "courses fuc62g_2",
+      "schemaname": "storage",
+      "with_check": null
+    }
+  ],
+  "triggers": [
+    {
+      "name": "trg_add_chat_to_users",
+      "table": "chats",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER trg_add_chat_to_users AFTER INSERT ON public.chats FOR EACH ROW EXECUTE FUNCTION add_chat_to_users()"
+    },
+    {
+      "name": "trg_remove_chat_from_users",
+      "table": "chats",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER trg_remove_chat_from_users BEFORE DELETE ON public.chats FOR EACH ROW EXECUTE FUNCTION remove_chat_from_users()"
+    },
+    {
+      "name": "trg_update_chat_sort_date_on_message",
+      "table": "messages",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER trg_update_chat_sort_date_on_message AFTER INSERT ON public.messages FOR EACH ROW EXECUTE FUNCTION update_chat_sort_date_on_message()"
+    },
+    {
+      "name": "trg_reset_chat_read_on_message",
+      "table": "messages",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER trg_reset_chat_read_on_message AFTER INSERT ON public.messages FOR EACH ROW EXECUTE FUNCTION reset_chat_read_on_message()"
+    },
+    {
+      "name": "on_message_notify",
+      "table": "messages",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER on_message_notify AFTER INSERT ON public.messages FOR EACH ROW EXECUTE FUNCTION tg_notify_push('chat_message')"
+    },
+    {
+      "name": "on_club_post_notify",
+      "table": "club_posts",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER on_club_post_notify AFTER INSERT ON public.club_posts FOR EACH ROW EXECUTE FUNCTION tg_notify_push('club_post')"
+    },
+    {
+      "name": "on_club_chat_notify",
+      "table": "club_chat",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER on_club_chat_notify AFTER INSERT ON public.club_chat FOR EACH ROW WHEN ((new.deleted IS NOT TRUE)) EXECUTE FUNCTION tg_notify_push('club_chat')"
+    },
+    {
+      "name": "trg_push_web_message_ins",
+      "table": "messages",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER trg_push_web_message_ins AFTER INSERT ON public.messages FOR EACH ROW EXECUTE FUNCTION trg_push_web_message()"
+    }
+  ],
+  "functions": [
+    {
+      "acl": [
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "name": "push_send_key",
+      "owner": "supabase_admin",
+      "signature": "push_send_key()"
+    }
+  ],
+  "extensions": [
+    "pg_net"
+  ],
+  "constraints": [
+    {
+      "name": "buckets_pkey",
+      "table": "storage.buckets",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "club_posts_pkey",
+      "table": "club_posts",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "club_chat_owner_fkey",
+      "table": "club_chat",
+      "definition": "FOREIGN KEY (owner) REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE"
+    },
+    {
+      "name": "club_chat_club_fkey",
+      "table": "club_chat",
+      "definition": "FOREIGN KEY (club) REFERENCES clubs(id) ON UPDATE CASCADE ON DELETE CASCADE"
+    },
+    {
+      "name": "club_posts_club_fkey",
+      "table": "club_posts",
+      "definition": "FOREIGN KEY (club) REFERENCES clubs(id) ON UPDATE CASCADE ON DELETE CASCADE"
+    },
+    {
+      "name": "club_chat_pkey",
+      "table": "club_chat",
+      "definition": "PRIMARY KEY (id)"
+    }
+  ]
+}
