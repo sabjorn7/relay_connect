@@ -1,0 +1,84 @@
+{
+  "expected": "d64d36b7a6e678a64cb80118f6ed4315f000a3cd",
+  "results": [
+    {
+      "engine": "Chrome",
+      "route": "/all_course/",
+      "http": 200,
+      "release": "d64d36b7a6e678a64cb80118f6ed4315f000a3cd",
+      "finalPath": "/all_course/",
+      "mounted": true,
+      "preloaderHidden": true,
+      "emailInputs": 0,
+      "passwordInputs": 0,
+      "pageErrors": [],
+      "assetErrors": [],
+      "failedAssets": [
+        {
+          "type": "stylesheet",
+          "host": "fonts.googleapis.com",
+          "path": "/css2",
+          "error": "net::ERR_SOCKET_NOT_CONNECTED"
+        },
+        {
+          "type": "script",
+          "host": "mc.yandex.ru",
+          "path": "/metrika/tag.js",
+          "error": "net::ERR_SOCKET_NOT_CONNECTED"
+        }
+      ],
+      "automaticReports": 0,
+      "pass": true
+    },
+    {
+      "engine": "Chrome",
+      "route": "/login/",
+      "http": 200,
+      "release": "d64d36b7a6e678a64cb80118f6ed4315f000a3cd",
+      "finalPath": "/login/",
+      "mounted": true,
+      "preloaderHidden": true,
+      "emailInputs": 1,
+      "passwordInputs": 1,
+      "pageErrors": [],
+      "assetErrors": [],
+      "failedAssets": [],
+      "automaticReports": 0,
+      "pass": true
+    },
+    {
+      "engine": "WebKit",
+      "route": "/all_course/",
+      "http": 200,
+      "release": "d64d36b7a6e678a64cb80118f6ed4315f000a3cd",
+      "finalPath": "/all_course/",
+      "mounted": true,
+      "preloaderHidden": true,
+      "emailInputs": 0,
+      "passwordInputs": 0,
+      "pageErrors": [],
+      "assetErrors": [],
+      "failedAssets": [],
+      "automaticReports": 0,
+      "pass": true
+    },
+    {
+      "engine": "WebKit",
+      "route": "/login/",
+      "http": 200,
+      "release": "d64d36b7a6e678a64cb80118f6ed4315f000a3cd",
+      "finalPath": "/login/",
+      "mounted": true,
+      "preloaderHidden": true,
+      "emailInputs": 1,
+      "passwordInputs": 1,
+      "pageErrors": [],
+      "assetErrors": [],
+      "failedAssets": [],
+      "automaticReports": 0,
+      "pass": true
+    }
+  ],
+  "realLogin": "NOT TESTED: no approved test credentials available",
+  "payments": "NOT PERFORMED"
+}
