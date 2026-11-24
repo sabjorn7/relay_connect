@@ -1,0 +1,160 @@
+{
+  "expected": "1d8364f7721cb0e9eeefaad815f1d1469af6ead7",
+  "results": [
+    {
+      "engine": "Chrome",
+      "route": "/",
+      "http": 200,
+      "release": "1d8364f7721cb0e9eeefaad815f1d1469af6ead7",
+      "mounted": true,
+      "preloaderHidden": true,
+      "emailInputs": 0,
+      "passwordInputs": 0,
+      "pageErrors": [],
+      "assetErrors": [],
+      "failedAssets": [
+        {
+          "type": "stylesheet",
+          "host": "fonts.googleapis.com",
+          "path": "/css2",
+          "error": "net::ERR_SOCKET_NOT_CONNECTED"
+        },
+        {
+          "type": "script",
+          "host": "mc.yandex.ru",
+          "path": "/metrika/tag.js",
+          "error": "net::ERR_SOCKET_NOT_CONNECTED"
+        }
+      ],
+      "automaticReports": 0,
+      "pass": false,
+      "failure": "AssertionError",
+      "reason": "Expected values to be strictly deep-equal:\n+ actual - expected\n\n+ [\n+   {\n+     error: 'net::ERR_SOCKET_NOT_CONNECTED',\n+     host: 'fonts.googleapis.com',\n+     path: '/css2',\n+     type: 'stylesheet'\n+   },\n+   {\n+     error: 'net::ERR_SOCKET_NOT_C"
+    },
+    {
+      "engine": "Chrome",
+      "route": "/all_course/",
+      "http": 200,
+      "release": "1d8364f7721cb0e9eeefaad815f1d1469af6ead7",
+      "mounted": true,
+      "preloaderHidden": true,
+      "emailInputs": 0,
+      "passwordInputs": 0,
+      "pageErrors": [],
+      "assetErrors": [],
+      "failedAssets": [
+        {
+          "type": "script",
+          "host": "mc.yandex.ru",
+          "path": "/metrika/tag.js",
+          "error": "net::ERR_SOCKET_NOT_CONNECTED"
+        }
+      ],
+      "automaticReports": 0,
+      "pass": false,
+      "failure": "AssertionError",
+      "reason": "Expected values to be strictly deep-equal:\n+ actual - expected\n\n+ [\n+   {\n+     error: 'net::ERR_SOCKET_NOT_CONNECTED',\n+     host: 'mc.yandex.ru',\n+     path: '/metrika/tag.js',\n+     type: 'script'\n+   }\n+ ]\n- []\n"
+    },
+    {
+      "engine": "Chrome",
+      "route": "/login/",
+      "http": 200,
+      "release": "1d8364f7721cb0e9eeefaad815f1d1469af6ead7",
+      "mounted": true,
+      "preloaderHidden": true,
+      "emailInputs": 1,
+      "passwordInputs": 1,
+      "pageErrors": [],
+      "assetErrors": [],
+      "failedAssets": [
+        {
+          "type": "script",
+          "host": "mc.yandex.ru",
+          "path": "/metrika/tag.js",
+          "error": "net::ERR_SOCKET_NOT_CONNECTED"
+        }
+      ],
+      "automaticReports": 0,
+      "pass": false,
+      "failure": "AssertionError",
+      "reason": "Expected values to be strictly deep-equal:\n+ actual - expected\n\n+ [\n+   {\n+     error: 'net::ERR_SOCKET_NOT_CONNECTED',\n+     host: 'mc.yandex.ru',\n+     path: '/metrika/tag.js',\n+     type: 'script'\n+   }\n+ ]\n- []\n"
+    },
+    {
+      "engine": "Chrome",
+      "route": "/registration/",
+      "http": 200,
+      "release": "1d8364f7721cb0e9eeefaad815f1d1469af6ead7",
+      "mounted": true,
+      "preloaderHidden": true,
+      "emailInputs": 1,
+      "passwordInputs": 2,
+      "pageErrors": [],
+      "assetErrors": [],
+      "failedAssets": [],
+      "automaticReports": 0,
+      "pass": true
+    },
+    {
+      "engine": "WebKit",
+      "route": "/",
+      "http": 200,
+      "release": "1d8364f7721cb0e9eeefaad815f1d1469af6ead7",
+      "mounted": true,
+      "preloaderHidden": true,
+      "emailInputs": 0,
+      "passwordInputs": 0,
+      "pageErrors": [],
+      "assetErrors": [],
+      "failedAssets": [],
+      "automaticReports": 0,
+      "pass": true
+    },
+    {
+      "engine": "WebKit",
+      "route": "/all_course/",
+      "http": 200,
+      "release": "1d8364f7721cb0e9eeefaad815f1d1469af6ead7",
+      "mounted": true,
+      "preloaderHidden": true,
+      "emailInputs": 0,
+      "passwordInputs": 0,
+      "pageErrors": [],
+      "assetErrors": [],
+      "failedAssets": [],
+      "automaticReports": 0,
+      "pass": true
+    },
+    {
+      "engine": "WebKit",
+      "route": "/login/",
+      "http": 200,
+      "release": "1d8364f7721cb0e9eeefaad815f1d1469af6ead7",
+      "mounted": true,
+      "preloaderHidden": true,
+      "emailInputs": 1,
+      "passwordInputs": 1,
+      "pageErrors": [],
+      "assetErrors": [],
+      "failedAssets": [],
+      "automaticReports": 0,
+      "pass": true
+    },
+    {
+      "engine": "WebKit",
+      "route": "/registration/",
+      "http": 200,
+      "release": "1d8364f7721cb0e9eeefaad815f1d1469af6ead7",
+      "mounted": true,
+      "preloaderHidden": true,
+      "emailInputs": 1,
+      "passwordInputs": 2,
+      "pageErrors": [],
+      "assetErrors": [],
+      "failedAssets": [],
+      "automaticReports": 0,
+      "pass": true
+    }
+  ],
+  "realLogin": "NOT TESTED: no approved test credentials available",
+  "payments": "NOT PERFORMED"
+}
