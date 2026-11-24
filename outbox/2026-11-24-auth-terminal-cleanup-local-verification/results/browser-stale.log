@@ -1,0 +1,3 @@
+{"engine":"Chrome","mode":"stale-event","requests":1,"pass":true}
+{"engine":"WebKit","mode":"stale-event","requests":1,"pass":true}
+{"pass":2,"results":[{"engine":"Chrome","mode":"stale-event","requests":1,"pass":true},{"engine":"WebKit","mode":"stale-event","requests":1,"pass":true}],"network":"local mocks only"}

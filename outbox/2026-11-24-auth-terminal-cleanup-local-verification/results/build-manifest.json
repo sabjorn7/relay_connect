@@ -1,0 +1,15 @@
+{
+  "node": "24.14.0",
+  "typescript": "5.8.3",
+  "auth_js": "2.119.2-mg.terminal-test.1",
+  "supabase_js": "2.50.3",
+  "base": "e062265304688b744b36b8f2ea021b8270c641ad",
+  "ci_changed": false,
+  "production_changed": false,
+  "sha256": {
+    "sdk/src/GoTrueClient.ts": "ab243b13c15e871c30e4c1e9ec0e60d27b648d3d930cd9ec4887b8216d68365c",
+    "sdk/dist/main/GoTrueClient.js": "de7ebca6fd5749cd3aec2c4711f421475e402f070e867a76e9a9910163c44cf4",
+    "sdk/dist/module/GoTrueClient.js": "55489c8a353e5481f504c5a6354682188893fcfb0231e02beeb91a4dc729f6f8",
+    "sdk/supabase-auth-js-2.119.2-mg.terminal-test.1.tgz": "72950cdb4b18a5056058e63022f0af65dd289c8544a99db3f5598ff4ef73568c"
+  }
+}
