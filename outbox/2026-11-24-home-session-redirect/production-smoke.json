@@ -1,0 +1,162 @@
+{
+  "expected": "ff891768c043849c99e28973f52090d0a57b6768",
+  "results": [
+    {
+      "engine": "Chrome",
+      "route": "/",
+      "http": 200,
+      "release": "ff891768c043849c99e28973f52090d0a57b6768",
+      "finalPath": "/all_course",
+      "mounted": true,
+      "preloaderHidden": true,
+      "emailInputs": 0,
+      "passwordInputs": 0,
+      "pageErrors": [],
+      "assetErrors": [],
+      "failedAssets": [
+        {
+          "type": "stylesheet",
+          "host": "fonts.googleapis.com",
+          "path": "/css2",
+          "error": "net::ERR_SOCKET_NOT_CONNECTED"
+        },
+        {
+          "type": "script",
+          "host": "mc.yandex.ru",
+          "path": "/metrika/tag.js",
+          "error": "net::ERR_SOCKET_NOT_CONNECTED"
+        }
+      ],
+      "automaticReports": 0,
+      "pass": true
+    },
+    {
+      "engine": "Chrome",
+      "route": "/all_course/",
+      "http": 200,
+      "release": "ff891768c043849c99e28973f52090d0a57b6768",
+      "finalPath": "/all_course/",
+      "mounted": true,
+      "preloaderHidden": true,
+      "emailInputs": 0,
+      "passwordInputs": 0,
+      "pageErrors": [],
+      "assetErrors": [],
+      "failedAssets": [
+        {
+          "type": "script",
+          "host": "mc.yandex.ru",
+          "path": "/metrika/tag.js",
+          "error": "net::ERR_SOCKET_NOT_CONNECTED"
+        }
+      ],
+      "automaticReports": 0,
+      "pass": true
+    },
+    {
+      "engine": "Chrome",
+      "route": "/login/",
+      "http": 200,
+      "release": "ff891768c043849c99e28973f52090d0a57b6768",
+      "finalPath": "/login/",
+      "mounted": true,
+      "preloaderHidden": true,
+      "emailInputs": 1,
+      "passwordInputs": 1,
+      "pageErrors": [],
+      "assetErrors": [],
+      "failedAssets": [
+        {
+          "type": "script",
+          "host": "mc.yandex.ru",
+          "path": "/metrika/tag.js",
+          "error": "net::ERR_SOCKET_NOT_CONNECTED"
+        }
+      ],
+      "automaticReports": 0,
+      "pass": true
+    },
+    {
+      "engine": "Chrome",
+      "route": "/registration/",
+      "http": 200,
+      "release": "ff891768c043849c99e28973f52090d0a57b6768",
+      "finalPath": "/registration/",
+      "mounted": true,
+      "preloaderHidden": true,
+      "emailInputs": 1,
+      "passwordInputs": 2,
+      "pageErrors": [],
+      "assetErrors": [],
+      "failedAssets": [],
+      "automaticReports": 0,
+      "pass": true
+    },
+    {
+      "engine": "WebKit",
+      "route": "/",
+      "http": 200,
+      "release": "ff891768c043849c99e28973f52090d0a57b6768",
+      "finalPath": "/all_course",
+      "mounted": true,
+      "preloaderHidden": true,
+      "emailInputs": 0,
+      "passwordInputs": 0,
+      "pageErrors": [],
+      "assetErrors": [],
+      "failedAssets": [],
+      "automaticReports": 0,
+      "pass": true
+    },
+    {
+      "engine": "WebKit",
+      "route": "/all_course/",
+      "http": 200,
+      "release": "ff891768c043849c99e28973f52090d0a57b6768",
+      "finalPath": "/all_course/",
+      "mounted": true,
+      "preloaderHidden": true,
+      "emailInputs": 0,
+      "passwordInputs": 0,
+      "pageErrors": [],
+      "assetErrors": [],
+      "failedAssets": [],
+      "automaticReports": 0,
+      "pass": true
+    },
+    {
+      "engine": "WebKit",
+      "route": "/login/",
+      "http": 200,
+      "release": "ff891768c043849c99e28973f52090d0a57b6768",
+      "finalPath": "/login/",
+      "mounted": true,
+      "preloaderHidden": true,
+      "emailInputs": 1,
+      "passwordInputs": 1,
+      "pageErrors": [],
+      "assetErrors": [],
+      "failedAssets": [],
+      "automaticReports": 0,
+      "pass": true
+    },
+    {
+      "engine": "WebKit",
+      "route": "/registration/",
+      "http": 200,
+      "release": "ff891768c043849c99e28973f52090d0a57b6768",
+      "finalPath": "/registration/",
+      "mounted": true,
+      "preloaderHidden": true,
+      "emailInputs": 1,
+      "passwordInputs": 2,
+      "pageErrors": [],
+      "assetErrors": [],
+      "failedAssets": [],
+      "automaticReports": 0,
+      "pass": true
+    }
+  ],
+  "realLogin": "NOT TESTED: no approved test credentials available",
+  "payments": "NOT PERFORMED"
+}
