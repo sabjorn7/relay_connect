@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {clubAttachmentsEnabled,prepareClubAttachment,sendClubAttachment,clubAttachmentUrl} from '../src/_front/helpers/clubAttachments.js';
+const uid='11111111-1111-4111-8111-111111111111',club='22222222-2222-4222-8222-222222222222';
+assert.equal(await clubAttachmentsEnabled({rpc:async()=>{throw Error()}}),false);
+let enabled=true,fail=true,uploads=0,sends=0;const args=[];
+const sb={rpc:async(name,a)=>name==='club_chat_capabilities'?{data:{attachments:enabled}}:(sends++,args.push(a),fail?{error:{}}:{data:'id'}),storage:{from(bucket){assert.equal(bucket,'club-chat-private');return{upload:async(path,file,opts)=>{uploads++;assert.equal(opts.upsert,false);return{}},createSignedUrl:async(path,ttl)=>{assert.equal(ttl,60);return{data:{signedUrl:'https://example.invalid/signed'}}}}}}};
+const item=prepareClubAttachment(new File(['fixture'],'a.pdf',{type:'application/pdf'}),club,uid);
+await assert.rejects(sendClubAttachment(sb,item,()=>false),/session_changed/);assert.equal(uploads,0);
+enabled=false;await assert.rejects(sendClubAttachment(sb,item,()=>true),/attachments_disabled/);assert.equal(uploads,0);enabled=true;
+await assert.rejects(sendClubAttachment(sb,item,()=>true),/send_failed/);fail=false;assert.equal(await sendClubAttachment(sb,item,()=>true),'id');assert.equal(uploads,1);assert.equal(sends,2);assert.deepEqual(args[0],args[1]);assert.equal('owner' in args[0],false);assert.equal('user_id' in args[0],false);
+globalThis.location={origin:'https://example.invalid'};assert.equal(await clubAttachmentUrl(sb,item.path),'https://example.invalid/signed');await assert.rejects(clubAttachmentUrl(sb,'../../x'),/invalid_path/);
+console.log('PASS: fail-closed capability, session switch, private bucket, stable retry, no owner input, 60s signed read, invalid path');

@@ -1,0 +1,2 @@
+PASS: SQL compilation; existing RLS unchanged; disabled gates; upload+send; idempotency; outsider attachment denial; restrictive Storage vs broad legacy policy; publication triggers; dedup; disable; subscription rows unchanged. Synthetic PostgreSQL only.
+LOCAL_ARTIFACTS=/private/tmp/mg-club-pg-cc8rz_8_
