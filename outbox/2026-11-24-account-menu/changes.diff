@@ -1,0 +1,76 @@
+diff --git a/src/_front/chrome/AppHeader.vue b/src/_front/chrome/AppHeader.vue
+index fe21b56..17981f0 100644
+--- a/src/_front/chrome/AppHeader.vue
++++ b/src/_front/chrome/AppHeader.vue
+@@ -77,13 +77,16 @@
+ 
+                 <!-- ACCOUNT -->
+                 <div v-if="user" class="mgh__pop" ref="acctPop">
+-                    <button class="mgh__avatar" type="button" :aria-expanded="open === 'acct' ? 'true' : 'false'" aria-label="Аккаунт" @click="toggle('acct')">
++                    <button class="mgh__avatar" type="button" :aria-expanded="open === 'acct' ? 'true' : 'false'" :aria-label="hasUnread ? 'Аккаунт: есть непрочитанные сообщения' : 'Аккаунт'" @click="toggle('acct')">
+                         <img v-if="avatar" :src="avatar" alt="" @error="avatar = ''" />
+                         <span v-else>{{ initialsStr }}</span>
++                        <span v-if="hasUnread" class="mgh__avatar-dot" aria-hidden="true"></span>
+                     </button>
+                     <div v-if="open === 'acct'" class="mgh__dd mgh__dd--acct">
+                         <div class="mgh__acct-head">{{ user.Name || user.email }}</div>
+                         <a href="/profile" @click.prevent="go('/profile')">Профиль</a>
++                        <a href="/" @click.prevent="go('/')">Мои курсы</a>
++                        <a href="/chats" @click.prevent="go('/chats')">Чаты<span v-if="hasUnread" class="mgh__dot" aria-label="Есть непрочитанные сообщения"></span></a>
+                         <a href="/my_finanse" @click.prevent="go('/my_finanse')">Финансы<span v-if="user.Ammount != null" class="mgh__bal">{{ money(user.Ammount) }} ₽</span></a>
+                         <hr />
+                         <button class="mgh__logout" type="button" @click="doSignOut">Выйти</button>
+@@ -96,7 +99,6 @@
+ 
+                 <button class="mgh__burger" type="button" :aria-expanded="menuOpen ? 'true' : 'false'" aria-label="Меню" @click="menuOpen = !menuOpen">
+                     <span :class="{ 'is-x': menuOpen }"></span>
+-                    <span v-if="hasUnread && !menuOpen" class="mgh__burger-dot" aria-hidden="true"></span>
+                 </button>
+             </div>
+         </div>
+@@ -108,7 +110,6 @@
+                 <template v-if="user">
+                     <a v-for="i in burgerItems" :key="i.path" :href="i.path" @click.prevent="go(i.path)">
+                         {{ i.label }}
+-                        <span v-if="i.path === '/chats' && hasUnread" class="mgh__dot" aria-label="Есть непрочитанные сообщения"></span>
+                     </a>
+                 </template>
+                 <template v-else>
+@@ -171,8 +172,6 @@ const isCreator = computed(() => ['Спикер', 'Учебное заведен
+ const burgerItems = computed(() => {
+     const items = [
+         { label: 'Все статьи', path: '/articles' },
+-        { label: 'Мои курсы', path: '/' },
+-        { label: 'Чаты', path: '/chats' },
+         { label: 'Все пользователи', path: '/users' },
+     ];
+     if (isCreator.value) {
+@@ -340,8 +339,8 @@ function ensureFont() {
+ .mgh__icon { position: relative; display: grid; place-items: center; width: 40px; height: 40px; border: none; border-radius: var(--r-pill); background: none; color: var(--ink); cursor: pointer; transition: background 0.18s var(--ease-out); }
+ @media (hover: hover) and (pointer: fine) { .mgh__icon:hover { background: var(--blue-tint); } }
+ .mgh__badge { position: absolute; top: 2px; right: 2px; min-width: 17px; height: 17px; padding: 0 4px; display: grid; place-items: center; border-radius: 999px; background: var(--orange); color: #fff; font-size: 11px; font-weight: 700; line-height: 1; }
+-.mgh__avatar { width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--line); background: var(--blue-tint); color: var(--blue-ink); font-weight: 700; font-size: 13px; cursor: pointer; overflow: hidden; display: grid; place-items: center; padding: 0; }
+-.mgh__avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
++.mgh__avatar { position: relative; width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--line); background: var(--blue-tint); color: var(--blue-ink); font-weight: 700; font-size: 13px; cursor: pointer; overflow: visible; display: grid; place-items: center; padding: 0; }
++.mgh__avatar img { width: 100%; height: 100%; border-radius: inherit; object-fit: cover; display: block; }
+ 
+ /* auth (logged-out) */
+ .mgh__auth { display: flex; align-items: center; gap: 12px; }
+@@ -352,7 +351,7 @@ function ensureFont() {
+ .mgh__dd { position: absolute; top: calc(100% + 10px); right: 0; background: #fff; border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: var(--shadow); padding: 10px; z-index: 10; }
+ .mgh__dd--cart { width: 320px; }
+ .mgh__dd--acct { width: 240px; display: grid; }
+-.mgh__dd--acct a, .mgh__logout { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: 8px; color: var(--ink); text-decoration: none; font-weight: 500; font-size: 15px; background: none; border: none; width: 100%; text-align: left; cursor: pointer; font-family: inherit; }
++.mgh__dd--acct a, .mgh__logout { box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: 8px; color: var(--ink); text-decoration: none; font-weight: 500; font-size: 15px; background: none; border: none; width: 100%; text-align: left; cursor: pointer; font-family: inherit; }
+ @media (hover: hover) and (pointer: fine) { .mgh__dd--acct a:hover, .mgh__logout:hover { background: var(--blue-tint); } }
+ .mgh__acct-head { padding: 8px 12px 10px; font-weight: 700; color: var(--ink); border-bottom: 1px solid var(--line); margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+ .mgh__bal { color: var(--blue-ink); font-weight: 700; font-size: 13px; }
+@@ -395,7 +394,7 @@ function ensureFont() {
+ .mgh__burger span::after { top: 7px; }
+ .mgh__burger span.is-x { background: transparent; }
+ /* unread-messages indicators (orange dot, no count) */
+-.mgh__burger-dot { position: absolute; top: 7px; right: 6px; width: 9px; height: 9px; border-radius: 50%; background: #ff6a1a; box-shadow: 0 0 0 2px #fff; }
++.mgh__avatar-dot { position: absolute; top: 0; right: 0; width: 9px; height: 9px; border-radius: 50%; background: #ff6a1a; box-shadow: 0 0 0 2px #fff; }
+ .mgh__dot { display: inline-block; width: 8px; height: 8px; margin-left: 7px; border-radius: 50%; background: #ff6a1a; vertical-align: middle; }
+ .mgh__burger span.is-x::before { transform: translateY(7px) rotate(45deg); }
+ .mgh__burger span.is-x::after { transform: translateY(-7px) rotate(-45deg); }
