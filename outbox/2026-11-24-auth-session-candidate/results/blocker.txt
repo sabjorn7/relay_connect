@@ -1,0 +1,17 @@
+EXIT_CODE=1
+{"sdk":"2.119.2","results":[{"status":400,"switched":true,"finalUser":null,"signedOut":1},{"status":401,"switched":true,"finalUser":null,"signedOut":1}]}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: old terminal cleanup must preserve B
+    at file:///private/tmp/mg-auth-candidate-20261124/tests/auth-terminal-commit-gap.mjs:30:54 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: '==',
+  diff: 'simple'
+}
+
+Node.js v24.14.0

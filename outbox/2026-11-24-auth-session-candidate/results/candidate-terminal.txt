@@ -1,0 +1,2 @@
+EXIT_CODE=0
+{"sdk":"2.119.2","scope":"Actual SDK + proposed adapter; isolated synthetic two-tab interleaving; no production calls","results":[{"status":400,"loginBConfirmed":true,"storageContainedB":true,"terminalCleanupEvents":1,"finalUser":"B","releaseBlocker":false,"logoutPassed":true},{"status":401,"loginBConfirmed":true,"storageContainedB":true,"terminalCleanupEvents":1,"finalUser":"B","releaseBlocker":false,"logoutPassed":true}]}

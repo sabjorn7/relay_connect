@@ -1,0 +1,17 @@
+EXIT_CODE=1
+{"sdk":"2.119.2","adapter":"unchanged previous candidate","results":[{"status":400,"finalUser":"B","logoutError":"AuthRetryableFetchError"},{"status":401,"finalUser":"B","logoutError":"AuthRetryableFetchError"}]}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: explicit logout must remove B
+    at file:///private/tmp/mg-auth-candidate-20261124/tests/auth-original-adapter-compat.mjs:17:93 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: '==',
+  diff: 'simple'
+}
+
+Node.js v24.14.0

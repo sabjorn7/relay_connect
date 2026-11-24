@@ -1,0 +1,534 @@
+diff --git a/package-lock.json b/package-lock.json
+index e73d692..b9aa632 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1286,12 +1286,15 @@
+       "license": "MIT"
+     },
+     "node_modules/@supabase/auth-js": {
+-      "version": "2.70.0",
+-      "resolved": "https://registry.npmjs.org/@supabase/auth-js/-/auth-js-2.70.0.tgz",
+-      "integrity": "sha512-BaAK/tOAZFJtzF1sE3gJ2FwTjLf4ky3PSvcvLGEgEmO4BSBkwWKu8l67rLLIBZPDnCyV7Owk2uPyKHa0kj5QGg==",
++      "version": "2.119.2",
++      "resolved": "https://registry.npmjs.org/@supabase/auth-js/-/auth-js-2.119.2.tgz",
++      "integrity": "sha512-zWi7pGT6XIMWG0Ja5Unvsv9ixwgLTq/pnWNzGVwVXlr/onraf3v4VwepCFSlxGrvNyKRmhn7O6e4CHF1TJg73Q==",
+       "license": "MIT",
+       "dependencies": {
+-        "@supabase/node-fetch": "^2.6.14"
++        "tslib": "2.8.1"
++      },
++      "engines": {
++        "node": ">=22.0.0"
+       }
+     },
+     "node_modules/@supabase/functions-js": {
+diff --git a/package.json b/package.json
+index 367aed8..d8fde6a 100644
+--- a/package.json
++++ b/package.json
+@@ -1 +1 @@
+-{"name":"meetguru","version":"4.0.0","private":true,"type":"module","scripts":{"serve":"vite","build":"vite build -l warn","postbuild":"node ./postbuild.js","build:landing":"vite build -l warn --config vite.landing.config.js"},"dependencies":{"@ag-grid-community/locale":"33.2.4","@better-fetch/fetch":"1.1.21","@breezystack/lamejs":"^1.2.7","@supabase/supabase-js":"2.50.3","@tiptap/extension-color":"2.8.0","@tiptap/extension-image":"2.8.0","@tiptap/extension-link":"2.10.4","@tiptap/extension-mathematics":"2.26.1","@tiptap/extension-mention":"2.8.0","@tiptap/extension-placeholder":"2.8.0","@tiptap/extension-table":"2.8.0","@tiptap/extension-table-cell":"2.8.0","@tiptap/extension-table-header":"2.8.0","@tiptap/extension-table-row":"2.8.0","@tiptap/extension-task-item":"2.8.0","@tiptap/extension-task-list":"2.8.0","@tiptap/extension-text-align":"2.8.0","@tiptap/extension-text-style":"2.8.0","@tiptap/extension-underline":"2.8.0","@tiptap/pm":"2.8.0","@tiptap/starter-kit":"2.8.0","@tiptap/suggestion":"2.8.0","@tiptap/vue-3":"2.8.0","@unhead/vue":"2.1.13","@vueform/multiselect":"2.6.2","@vuepic/vue-datepicker":"3.6.8","@vueuse/core":"^13.0.0","ag-grid-vue3":"33.2.4","animejs":"^3.2.2","axios":"1.16.1","better-auth":"1.5.5","chart.js":"^4.5.1","date-fns":"4.1.0","dayjs":"1.11.0","diff":"^5.1.0","dompurify":"3.4.14","html-escaper":"3.0.3","html2canvas":"^1.4.1","imask":"^7.6.1","jspdf":"^4.2.1","katex":"^0.16.22","livekit-client":"^2.22.2","lodash-es":"4.18.1","marked":"^14.1.2","medium-zoom":"^1.0.6","pdfjs-dist":"^4.10.38","pinia":"3.0.4","prismjs":"^1.23.0","prosemirror-commands":"1.5.0","prosemirror-dropcursor":"1.5.0","prosemirror-gapcursor":"1.3.1","prosemirror-history":"1.3.0","prosemirror-keymap":"1.2.0","prosemirror-schema-list":"1.2.2","qs":"^6.14.0","short-unique-id":"5.3.2","tiny-emitter":"2.1.0","tiptap-markdown":"^0.8.10","uuid":"14.0.0","vanilla-colorful":"0.7.2","vue":"3.5.30","vue-cookie-next":"1.3.0","vue-ellipse-progress":"^2.1.1","vue-meta":"2.4.0","vue-router":"5.0.4","vuex":"4.1.0"},"devDependencies":{"@vitejs/plugin-vue":"6.0.5","@vue/tsconfig":"0.9.1","autoprefixer":"10.4.27","handlebars":"4.7.8","sass-embedded":"1.98.0","vite":"8.0.1"},"browserslist":["last 3 years"]}
+\ No newline at end of file
++{"name":"meetguru","version":"4.0.0","private":true,"type":"module","scripts":{"serve":"vite","build":"vite build -l warn","postbuild":"node ./postbuild.js","build:landing":"vite build -l warn --config vite.landing.config.js"},"dependencies":{"@ag-grid-community/locale":"33.2.4","@better-fetch/fetch":"1.1.21","@breezystack/lamejs":"^1.2.7","@supabase/supabase-js":"2.50.3","@tiptap/extension-color":"2.8.0","@tiptap/extension-image":"2.8.0","@tiptap/extension-link":"2.10.4","@tiptap/extension-mathematics":"2.26.1","@tiptap/extension-mention":"2.8.0","@tiptap/extension-placeholder":"2.8.0","@tiptap/extension-table":"2.8.0","@tiptap/extension-table-cell":"2.8.0","@tiptap/extension-table-header":"2.8.0","@tiptap/extension-table-row":"2.8.0","@tiptap/extension-task-item":"2.8.0","@tiptap/extension-task-list":"2.8.0","@tiptap/extension-text-align":"2.8.0","@tiptap/extension-text-style":"2.8.0","@tiptap/extension-underline":"2.8.0","@tiptap/pm":"2.8.0","@tiptap/starter-kit":"2.8.0","@tiptap/suggestion":"2.8.0","@tiptap/vue-3":"2.8.0","@unhead/vue":"2.1.13","@vueform/multiselect":"2.6.2","@vuepic/vue-datepicker":"3.6.8","@vueuse/core":"^13.0.0","ag-grid-vue3":"33.2.4","animejs":"^3.2.2","axios":"1.16.1","better-auth":"1.5.5","chart.js":"^4.5.1","date-fns":"4.1.0","dayjs":"1.11.0","diff":"^5.1.0","dompurify":"3.4.14","html-escaper":"3.0.3","html2canvas":"^1.4.1","imask":"^7.6.1","jspdf":"^4.2.1","katex":"^0.16.22","livekit-client":"^2.22.2","lodash-es":"4.18.1","marked":"^14.1.2","medium-zoom":"^1.0.6","pdfjs-dist":"^4.10.38","pinia":"3.0.4","prismjs":"^1.23.0","prosemirror-commands":"1.5.0","prosemirror-dropcursor":"1.5.0","prosemirror-gapcursor":"1.3.1","prosemirror-history":"1.3.0","prosemirror-keymap":"1.2.0","prosemirror-schema-list":"1.2.2","qs":"^6.14.0","short-unique-id":"5.3.2","tiny-emitter":"2.1.0","tiptap-markdown":"^0.8.10","uuid":"14.0.0","vanilla-colorful":"0.7.2","vue":"3.5.30","vue-cookie-next":"1.3.0","vue-ellipse-progress":"^2.1.1","vue-meta":"2.4.0","vue-router":"5.0.4","vuex":"4.1.0"},"devDependencies":{"@vitejs/plugin-vue":"6.0.5","@vue/tsconfig":"0.9.1","autoprefixer":"10.4.27","handlebars":"4.7.8","sass-embedded":"1.98.0","vite":"8.0.1"},"browserslist":["last 3 years"],"overrides":{"@supabase/auth-js":"2.119.2"}}
+\ No newline at end of file
+diff --git a/src/_front/chrome/confirmedSession.js b/src/_front/chrome/confirmedSession.js
+index 819deb8..5458c84 100644
+--- a/src/_front/chrome/confirmedSession.js
++++ b/src/_front/chrome/confirmedSession.js
+@@ -4,7 +4,7 @@ import { sbWithRetry } from './sbFetch.js';
+ // Callbacks are synchronous: consumers must defer SDK work until outside the Auth lock.
+ export function observeConfirmedSession(client, onChange, onError = () => {}) {
+     let uid = null, expiresAt = 0, generation = 0, revision = 0;
+-    let known = false, stopped = false, timer, subscription, refreshing;
++    let known = false, stopped = false, timer, eventTimer, subscription, refreshing, lastRecovery = -Infinity;
+     function apply(session) {
+         clearTimeout(timer);
+         const expiry = Number(session?.expires_at) * 1000;
+@@ -41,15 +41,35 @@ export function observeConfirmedSession(client, onChange, onError = () => {}) {
+     }
+     const result = client.auth.onAuthStateChange((event, session) => {
+         if (stopped || (event === 'INITIAL_SESSION' && revision > 0)) return;
+-        revision++;
+-        apply(event === 'SIGNED_OUT' ? null : session);
++        const eventRevision = ++revision;
++        // Events (including BroadcastChannel SIGNED_OUT) carry no source generation.
++        // Hide unconfirmed identity immediately; only a fresh SDK read can restore it.
++        if (event === 'SIGNED_OUT' || event === 'USER_DELETED' || session?.user?.id !== uid) apply(null);
++        clearTimeout(eventTimer);
++        eventTimer = setTimeout(async () => {
++            // Never await SDK work inside onAuthStateChange. Finish an older read,
++            // whose revision guard discards it, before confirming this event.
++            if (refreshing) await refreshing;
++            if (!stopped && revision === eventRevision) refresh();
++        }, 0);
+     });
+     subscription = result.data?.subscription;
+-    document.addEventListener('visibilitychange', checkExpiry);
+-    window.addEventListener('pageshow', checkExpiry);
++    function recover() {
++        checkExpiry();
++        if (stopped || document.visibilityState === 'hidden' || navigator.onLine === false || Date.now() - lastRecovery < 30000) return;
++        lastRecovery = Date.now();
++        refresh();
++    }
++    document.addEventListener('visibilitychange', recover);
++    window.addEventListener('pageshow', recover);
++    const offline = () => { lastRecovery = -Infinity; };
++    window.addEventListener('offline', offline);
++    window.addEventListener('online', recover);
+     return { snapshot, current, refresh, stop() {
+-        stopped = true; generation++; clearTimeout(timer); subscription?.unsubscribe();
+-        document.removeEventListener('visibilitychange', checkExpiry);
+-        window.removeEventListener('pageshow', checkExpiry);
++        stopped = true; generation++; clearTimeout(timer); clearTimeout(eventTimer); subscription?.unsubscribe();
++        document.removeEventListener('visibilitychange', recover);
++        window.removeEventListener('pageshow', recover);
++        window.removeEventListener('online', recover);
++        window.removeEventListener('offline', offline);
+     } };
+ }
+diff --git a/src/components/plugins/plugin-1fa0dd68-5069-436c-9a7d-3b54c340f1fa/src/wwPlugin.js b/src/components/plugins/plugin-1fa0dd68-5069-436c-9a7d-3b54c340f1fa/src/wwPlugin.js
+index f7cbc5e..f0eeaef 100644
+--- a/src/components/plugins/plugin-1fa0dd68-5069-436c-9a7d-3b54c340f1fa/src/wwPlugin.js
++++ b/src/components/plugins/plugin-1fa0dd68-5069-436c-9a7d-3b54c340f1fa/src/wwPlugin.js
+@@ -1,93 +1,27 @@
+ import { instrumentAuth } from '@/_front/chrome/sessionDiagnostic.js';
+-import { createClient } from '@supabase/supabase-js';
++import { createClient, isAuthRetryableFetchError } from '@supabase/supabase-js';
+ import { getCurrentSupabaseSettings, resolveRuntimeProjectUrl } from './helpers/environmentConfig';
+-import { logClientEvent } from '@/_front/chrome/errorLogger.js';
+ import { guardedTimeout } from '@/_front/chrome/freezeGuard.js';
+ 
+-// (a') v5 — неблокирующий pre-flight (локальная проверка; см. candA2-wwPlugin.diff.txt)
+-const AP_REUSE_MS = 10000, AP_BLOCK_MS = 3000, AP_MARGIN_MS = 3000;
+-// (a') выполняется ДО app.mount() — window.vm.$cookie может быть не готов, поэтому работаем с
+-// document.cookie НАПРЯМУЮ (тот же path/domain, что signOut(): domain=host и .host для Safari).
+-function apCookiePaths() { try { return wwLib.manager ? '/' + wwLib.wwWebsiteData.getInfo().id : '/'; } catch (e) { return '/'; } }
+-function apSetCookie(name, value, maxAgeSec) {
+-    const path = apCookiePaths(), h = window.location.hostname;
+-    const base = `${name}=${encodeURIComponent(value)}; path=${path}; max-age=${maxAgeSec}; samesite=Lax; secure`;
+-    try { document.cookie = `${base}; domain=${h}`; } catch (e) {}
+-    try { document.cookie = `${base}; domain=.${h}`; } catch (e) {}
+-}
+-function apClearCookies() {
+-    for (const n of ['sb-access-token', 'sb-refresh-token']) apSetCookie(n, '', 0);  // max-age=0 → удаление
+-}
+-function apSetCookies(session) {
+-    try {
+-        if (session?.access_token) apSetCookie('sb-access-token', session.access_token, session.expires_in || 3600);
+-        if (session?.refresh_token) apSetCookie('sb-refresh-token', session.refresh_token, 31536000);
+-    } catch (e) {}
++import { authRecoveryOptions, watchAuthRecovery } from '@/_front/chrome/authRecovery.js';
++
++function authBanner(kind) {
++    window.__mgAuthBanner = kind;
++    window.dispatchEvent(new CustomEvent('mg-auth-banner', { detail: kind }));
+ }
+-function apGuestStorage(sk, st) { const ls = window.localStorage; return {
+-    // прячем протухшую сессию от auth-js (иначе он рефрешит её и виснет), пока пользователь не вошёл
+-    getItem: k => (k === sk && !st.login ? null : ls.getItem(k)),
+-    // ВХОД = запись РЕАЛЬНОЙ сессии (есть access_token). init-очистка auth-js сюда не попадает.
+-    setItem: (k, v) => { if (k === sk && !st.login && /"access_token"/.test(v || '')) { st.login = true; apBanner('recovered'); } ls.setItem(k, v); },
+-    // КЛЮЧЕВОЕ: removeItem(sk) ДО входа — NO-OP. auth-js на init (и авто-signOut плагина при
+-    // refreshAuthUser→«нет юзера») зовёт его и стёр бы реальную, ещё валидную для рефреша сессию →
+-    // на следующей загрузке на здоровой сети юзер был бы разлогинен. ПОСЛЕ входа (st.login) защита
+-    // снимается — тогда явный выход через плагин (auth.signOut) корректно очищает LS[sk].
+-    removeItem: k => { if (k !== sk || st.login) ls.removeItem(k); } }; }
+-function apReadRT(sk) { try { return JSON.parse(window.localStorage.getItem(sk) || 'null')?.refresh_token || null; } catch (e) { return null; } }
+-function apNeeds(sk) { try { const s = JSON.parse(window.localStorage.getItem(sk) || 'null');
+-    if (!s || !s.refresh_token) return false; if (s.expires_at == null) return true;
+-    return (s.expires_at * 1000 - Date.now()) < 90 * 1000; } catch (e) { return false; } }
+-function apRefresh(p, k, rt) { return fetch(`${p}/auth/v1/token?grant_type=refresh_token`, { method: 'POST',
+-    headers: { 'Content-Type': 'application/json', apikey: k }, body: JSON.stringify({ refresh_token: rt }) })
+-    .then(async r => ({ code: r.status, body: await r.json().catch(() => ({})) })).catch(() => ({ code: 0 })); }
+-function apApply(sk, b) { if (!b || !b.access_token) return false;
+-    if (b.expires_at == null) b.expires_at = Math.floor(Date.now() / 1000) + (b.expires_in || 3600);
+-    try { window.localStorage.setItem(sk, JSON.stringify(b)); } catch (e) {}
+-    apSetCookies(b);   // document.cookie напрямую (не зависим от window.vm.$cookie до mount)
+-    return true; }
+-function apClear(sk) { try { window.localStorage.removeItem(sk); } catch (e) {} apClearCookies(); }
+-function apBanner(kind) { try { window.__mgAuthBanner = kind; window.dispatchEvent(new CustomEvent('mg-auth-banner', { detail: kind })); } catch (e) {} }
+-const apLog = (m, x) => { try { setTimeout(() => { try { logClientEvent('auth_preflight_timeout', m, x); } catch (e) {} }, 0); } catch (e) {} };
+-// Тонкая обёртка: любая ОШИБКА pre-flight не должна валить bootstrap — откат к обычному клиенту.
+-async function buildSupabaseClient(p, k, sk) {
+-    try { return await apBuild(p, k, sk); }
+-    catch (e) { try { apLog('ap_build_error', { msg: String(e && e.message || e) }); } catch (e2) {} return createClient(p, k, { auth: { storageKey: sk } }); }
++function validSession(session) {
++    return !!session?.access_token && !!session.user?.id && Number(session.expires_at) * 1000 > Date.now();
+ }
+-async function apBuild(p, k, sk) {
+-    if (!apNeeds(sk)) return createClient(p, k, { auth: { storageKey: sk } });
+-    const sentRT = apReadRT(sk), t0 = Date.now(); const P = apRefresh(p, k, sentRT);
+-    // guardedTimeout: если вкладку заморозили (iOS suspend) в течение блокирующего окна, перезапускаем
+-    // окно один раз вместо ложного TIMEOUT на пробуждении (ждём настоящий ответ apRefresh).
+-    // ВАЖНО: сохраняем handle и гасим его ПОСЛЕ гонки — иначе при победе apRefresh таймер доживает
+-    // и может позже перезапуститься/отправить лишний timer_rearmed (лимит 3 общий на страницу).
+-    let apTimer = null;
+-    const race = await Promise.race([P, new Promise(r => { apTimer = guardedTimeout(() => r('TIMEOUT'), AP_BLOCK_MS, { label: 'auth_preflight_timeout', onRearm: (i) => logClientEvent('timer_rearmed', `${i.label} rearm`, i) }); })]);
+-    if (apTimer) apTimer.clear();
+-    if (race !== 'TIMEOUT') {
+-        if (race.code === 200 && apApply(sk, race.body)) return createClient(p, k, { auth: { storageKey: sk } });
+-        if (race.code === 400) { if (apReadRT(sk) === sentRT) apClear(sk); return createClient(p, k, { auth: { storageKey: sk } }); }
++
++function writeSessionCookie(name, value, maxAge) {
++    const path = wwLib.manager ? '/' + wwLib.wwWebsiteData.getInfo().id : '/';
++    for (const domain of [window.location.hostname, '.' + window.location.hostname]) {
++        document.cookie = `${name}=${encodeURIComponent(value)}; path=${path}; domain=${domain}; max-age=${maxAge}; secure; samesite=Lax`;
+     }
+-    try { window.__mgGuestAuth = true; } catch (e) {}
+-    const state = { login: false };
+-    const client = createClient(p, k, { auth: { storage: apGuestStorage(sk, state), storageKey: sk, autoRefreshToken: true } });
+-    apBanner('offline'); apLog('preflight timeout', { conn: navigator.connection?.effectiveType || null, phase: 'sync', ms: Date.now() - t0 });
+-    const allowRetry = (race === 'TIMEOUT') || (race.code === 0); let settled = false;
+-    // Применять фоновый результат ТОЛЬКО если сохранённый refresh_token не изменился. removeItem(sk) теперь
+-    // no-op, поэтому LS[sk] меняется исключительно по настоящему событию: вход (другой RT) или выход
+-    // (clearStoredSession → null). Оба случая ≠ sentRT ⇒ не применяем (не клобберим вход, не воскрешаем выход).
+-    const changed = () => apReadRT(sk) !== sentRT;
+-    const applySafe = (r, ph) => { if (settled) return true;
+-        if (changed()) { settled = true; apLog('late_ignored', { phase: ph, ms: Date.now() - t0 }); return true; }
+-        if (r.code === 200 && apApply(sk, r.body)) { settled = true; apLog('recovered', { phase: ph, ms: Date.now() - t0 }); apBanner('recovered'); return true; }
+-        if (r.code === 400) { settled = true; apClear(sk); apLog('bg_400', { phase: ph, ms: Date.now() - t0 }); apBanner('reauth'); return true; }
+-        return false; };
+-    P.then(r => applySafe(r, 'late'));
+-    // ретраим ИСХОДНЫМ sentRT (не из LS — его auth-js мог стереть), только внутри reuse-окна, стоп на любом ответе
+-    if (allowRetry) (async () => { while (!settled && (Date.now() - t0) < (AP_REUSE_MS - AP_MARGIN_MS)) {
+-        await new Promise(r => setTimeout(r, 1000)); if (settled || changed()) return;
+-        const r = await apRefresh(p, k, sentRT); if (applySafe(r, 'retry')) return; if (r.code !== 0) return; } })();
+-    return client;
++}
++function clearSessionCookies() {
++    writeSessionCookie('sb-access-token', '', 0);
++    writeSessionCookie('sb-refresh-token', '', 0);
+ }
+ 
+ const maskForLog = value => {
+@@ -111,13 +45,25 @@ export default {
+         /* wwFront:end */
+     },
+     async _initAuth() {
+-        await this.refreshAuthUser();
+-    },
++        let timer;
++        try {
++            await Promise.race([
++                this.refreshAuthUser(),
++                new Promise(resolve => { timer = guardedTimeout(() => { this.markAuthPending(); resolve(false); }, 3000, { label: 'auth_preflight_timeout' }); }),
++            ]);
++        } finally { timer?.clear(); }
++    },
++    _getUser() {
++        return this.isAuthenticated && validSession({ ...this.user?._session, user: this.user }) ? this.user : null;
++    },
++    // Both names are used by the existing WeWeb auth service.
++    _isAuthenticated() { return this._getIsAuthenticated(); },
++    _getIsAuthenticated() { return !!this._getUser(); },
+     _getUserRoles() {
+-        return this.user?.roles || [];
++        return this._getUser()?.roles || [];
+     },
+     _matchRoles(roles) {
+-        return roles.every(role => this.user?.roles?.map(({ id }) => id).includes(role));
++        return roles.every(role => this._getUser()?.roles?.map(({ id }) => id).includes(role));
+     },
+     /*=============================================m_ÔÔ_m=============================================\
+         Auth API
+@@ -134,25 +80,28 @@ export default {
+             if (!runtimeProjectUrl || !effectivePublicKey) return;
+ 
+ 
+-            this.publicInstance = await buildSupabaseClient(runtimeProjectUrl, effectivePublicKey, wwLib.wwWebsiteData.getInfo().id);
++            this._authSubscription?.unsubscribe();
++            this._stopRecovery?.();
++            this.publicInstance = createClient(runtimeProjectUrl, effectivePublicKey, authRecoveryOptions(runtimeProjectUrl, wwLib.wwWebsiteData.getInfo().id));
+             instrumentAuth(this.publicInstance);
+ 
+             // The same public instance must be shared between supabase and supabase auth
+             if (wwLib.wwPlugins.supabase) wwLib.wwPlugins.supabase.syncInstance();
+             if (!this.privateInstance && !this.publicInstance) throw new Error('Invalid Supabase Auth configuration.');
+-            this.publicInstance.auth.onAuthStateChange(async (event, session) => {
+-                if (event === 'SIGNED_OUT') return;
+-                if (event == 'USER_DELETED') return this.signOut();
+-                if (event == 'USER_UPDATED') {
+-                    this.refreshAuthUser(session);
+-                }
+-                if (event === 'SIGNED_IN') {
+-                    this.refreshAuthUser(session);
+-                }
+-                if (event == 'TOKEN_REFRESHED') {
+-                    setCookies(session);
+-                }
+-            });
++            this._authEpoch = 0;
++            this._lastAuthSession = undefined;
++            this._authSubscription = this.publicInstance.auth.onAuthStateChange((event, session) => {
++                const epoch = ++this._authEpoch;
++                // An event is an invalidation, not proof of the current identity.
++                this._lastAuthSession = undefined;
++                if (event === 'SIGNED_OUT' || event === 'USER_DELETED' ||
++                    !validSession(session) || this.user?.id !== session.user.id) this.clearAuthView();
++                clearTimeout(this._authEventTimer);
++                this._authEventTimer = setTimeout(() => {
++                    if (this._authEpoch === epoch) this.refreshAuthUser().catch(() => this.markAuthPending());
++                }, 0);
++            }).data.subscription;
++            this._stopRecovery = watchAuthRecovery(this.publicInstance, () => this.markAuthPending(), () => this.refreshAuthUser());
+         } catch (err) {
+             this.publicInstance = null;
+             this.privateInstance = null;
+@@ -357,55 +306,66 @@ export default {
+     signOut() {
+         if (!this.publicInstance) throw new Error('Invalid Supabase Auth configuration.');
+ 
++        this._authEpoch = (this._authEpoch || 0) + 1;
++        this._authRequest = (this._authRequest || 0) + 1;
++        this._lastAuthSession = null;
+         this.user = null;
+         this.isAuthenticated = false;
+-        const path = wwLib.manager ? '/' + wwLib.wwWebsiteData.getInfo().id : '/';
+-        window.vm.config.globalProperties.$cookie.removeCookie('sb-access-token', {
+-            path,
+-            domain: window.location.hostname,
+-        });
+-        window.vm.config.globalProperties.$cookie.removeCookie('sb-refresh-token', {
+-            path,
+-            domain: window.location.hostname,
+-        });
+-        // For safari
+-        window.vm.config.globalProperties.$cookie.removeCookie('sb-access-token', {
+-            path,
+-            domain: '.' + window.location.hostname,
+-        });
+-        window.vm.config.globalProperties.$cookie.removeCookie('sb-refresh-token', {
+-            path,
+-            domain: '.' + window.location.hostname,
+-        });
++        clearSessionCookies();
+         this.publicInstance.auth.signOut();
+     },
+     // Ensure Retro compatibility for the workflow action fetchUser
+     fetchUser() {
+         return this.refreshAuthUser();
+     },
+-    async refreshAuthUser(_session) {
++    clearAuthView() {
++        this.user = null;
++        this.isAuthenticated = false;
++    },
++    markAuthPending() {
++        this.clearAuthView();
++        window.__mgGuestAuth = true;
++        authBanner('offline');
++    },
++    async refreshAuthUser() {
+         if (!this.publicInstance) throw new Error('Invalid Supabase Auth configuration.');
+-
+-        const { data } = await this.publicInstance.auth.getSession();
+-        const session = _session || data.session;
+-        const user = session ? session.user : data.user;
+-        const currentUser = wwLib.wwVariable.getValue(`${this.id}-user`);
+-        if (!user) {
+-            this.signOut();
++        const request = this._authRequest = (this._authRequest || 0) + 1;
++        const started = this._authEpoch || 0;
++        let result;
++        try { result = await this.publicInstance.auth.getSession(); }
++        catch { if (request === this._authRequest) this.markAuthPending(); return false; }
++        const session = result.data?.session;
++        if (started !== (this._authEpoch || 0) || request !== this._authRequest) return false;
++        if (result.error) {
++            if (isAuthRetryableFetchError(result.error)) this.markAuthPending();
++            else { this.clearAuthView(); clearSessionCookies(); window.__mgGuestAuth = false; authBanner('reauth'); }
+             return false;
+         }
+-        user.roles = await this.getUserRoles(user.id);
+-        user._session = {
++        if (!validSession(session)) {
++            this.clearAuthView();
++            if (!session) { clearSessionCookies(); window.__mgGuestAuth = false; authBanner(''); }
++            return false;
++        }
++        const epoch = this._authEpoch || 0;
++        let roles;
++        try { roles = await this.getUserRoles(session.user.id); }
++        catch { if (request === this._authRequest) this.markAuthPending(); return false; }
++        if (request !== this._authRequest || epoch !== (this._authEpoch || 0) || !validSession(session)) return false;
++        const currentUser = wwLib.wwVariable.getValue(`${this.id}-user`);
++        const user = { ...session.user, roles, _session: {
+             access_token: session.access_token,
+             expires_in: session.expires_in,
+             expires_at: session.expires_at,
+-            provider_token: session.provider_token || currentUser?._session?.provider_token,
++            provider_token: session.provider_token || (currentUser?.id === session.user.id ? currentUser?._session?.provider_token : null),
+             refresh_token: session.refresh_token,
+             token_type: session.token_type,
+-        };
++        } };
+         this.user = user;
+         this.isAuthenticated = true;
+         setCookies(session);
++        const wasPending = window.__mgGuestAuth;
++        window.__mgGuestAuth = false;
++        if (wasPending) authBanner('recovered');
+         return user;
+     },
+     async getUserRoles(userId) {
+@@ -465,45 +425,18 @@ export default {
+     },
+     async refreshSession() {
+         if (!this.publicInstance) throw new Error('Invalid Supabase Auth configuration.');
+-        const { data, error } = await this.publicInstance.auth.refreshSession();
++        const { error } = await this.publicInstance.auth.refreshSession();
+         if (error) throw new Error(error.message, { cause: error });
+-        const currentUser = wwLib.wwVariable.getValue(`${this.id}-user`);
+-        const { user, session } = data;
+-        if (!user || !session) return;
+-        this.user = {
+-            ...currentUser,
+-            ...user,
+-            _session: {
+-                access_token: session?.access_token,
+-                expires_in: session?.expires_in,
+-                expires_at: session?.expires_at,
+-                provider_token: currentUser?._session?.provider_token,
+-                refresh_token: session?.refresh_token,
+-                token_type: session?.token_type,
+-            },
+-        };
+-        this.isAuthenticated = true;
+-        setCookies(session);
++        // Re-read the current SDK session; a returned refresh result may already
++        // have been superseded by logout/login before this continuation runs.
++        return this.refreshAuthUser();
+     },
+ };
+ 
+ 
+ const setCookies = session => {
+-    const path = wwLib.manager ? '/' + wwLib.wwWebsiteData.getInfo().id : '/';
+-    window.vm.config.globalProperties.$cookie.setCookie('sb-access-token', session.access_token, {
+-        expire: session.expires_in,
+-        path,
+-        domain: window.location.hostname,
+-        secure: true,
+-        sameSite: 'Lax',
+-    });
+-    window.vm.config.globalProperties.$cookie.setCookie('sb-refresh-token', session.refresh_token, {
+-        expire: '1y',
+-        path,
+-        domain: window.location.hostname,
+-        secure: true,
+-        sameSite: 'Lax',
+-    });
++    writeSessionCookie('sb-access-token', session.access_token, Math.max(0, Math.floor(Number(session.expires_at) - Date.now() / 1000)));
++    writeSessionCookie('sb-refresh-token', session.refresh_token, 31536000);
+ };
+ 
+ const adminFunctions = {
+diff --git a/src/_front/chrome/authRecovery.js b/src/_front/chrome/authRecovery.js
+new file mode 100644
+index 0000000..4c22261
+--- /dev/null
++++ b/src/_front/chrome/authRecovery.js
+@@ -0,0 +1,102 @@
++import { AuthRetryableFetchError } from '@supabase/supabase-js';
++
++// One SDK owns refresh and its coordination. Never issue an independent preflight request.
++// This adapter only fences SDK storage commits and classifies transport failures.
++export function authRecoveryOptions(projectUrl, storageKey, { storage, fetcher = globalThis.fetch, timeoutMs = 8000 } = {}) {
++    if (!storage) {
++        try { storage = window.localStorage; storage.getItem(storageKey); }
++        catch {
++            // Same persistence limitation as the SDK fallback: usable for this
++            // document only when browser policy denies localStorage entirely.
++            const memory = new Map();
++            storage = { getItem: key => memory.get(key) ?? null, setItem: (key, value) => memory.set(key, value), removeItem: key => memory.delete(key) };
++        }
++    }
++    const endpoint = new URL(`${projectUrl.replace(/\/$/, '')}/auth/v1/token`, window.location.origin);
++    const commits = new Map();
++    const retryable = () => new AuthRetryableFetchError('Temporary or superseded auth refresh', 0);
++    const read = () => {
++        const raw = storage.getItem(storageKey);
++        try { return JSON.parse(raw || 'null'); } catch { return null; }
++    };
++    const matches = token => read()?.refresh_token === token;
++    const adapter = {
++        getItem: key => storage.getItem(key),
++        setItem(key, value) {
++            if (key === storageKey) {
++                let incoming;
++                try { incoming = JSON.parse(value); } catch { throw retryable(); }
++                const expected = commits.get(incoming?.access_token);
++                if (expected !== undefined) {
++                    commits.delete(incoming.access_token);
++                    if (!matches(expected)) throw retryable();
++                }
++            }
++            storage.setItem(key, value);
++        },
++        // Terminal cleanup belongs to the pinned SDK; a persistent removal fence
++        // cannot distinguish a later explicit logout from refresh cleanup.
++        removeItem: key => storage.removeItem(key),
++    };
++    const fetch = async (input, init) => {
++        let url;
++        try { url = new URL(typeof input === 'string' ? input : input.url, window.location.origin); } catch { return fetcher(input, init); }
++        if (url.origin !== endpoint.origin || url.pathname !== endpoint.pathname || url.searchParams.get('grant_type') !== 'refresh_token') return fetcher(input, init);
++        let token;
++        try { token = JSON.parse(init?.body)?.refresh_token; } catch { throw retryable(); }
++        // Includes explicit logout's synchronous storage clear, and login in another tab.
++        if (!token || !matches(token)) throw retryable();
++        const controller = new AbortController();
++        const abort = () => controller.abort();
++        init?.signal?.addEventListener('abort', abort, { once: true });
++        if (init?.signal?.aborted) abort();
++        const timer = setTimeout(abort, timeoutMs);
++        try {
++            const response = await fetcher(input, { ...init, signal: controller.signal });
++            if (!matches(token)) throw retryable();
++            if ([409, 429].includes(response.status) || response.status >= 500) {
++                await response.body?.cancel();
++                throw retryable();
++            }
++            if (response.ok) {
++                const body = await response.clone().json().catch(() => null);
++                if (!body?.access_token || !body.refresh_token || !body.user?.id || !Number.isFinite(body.expires_in) || body.expires_in <= 0) throw retryable();
++                if (!matches(token)) throw retryable();
++                // Bounded, in-memory only. The SDK still validates/normalizes the response.
++                if (commits.size >= 8) commits.delete(commits.keys().next().value);
++                commits.set(body.access_token, token);
++            }
++            return response;
++        } catch (error) {
++            if (controller.signal.aborted) throw retryable();
++            throw error;
++        } finally {
++            clearTimeout(timer);
++            init?.signal?.removeEventListener('abort', abort);
++        }
++    };
++    return { auth: { storageKey, storage: adapter, autoRefreshToken: true, persistSession: true }, global: { fetch } };
++}
++
++// SDK retries are bounded. A later online/foreground event may try again, at most
++// once per 30s (a new offline transition resets this cooldown), without polling/reload.
++export function watchAuthRecovery(client, onPending = () => {}, onRecovered = () => {}) {
++    let pending = false, last = -Infinity, stopped = false;
++    const recover = () => {
++        if (stopped || pending || document.visibilityState === 'hidden' || navigator.onLine === false || Date.now() - last < 30000) return;
++        pending = true; last = Date.now();
++        client.auth.getSession().then(({ error }) => error ? onPending() : onRecovered()).catch(onPending).finally(() => { pending = false; });
++    };
++    const offline = () => { last = -Infinity; };
++    window.addEventListener('offline', offline);
++    window.addEventListener('online', recover);
++    window.addEventListener('pageshow', recover);
++    document.addEventListener('visibilitychange', recover);
++    return () => {
++        stopped = true;
++        window.removeEventListener('online', recover);
++        window.removeEventListener('offline', offline);
++        window.removeEventListener('pageshow', recover);
++        document.removeEventListener('visibilitychange', recover);
++    };
++}

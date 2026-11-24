@@ -1,0 +1,170 @@
+--- a/package.json
++++ b/package.json
+@@ -1 +1 @@
+-{"name":"meetguru","version":"4.0.0","private":true,"type":"module","scripts":{"serve":"vite","build":"vite build -l warn","postbuild":"node ./postbuild.js","build:landing":"vite build -l warn --config vite.landing.config.js"},"dependencies":{"@ag-grid-community/locale":"33.2.4","@better-fetch/fetch":"1.1.21","@breezystack/lamejs":"^1.2.7","@supabase/supabase-js":"2.50.3","@tiptap/extension-color":"2.8.0","@tiptap/extension-image":"2.8.0","@tiptap/extension-link":"2.10.4","@tiptap/extension-mathematics":"2.26.1","@tiptap/extension-mention":"2.8.0","@tiptap/extension-placeholder":"2.8.0","@tiptap/extension-table":"2.8.0","@tiptap/extension-table-cell":"2.8.0","@tiptap/extension-table-header":"2.8.0","@tiptap/extension-table-row":"2.8.0","@tiptap/extension-task-item":"2.8.0","@tiptap/extension-task-list":"2.8.0","@tiptap/extension-text-align":"2.8.0","@tiptap/extension-text-style":"2.8.0","@tiptap/extension-underline":"2.8.0","@tiptap/pm":"2.8.0","@tiptap/starter-kit":"2.8.0","@tiptap/suggestion":"2.8.0","@tiptap/vue-3":"2.8.0","@unhead/vue":"2.1.13","@vueform/multiselect":"2.6.2","@vuepic/vue-datepicker":"3.6.8","@vueuse/core":"^13.0.0","ag-grid-vue3":"33.2.4","animejs":"^3.2.2","axios":"1.16.1","better-auth":"1.5.5","chart.js":"^4.5.1","date-fns":"4.1.0","dayjs":"1.11.0","diff":"^5.1.0","dompurify":"3.4.14","html-escaper":"3.0.3","html2canvas":"^1.4.1","imask":"^7.6.1","jspdf":"^4.2.1","katex":"^0.16.22","livekit-client":"^2.22.2","lodash-es":"4.18.1","marked":"^14.1.2","medium-zoom":"^1.0.6","pdfjs-dist":"^4.10.38","pinia":"3.0.4","prismjs":"^1.23.0","prosemirror-commands":"1.5.0","prosemirror-dropcursor":"1.5.0","prosemirror-gapcursor":"1.3.1","prosemirror-history":"1.3.0","prosemirror-keymap":"1.2.0","prosemirror-schema-list":"1.2.2","qs":"^6.14.0","short-unique-id":"5.3.2","tiny-emitter":"2.1.0","tiptap-markdown":"^0.8.10","uuid":"14.0.0","vanilla-colorful":"0.7.2","vue":"3.5.30","vue-cookie-next":"1.3.0","vue-ellipse-progress":"^2.1.1","vue-meta":"2.4.0","vue-router":"5.0.4","vuex":"4.1.0"},"devDependencies":{"@vitejs/plugin-vue":"6.0.5","@vue/tsconfig":"0.9.1","autoprefixer":"10.4.27","handlebars":"4.7.8","sass-embedded":"1.98.0","vite":"8.0.1"},"browserslist":["last 3 years"]}+{"name":"meetguru","version":"4.0.0","private":true,"type":"module","scripts":{"serve":"vite","build":"vite build -l warn","postbuild":"node ./postbuild.js","build:landing":"vite build -l warn --config vite.landing.config.js"},"dependencies":{"@ag-grid-community/locale":"33.2.4","@better-fetch/fetch":"1.1.21","@breezystack/lamejs":"^1.2.7","@supabase/supabase-js":"2.50.3","@tiptap/extension-color":"2.8.0","@tiptap/extension-image":"2.8.0","@tiptap/extension-link":"2.10.4","@tiptap/extension-mathematics":"2.26.1","@tiptap/extension-mention":"2.8.0","@tiptap/extension-placeholder":"2.8.0","@tiptap/extension-table":"2.8.0","@tiptap/extension-table-cell":"2.8.0","@tiptap/extension-table-header":"2.8.0","@tiptap/extension-table-row":"2.8.0","@tiptap/extension-task-item":"2.8.0","@tiptap/extension-task-list":"2.8.0","@tiptap/extension-text-align":"2.8.0","@tiptap/extension-text-style":"2.8.0","@tiptap/extension-underline":"2.8.0","@tiptap/pm":"2.8.0","@tiptap/starter-kit":"2.8.0","@tiptap/suggestion":"2.8.0","@tiptap/vue-3":"2.8.0","@unhead/vue":"2.1.13","@vueform/multiselect":"2.6.2","@vuepic/vue-datepicker":"3.6.8","@vueuse/core":"^13.0.0","ag-grid-vue3":"33.2.4","animejs":"^3.2.2","axios":"1.16.1","better-auth":"1.5.5","chart.js":"^4.5.1","date-fns":"4.1.0","dayjs":"1.11.0","diff":"^5.1.0","dompurify":"3.4.14","html-escaper":"3.0.3","html2canvas":"^1.4.1","imask":"^7.6.1","jspdf":"^4.2.1","katex":"^0.16.22","livekit-client":"^2.22.2","lodash-es":"4.18.1","marked":"^14.1.2","medium-zoom":"^1.0.6","pdfjs-dist":"^4.10.38","pinia":"3.0.4","prismjs":"^1.23.0","prosemirror-commands":"1.5.0","prosemirror-dropcursor":"1.5.0","prosemirror-gapcursor":"1.3.1","prosemirror-history":"1.3.0","prosemirror-keymap":"1.2.0","prosemirror-schema-list":"1.2.2","qs":"^6.14.0","short-unique-id":"5.3.2","tiny-emitter":"2.1.0","tiptap-markdown":"^0.8.10","uuid":"14.0.0","vanilla-colorful":"0.7.2","vue":"3.5.30","vue-cookie-next":"1.3.0","vue-ellipse-progress":"^2.1.1","vue-meta":"2.4.0","vue-router":"5.0.4","vuex":"4.1.0"},"devDependencies":{"@vitejs/plugin-vue":"6.0.5","@vue/tsconfig":"0.9.1","autoprefixer":"10.4.27","handlebars":"4.7.8","sass-embedded":"1.98.0","vite":"8.0.1"},"browserslist":["last 3 years"],"overrides":{"@supabase/auth-js":"2.119.2"}}--- a/package-lock.json
++++ b/package-lock.json
+@@ -1286,12 +1286,15 @@
+       "license": "MIT"
+     },
+     "node_modules/@supabase/auth-js": {
+-      "version": "2.70.0",
+-      "resolved": "https://registry.npmjs.org/@supabase/auth-js/-/auth-js-2.70.0.tgz",
+-      "integrity": "sha512-BaAK/tOAZFJtzF1sE3gJ2FwTjLf4ky3PSvcvLGEgEmO4BSBkwWKu8l67rLLIBZPDnCyV7Owk2uPyKHa0kj5QGg==",
+-      "license": "MIT",
+-      "dependencies": {
+-        "@supabase/node-fetch": "^2.6.14"
++      "version": "2.119.2",
++      "resolved": "https://registry.npmjs.org/@supabase/auth-js/-/auth-js-2.119.2.tgz",
++      "integrity": "sha512-zWi7pGT6XIMWG0Ja5Unvsv9ixwgLTq/pnWNzGVwVXlr/onraf3v4VwepCFSlxGrvNyKRmhn7O6e4CHF1TJg73Q==",
++      "license": "MIT",
++      "dependencies": {
++        "tslib": "2.8.1"
++      },
++      "engines": {
++        "node": ">=22.0.0"
+       }
+     },
+     "node_modules/@supabase/functions-js": {
+--- a/src/_front/chrome/confirmedSession.js
++++ b/src/_front/chrome/confirmedSession.js
+@@ -4,7 +4,7 @@
+ // Callbacks are synchronous: consumers must defer SDK work until outside the Auth lock.
+ export function observeConfirmedSession(client, onChange, onError = () => {}) {
+     let uid = null, expiresAt = 0, generation = 0, revision = 0;
+-    let known = false, stopped = false, timer, subscription, refreshing, lastRecovery = -Infinity;
++    let known = false, stopped = false, timer, eventTimer, subscription, refreshing, lastRecovery = -Infinity;
+     function apply(session) {
+         clearTimeout(timer);
+         const expiry = Number(session?.expires_at) * 1000;
+@@ -41,8 +41,17 @@
+     }
+     const result = client.auth.onAuthStateChange((event, session) => {
+         if (stopped || (event === 'INITIAL_SESSION' && revision > 0)) return;
+-        revision++;
+-        apply(event === 'SIGNED_OUT' ? null : session);
++        const eventRevision = ++revision;
++        // Events (including BroadcastChannel SIGNED_OUT) carry no source generation.
++        // Hide unconfirmed identity immediately; only a fresh SDK read can restore it.
++        if (event === 'SIGNED_OUT' || event === 'USER_DELETED' || session?.user?.id !== uid) apply(null);
++        clearTimeout(eventTimer);
++        eventTimer = setTimeout(async () => {
++            // Never await SDK work inside onAuthStateChange. Finish an older read,
++            // whose revision guard discards it, before confirming this event.
++            if (refreshing) await refreshing;
++            if (!stopped && revision === eventRevision) refresh();
++        }, 0);
+     });
+     subscription = result.data?.subscription;
+     function recover() {
+@@ -57,7 +66,7 @@
+     window.addEventListener('offline', offline);
+     window.addEventListener('online', recover);
+     return { snapshot, current, refresh, stop() {
+-        stopped = true; generation++; clearTimeout(timer); subscription?.unsubscribe();
++        stopped = true; generation++; clearTimeout(timer); clearTimeout(eventTimer); subscription?.unsubscribe();
+         document.removeEventListener('visibilitychange', recover);
+         window.removeEventListener('pageshow', recover);
+         window.removeEventListener('online', recover);
+--- a/src/components/plugins/plugin-1fa0dd68-5069-436c-9a7d-3b54c340f1fa/src/wwPlugin.js
++++ b/src/components/plugins/plugin-1fa0dd68-5069-436c-9a7d-3b54c340f1fa/src/wwPlugin.js
+@@ -91,20 +91,15 @@
+             this._authEpoch = 0;
+             this._lastAuthSession = undefined;
+             this._authSubscription = this.publicInstance.auth.onAuthStateChange((event, session) => {
+-                this._authEpoch++;
+-                this._lastAuthSession = (event === 'SIGNED_OUT' || event === 'USER_DELETED') ? null : session;
+-                if (event === 'SIGNED_OUT' || event === 'USER_DELETED' || !validSession(session)) {
+-                    this.clearAuthView();
+-                    if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
+-                        window.__mgGuestAuth = false;
+-                        clearSessionCookies();
+-                        authBanner('');
+-                    }
+-                    return;
+-                }
+-                // Never await SDK work inside its own auth callback / lock.
+-                if (this.user?.id !== session.user.id) this.clearAuthView();
+-                setTimeout(() => this.refreshAuthUser().catch(() => this.markAuthPending()), 0);
++                const epoch = ++this._authEpoch;
++                // An event is an invalidation, not proof of the current identity.
++                this._lastAuthSession = undefined;
++                if (event === 'SIGNED_OUT' || event === 'USER_DELETED' ||
++                    !validSession(session) || this.user?.id !== session.user.id) this.clearAuthView();
++                clearTimeout(this._authEventTimer);
++                this._authEventTimer = setTimeout(() => {
++                    if (this._authEpoch === epoch) this.refreshAuthUser().catch(() => this.markAuthPending());
++                }, 0);
+             }).data.subscription;
+             this._stopRecovery = watchAuthRecovery(this.publicInstance, () => this.markAuthPending(), () => this.refreshAuthUser());
+         } catch (err) {
+@@ -340,18 +335,22 @@
+         try { result = await this.publicInstance.auth.getSession(); }
+         catch { if (request === this._authRequest) this.markAuthPending(); return false; }
+         const session = result.data?.session;
+-        if (started !== (this._authEpoch || 0) && this._lastAuthSession?.access_token !== session?.access_token) return false;
++        if (started !== (this._authEpoch || 0) || request !== this._authRequest) return false;
+         if (result.error) {
+             if (isAuthRetryableFetchError(result.error)) this.markAuthPending();
+             else { this.clearAuthView(); clearSessionCookies(); window.__mgGuestAuth = false; authBanner('reauth'); }
+             return false;
+         }
+-        if (!validSession(session)) { this.clearAuthView(); return false; }
++        if (!validSession(session)) {
++            this.clearAuthView();
++            if (!session) { clearSessionCookies(); window.__mgGuestAuth = false; authBanner(''); }
++            return false;
++        }
+         const epoch = this._authEpoch || 0;
+         let roles;
+         try { roles = await this.getUserRoles(session.user.id); }
+         catch { if (request === this._authRequest) this.markAuthPending(); return false; }
+-        if (epoch !== (this._authEpoch || 0) || !validSession(session)) return false;
++        if (request !== this._authRequest || epoch !== (this._authEpoch || 0) || !validSession(session)) return false;
+         const currentUser = wwLib.wwVariable.getValue(`${this.id}-user`);
+         const user = { ...session.user, roles, _session: {
+             access_token: session.access_token,
+--- a/src/_front/chrome/authRecovery.js
++++ b/src/_front/chrome/authRecovery.js
+@@ -1,6 +1,6 @@
+ import { AuthRetryableFetchError } from '@supabase/supabase-js';
+ 
+-// One SDK owns refresh and its Web Lock. Never issue an independent preflight request.
++// One SDK owns refresh and its coordination. Never issue an independent preflight request.
+ // This adapter only fences SDK storage commits and classifies transport failures.
+ export function authRecoveryOptions(projectUrl, storageKey, { storage, fetcher = globalThis.fetch, timeoutMs = 8000 } = {}) {
+     if (!storage) {
+@@ -14,7 +14,6 @@
+     }
+     const endpoint = new URL(`${projectUrl.replace(/\/$/, '')}/auth/v1/token`, window.location.origin);
+     const commits = new Map();
+-    let rejectedRemoval;
+     const retryable = () => new AuthRetryableFetchError('Temporary or superseded auth refresh', 0);
+     const read = () => {
+         const raw = storage.getItem(storageKey);
+@@ -35,14 +34,9 @@
+             }
+             storage.setItem(key, value);
+         },
+-        removeItem(key) {
+-            if (key === storageKey && rejectedRemoval !== undefined) {
+-                const expected = rejectedRemoval;
+-                rejectedRemoval = undefined;
+-                if (!matches(expected)) throw retryable();
+-            }
+-            storage.removeItem(key);
+-        },
++        // Terminal cleanup belongs to the pinned SDK; a persistent removal fence
++        // cannot distinguish a later explicit logout from refresh cleanup.
++        removeItem: key => storage.removeItem(key),
+     };
+     const fetch = async (input, init) => {
+         let url;
+@@ -71,8 +65,6 @@
+                 // Bounded, in-memory only. The SDK still validates/normalizes the response.
+                 if (commits.size >= 8) commits.delete(commits.keys().next().value);
+                 commits.set(body.access_token, token);
+-            } else {
+-                rejectedRemoval = token; // fence terminal SDK cleanup against a newer login
+             }
+             return response;
+         } catch (error) {

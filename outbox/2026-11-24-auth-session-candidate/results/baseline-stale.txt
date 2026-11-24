@@ -1,0 +1,2 @@
+EXIT_CODE=0
+{"eventDelivery":"injected into actual SDK subscriber path","storageUser":"B","viewUser":null,"staleEventClearsView":true,"changes":["B",null]}

@@ -1,0 +1,41 @@
+{
+  "base": "e062265304688b744b36b8f2ea021b8270c641ad",
+  "status": "BLOCKED_DO_NOT_DEPLOY",
+  "browser": {
+    "Chrome": {
+      "auth_recovery": 14,
+      "stale_broadcast_logout": 1,
+      "email_vk": 26,
+      "checkout": 12
+    },
+    "WebKit": {
+      "auth_recovery": 14,
+      "stale_broadcast_logout": 1
+    }
+  },
+  "sdk_tests": {
+    "original_terminal_double_cleanup": [
+      400,
+      401
+    ],
+    "stale_event_recovers_then_real_logout": "PASS",
+    "terminal_read_remove_gap": {
+      "400": "FAIL: finalUser=null",
+      "401": "FAIL: finalUser=null"
+    },
+    "unchanged_adapter_proactive_then_logout": {
+      "400": "FAIL: B remains after explicit logout",
+      "401": "FAIL: B remains after explicit logout"
+    }
+  },
+  "build": "Vite PASS Node 24.14.0; postbuild not run",
+  "not_tested": [
+    "physical iPhone/Android PWA",
+    "real OS sleep/storage eviction",
+    "real Supabase refresh/GoTrue server compatibility",
+    "real OAuth provider round trip",
+    "WebKit full email/VK/checkout suites",
+    "Node20 CI compatibility",
+    "browser reproduction of narrow terminal read/remove gap"
+  ]
+}
