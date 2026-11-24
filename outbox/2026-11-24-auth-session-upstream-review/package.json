@@ -1,0 +1,7 @@
+{
+  "dependencies": {
+    "@supabase/auth-js": "2.119.2"
+  },
+  "private": true,
+  "type": "module"
+}
