@@ -1,0 +1,104 @@
+diff --git a/src/_front/views/MyCoursePage.vue b/src/_front/views/MyCoursePage.vue
+index 9f3d92b..e1c0960 100644
+--- a/src/_front/views/MyCoursePage.vue
++++ b/src/_front/views/MyCoursePage.vue
+@@ -17,6 +17,10 @@
+ <template>
+     <main class="pd" :class="{ 'is-ready': ready }">
+         <div v-if="loading" class="pd-wrap pd-load">Загрузка…</div>
++        <div v-else-if="authError" class="pd-wrap pd-load" role="alert">
++            <p>Не удалось подтвердить вход. Проверьте соединение и повторите попытку.</p>
++            <button type="button" class="pd-btn" @click="load">Повторить</button>
++        </div>
+         <div v-else-if="!course" class="pd-wrap pd-load">
+             <p>Курс не найден.</p>
+             <a href="/" class="pd-btn">На главную</a>
+@@ -197,7 +201,7 @@ import { tracePage } from '@/_front/chrome/sessionDiagnostic.js';
+ 
+ import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue';
+ import { useRoute } from 'vue-router';
+-import { getSupabase, readStoredSession, authCookieUser } from '@/_front/chrome/headerAccount.js';
++import { getSupabase } from '@/_front/chrome/headerAccount.js';
+ import { ownsCourse } from '@/_front/course/coursesApi.js';
+ import { embedUrl } from '@/_front/streams/peertubeLive.js';
+ import { logClientEvent } from '@/_front/chrome/errorLogger.js';
+@@ -215,6 +219,7 @@ let sb = null;
+ const myId = ref(null);
+ const me = ref(null);
+ const loading = ref(true);
++const authError = ref(false);
+ const ready = ref(false);
+ const course = ref(null);
+ const author = ref(null);
+@@ -448,15 +453,32 @@ async function loadCheatsheet(courseId) {
+ 
+ async function load() {
+     return tracePage('MyCoursePage', () => loading.value, async (__mgTrace) => {
++    loading.value = true;
++    authError.value = false;
+     sb = getSupabase();
+-    myId.value = readStoredSession()?.user?.id || authCookieUser()?.id || null;
++    // The profile snapshot can still be empty while the SDK restores auth-v2.
++    // Confirm identity through that same SDK before deciding this visitor is a guest.
++    try {
++        if (!sb?.auth) throw new Error('Auth unavailable');
++        const { data, error } = await __mgTrace.wait(0, () => sb.auth.getSession());
++        if (error) throw error;
++        const session = data?.session;
++        if (!session) { window.location.href = '/login'; return; }
++        if (!session.user?.id || !session.access_token || !(Number(session.expires_at) * 1000 > Date.now())) {
++            throw new Error('Session not confirmed');
++        }
++        myId.value = session.user.id;
++    } catch (_) {
++        myId.value = null;
++        authError.value = true;
++        loading.value = false;
++        return;
++    }
+     // Постепенное включение нативного VOD-плеера: пересчитываем после получения user_id (стабильный бакет).
+     rolloutBucketVal.value = myId.value ? rolloutBucket(myId.value) : null;
+     vodNativeOn.value = resolveVodNative(myId.value);
+     const courseId = route.query.course || '';
+ 
+-    // guest → login
+-    if (!myId.value) { window.location.href = '/login'; return; }
+     if (!sb || !courseId) { loading.value = false; __mgTrace.ready(); return; }
+ 
+     const { data } = await __mgTrace.wait(1, () => (sb.from('course')
+diff --git a/tests/course-auth-ready.browser.mjs b/tests/course-auth-ready.browser.mjs
+new file mode 100644
+index 0000000..347bd9f
+--- /dev/null
++++ b/tests/course-auth-ready.browser.mjs
+@@ -0,0 +1,30 @@
++import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import http from 'node:http';import assert from 'node:assert/strict';import {execFileSync} from 'node:child_process';
++import {build} from 'vite';import vue from '@vitejs/plugin-vue';
++const {chromium,webkit}=await import(process.env.PLAYWRIGHT_MODULE||'playwright');
++const root=process.cwd(),work=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'mg-course-auth-fixture-')));
++fs.symlinkSync(root+'/node_modules',work+'/node_modules','dir');
++const put=(name,body)=>{fs.writeFileSync(work+'/'+name,body);return work+'/'+name};
++const source=process.env.BEFORE?execFileSync('git',['show','HEAD:src/_front/views/MyCoursePage.vue'],{encoding:'utf8'}):fs.readFileSync(root+'/src/_front/views/MyCoursePage.vue','utf8');
++put('MyCourse.vue',source);
++const aliases=[{find:'@/_front/chrome/sessionDiagnostic.js',replacement:put('diag.js',`export const tracePage=(_n,_l,fn)=>fn({wait:(_n,f)=>f(),ready(){}});`)} ,{find:'@/_front/streams/peertubeLive.js',replacement:put('video.js',`export const embedUrl=()=>'';`)},{find:'@/_front/course/certificate.js',replacement:put('cert.js',`export const certNumber=()=>'',certDate=()=>'',certFilename=()=>'',downloadCertificatePdf=()=>{};`)},{find:'@/_front/chrome/errorLogger.js',replacement:put('log.js',`export const logClientEvent=()=>{};`)},{find:'@',replacement:root+'/src'}];
++put('index.html','<html><div id="app"></div><script type="module" src="/main.js"></script></html>');
++put('main.js',`
++import {createApp} from 'vue';import {createRouter,createWebHistory} from 'vue-router';import Page from './MyCourse.vue';
++const mode=new URLSearchParams(location.search).get('mode');let attempts=0;
++const session={access_token:'synthetic',expires_at:Math.floor(Date.now()/1000)+3600,user:{id:'B'}};
++localStorage.setItem('fixture-session',JSON.stringify(session));
++window.calls=[];const record=t=>{calls.push(t);sessionStorage.setItem('calls',JSON.stringify(calls))};
++const sb={auth:{async getSession(){record('session');attempts++;await new Promise(r=>setTimeout(r,200));if(mode==='error'&&attempts===1)return {data:{session:null},error:Error('synthetic offline')};return {data:{session:mode==='guest'?null:session},error:null};}},
++from(table){record(table);const row=table==='course'?[{id:'course-1',Title:'Synthetic owned course',Free:false,DurationLong:mode==='expired'?30:0,slug:'fixture',Less_Id:[]}]:table==='user_course'?(mode==='denied'?[]:[{id:'owned',end_period:'2001-01-01',created_at:'2000-01-01'}]):[];const q={select(){return q},eq(){return q},limit(){return q},in(){return q},update(){return q},then(ok,bad){return Promise.resolve({data:row,error:null}).then(ok,bad)}};return q},rpc:async()=>({data:null,error:null})};
++window.wwLib={wwPlugins:{supabase:{instance:sb},supabaseAuth:{publicInstance:sb,signOut(){throw Error('No logout allowed')},_getUser:()=>null}}};
++const router=createRouter({history:createWebHistory(),routes:[{path:'/:pathMatch(.*)*',component:Page}]});await router.push(location.pathname+location.search);await router.isReady();createApp(Page).use(router).mount('#app');
++`);
++await build({root:work,configFile:false,plugins:[vue({template:{transformAssetUrls:false}})],resolve:{alias:aliases},logLevel:'silent',build:{outDir:'dist'}});
++const server=http.createServer((req,res)=>{const u=new URL(req.url,'http://fixture');if(u.pathname==='/login'||u.pathname.startsWith('/course/')){res.setHeader('Content-Type','text/html');res.end('<h1>Destination</h1>');return;}const file=path.join(work,'dist',u.pathname==='/'?'index.html':u.pathname);if(!file.startsWith(work+'/dist/')||!fs.existsSync(file)){res.writeHead(404).end();return;}res.setHeader('Content-Type',file.endsWith('.js')?'application/javascript':file.endsWith('.css')?'text/css':'text/html');res.end(fs.readFileSync(file));});
++await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.0.1:'+server.address().port;
++try{for(const engine of ['Chrome','WebKit']){const browser=engine==='Chrome'?await chromium.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true}):await webkit.launch();try{for(const mode of (process.env.BEFORE?['owned']:['owned','guest','denied','expired','error'])){const page=await browser.newPage();await page.route('**/*',r=>r.request().url().startsWith(origin)?r.continue():r.abort());await page.goto(origin+'/?course=course-1&mode='+mode);
++if(process.env.BEFORE){await page.waitForURL('**/login');assert(await page.evaluate(()=>!!localStorage.getItem('fixture-session')));console.log(JSON.stringify({engine,mode,before:'REPRODUCED: redirected to login with stored session intact'}));}
++else if(mode==='guest')await page.waitForURL('**/login');
++else if(['denied','expired'].includes(mode))await page.waitForURL('**/course/fixture');
++else {if(mode==='error'){await page.getByRole('button',{name:'Повторить'}).waitFor();assert.equal(await page.evaluate(()=>JSON.parse(sessionStorage.getItem('calls')).includes('course')),false);await page.getByRole('button',{name:'Повторить'}).click();}await page.getByRole('heading',{name:'Synthetic owned course'}).waitFor();assert.equal(new URL(page.url()).pathname,'/');assert(await page.evaluate(()=>!!localStorage.getItem('fixture-session')));}
++console.log(JSON.stringify({engine,mode,pass:true}));await page.close();}}finally{await browser.close();}}}finally{await new Promise(r=>server.close(r));}

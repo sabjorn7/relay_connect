@@ -1,0 +1,4 @@
+{"engine":"Chrome","mode":"owned","before":"REPRODUCED: redirected to login with stored session intact"}
+{"engine":"Chrome","mode":"owned","pass":true}
+{"engine":"WebKit","mode":"owned","before":"REPRODUCED: redirected to login with stored session intact"}
+{"engine":"WebKit","mode":"owned","pass":true}
