@@ -1,0 +1,22 @@
+Выполнить от root на sb после проверки пакета 760c364.
+Скрипты уже в /home/mgdeploy/staging/, серверные SHA совпали.
+
+sha256sum /home/mgdeploy/staging/meetguru-club-scope-*-20261124.sh
+
+После сверки добавить одобрение:
+cat >> /etc/mg-deploy/approved.sha <<'MG_APPROVED'
+73c1396593f0c52648aa40430471e01b4f994dbc92d5c923af6b6f14851046ba meetguru-club-scope-disable-20261124.sh
+475bde6dd918603949c579d5cfc78618001aabdcbe780a7dda2414c7347f84fb meetguru-club-scope-install-20261124.sh
+b5974e06e0d1b94b1afd830e5bb50c9bf8a7b20bf45097a0adb51691fb454645 meetguru-club-scope-rollback-20261124.sh
+df659f33d80a53a2e1372a994e007505f787f92a16b7e6bd83644a8e220c8103 meetguru-club-scope-status-20261124.sh
+MG_APPROVED
+
+Затем только status:
+/usr/local/sbin/mg-deploy meetguru-club-scope-status-20261124.sh
+
+Передать вывод status. При baseline_matches=false остановиться.
+При scoped_disabled_matches=true не повторять установку.
+При подтверждённой базе следующий согласованный этап:
+/usr/local/sbin/mg-deploy meetguru-club-scope-install-20261124.sh
+Ожидается BACKUP и INSTALLED_DISABLED. Затем повторить status:
+scoped_disabled_matches=true. Вложения/push не включать, frontend не публиковать.

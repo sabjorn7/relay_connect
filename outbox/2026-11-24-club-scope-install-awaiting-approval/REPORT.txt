@@ -1,0 +1,20 @@
+STATUS: BLOCKED BY ADMIN SHA APPROVAL — NOT INSTALLED
+24.11.2026, пакет 760c364.
+SSH sb-edge доступен (mgdeploy). Четыре wrapper скопированы в staging;
+до загрузки файлов не было. Серверные SHA всех четырёх совпали с пакетом.
+Запрошен sudo -n /usr/local/sbin/mg-deploy meetguru-club-scope-status-20261124.sh.
+Результат exit 3: sha не одобрена:
+df659f33d80a53a2e1372a994e007505f787f92a16b7e6bd83644a8e220c8103.
+
+Status Python/SQL не исполнялся; актуальная схема этим запуском не подтверждена.
+INSTALLED_DISABLED/scoped_disabled_matches не получены.
+Install не запускался. BACKUP не создан. БД, Storage policies, capability,
+сообщения, клубы, подписки, push и frontend не менялись нами.
+Выполнена только подготовительная загрузка скриптов в staging.
+Реальные отправки/удаления сообщений не проверялись.
+
+sudo также сообщил unable to resolve host sb, но выполнил mg-deploy;
+непосредственный блокер — отсутствие SHA approval. Настройки не менялись.
+Следующий шаг — административное одобрение и повторный status (ADMIN.txt).
+Не обходим обязательное одобрение и сами не изменяем approved.sha.
+Rollback пока не требуется: схема не изменена. Скрипт rollback загружен.
