@@ -1,0 +1,35 @@
+{
+  "status": "READY_FOR_OWNER_REVIEW",
+  "base_main_sha": "e062265304688b744b36b8f2ea021b8270c641ad",
+  "public_html_release_sha": "e062265304688b744b36b8f2ea021b8270c641ad",
+  "public_main_asset": "/assets/main-COR6BoJY.js",
+  "local_branch": "release/auth-session-20261124",
+  "candidate_app_commit_created": false,
+  "app_branch_pushed": false,
+  "production_changed": false,
+  "deploy_run": false,
+  "ci_changed_in_main": false,
+  "node": "24.14.0",
+  "npm": "11.9.0",
+  "independent_sdk_rebuilds_identical": true,
+  "clean_npm_ci": {
+    "a": 0,
+    "b": 0
+  },
+  "vite_exit_codes": {
+    "a": 0,
+    "b": 0
+  },
+  "auth_browser": 30,
+  "repeat429_browser": 10,
+  "boundaries_browser": 12,
+  "terminal_browser": 16,
+  "email_vk_chrome": 26,
+  "checkout_chrome": 12,
+  "browser_total": 106,
+  "unrelated_lock_records_changed": [],
+  "release_sha256": "e47fe5a3cd4f53b508ad914860fa93888c666ffa36dcf9c1e7c7cac45ba671b1",
+  "rollback_sha256": "41542b51b7ee3fa3857c7306023e57bc28603cfc089e2c6d73c3a32e0c1a69c7",
+  "vendor_tar_sha256": "8875d3ae22ea6eb3ab7426b66f60c0ed09d6e6da6774f43e9e790db3be5e2964",
+  "patch_apply_and_reverse_check": "PASS"
+}

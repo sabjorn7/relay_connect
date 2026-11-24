@@ -1,0 +1,132 @@
+[
+  {
+    "engine": "Chrome",
+    "requests": 2,
+    "confirmation_ms": 437,
+    "statuses": [
+      [
+        429
+      ],
+      [
+        200
+      ]
+    ]
+  },
+  {
+    "engine": "WebKit",
+    "requests": 2,
+    "confirmation_ms": 455,
+    "statuses": [
+      [
+        429
+      ],
+      [
+        200
+      ]
+    ]
+  },
+  {
+    "engine": "Chrome",
+    "requests": 2,
+    "confirmation_ms": 441,
+    "statuses": [
+      [
+        429
+      ],
+      [
+        200
+      ]
+    ]
+  },
+  {
+    "engine": "WebKit",
+    "requests": 2,
+    "confirmation_ms": 432,
+    "statuses": [
+      [
+        429
+      ],
+      [
+        200
+      ]
+    ]
+  },
+  {
+    "engine": "Chrome",
+    "requests": 2,
+    "confirmation_ms": 433,
+    "statuses": [
+      [
+        429
+      ],
+      [
+        200
+      ]
+    ]
+  },
+  {
+    "engine": "WebKit",
+    "requests": 2,
+    "confirmation_ms": 440,
+    "statuses": [
+      [
+        429
+      ],
+      [
+        200
+      ]
+    ]
+  },
+  {
+    "engine": "Chrome",
+    "requests": 2,
+    "confirmation_ms": 432,
+    "statuses": [
+      [
+        429
+      ],
+      [
+        200
+      ]
+    ]
+  },
+  {
+    "engine": "WebKit",
+    "requests": 2,
+    "confirmation_ms": 434,
+    "statuses": [
+      [
+        429
+      ],
+      [
+        200
+      ]
+    ]
+  },
+  {
+    "engine": "Chrome",
+    "requests": 2,
+    "confirmation_ms": 438,
+    "statuses": [
+      [
+        429
+      ],
+      [
+        200
+      ]
+    ]
+  },
+  {
+    "engine": "WebKit",
+    "requests": 2,
+    "confirmation_ms": 436,
+    "statuses": [
+      [
+        429
+      ],
+      [
+        200
+      ]
+    ]
+  }
+]

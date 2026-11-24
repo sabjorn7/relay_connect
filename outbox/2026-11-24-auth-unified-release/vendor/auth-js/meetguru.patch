@@ -1,0 +1,299 @@
+--- a/src/GoTrueClient.ts
++++ b/src/GoTrueClient.ts
+@@ -65,7 +65,7 @@
+   validatePKCEFlowId,
+ } from './lib/helpers'
+ import { memoryLocalStorageAdapter } from './lib/local-storage'
+-import { LockAcquireTimeoutError, navigatorLock } from './lib/locks'
++import { LockAcquireTimeoutError, navigatorLock, processLock } from './lib/locks'
+ import { polyfillGlobalThis } from './lib/polyfills'
+ import { version } from './lib/version'
+ 
+@@ -656,7 +656,17 @@
+     const queue = this._pendingInitNotifications ?? []
+     this._pendingInitNotifications = null
+     for (const n of queue) {
+-      await this._notifyAllSubscribers(n.event, n.session, n.broadcast)
++      if (n.event !== 'SIGNED_OUT') {
++        await this._notifyAllSubscribers(n.event, n.session, n.broadcast)
++        continue
++      }
++      let notification: Promise<void> | undefined
++      await this._withSessionWriteLock(async () => {
++        if ((await getItemAsync(this.storage, this.storageKey)) !== null) return
++        notification = this._notifyAllSubscribers(n.event, n.session, n.broadcast)
++        notification.catch(() => {})
++      })
++      await notification
+     }
+ 
+     return result
+@@ -4092,6 +4102,15 @@
+    * ```
+    */
+   async signOut(options: SignOut = { scope: 'global' }): Promise<{ error: AuthError | null }> {
++    // Unsupported shared-storage coordination: permit only explicit destructive
++    // logout. No refresh or session write may run through this branch.
++    if (isBrowser() && !globalThis.navigator?.locks?.request && options.scope !== 'others') {
++      const current = (await getItemAsync(this.storage, this.storageKey)) as Session | null
++      await this._removeSession()
++      // Local removal is confirmed; server revocation failures remain visible.
++      if (current?.access_token) return await this.admin.signOut(current.access_token, options.scope ?? 'global')
++      return { error: null }
++    }
+     await this.initializePromise
+ 
+     if (this.lock != null) {
+@@ -4830,7 +4849,10 @@
+    * Generates a new JWT.
+    * @param refreshToken A valid refresh token that was returned on login.
+    */
+-  private async _refreshAccessToken(refreshToken: string): Promise<AuthResponse> {
++  private async _refreshAccessToken(
++    refreshToken: string,
++    storedAtStart: Session | null
++  ): Promise<AuthResponse> {
+     // Refresh tokens are long-lived bearer credentials; do NOT include any
+     // fragment of the token in the debug tag, even when `debug: true` is
+     // enabled (logs may be forwarded to third-party services).
+@@ -4845,6 +4867,13 @@
+         async (attempt) => {
+           if (attempt > 0) {
+             await sleep(200 * Math.pow(2, attempt - 1)) // 200, 400, 800, ...
++          }
++
++          // A retry belongs to the captured session generation, not to whichever
++          // user happens to occupy storage now. Check after backoff, before I/O.
++          const current = (await getItemAsync(this.storage, this.storageKey)) as Session | null
++          if (current?.refresh_token !== storedAtStart?.refresh_token) {
++            throw new AuthRefreshDiscardedError()
+           }
+ 
+           this._debug(debugName, 'refreshing attempt', attempt)
+@@ -4937,7 +4966,11 @@
+           // from storage -> userStorage
+ 
+           maybeUser = { user: currentSession.user }
+-          await setItemAsync(this.userStorage, this.storageKey + '-user', maybeUser)
++          await this._withSessionWriteLock(async () => {
++            const latest = (await getItemAsync(this.storage, this.storageKey)) as Session | null
++            if (latest?.refresh_token !== currentSession.refresh_token) return
++            await setItemAsync(this.userStorage!, this.storageKey + '-user', maybeUser)
++          })
+         }
+ 
+         currentSession.user = maybeUser?.user ?? userNotAvailableProxy()
+@@ -4955,8 +4988,12 @@
+           if (separateUser && separateUser?.user) {
+             currentSession.user = separateUser.user
+ 
+-            await removeItemAsync(this.storage, this.storageKey + '-user')
+-            await setItemAsync(this.storage, this.storageKey, currentSession)
++            await this._withSessionWriteLock(async () => {
++              const latest = (await getItemAsync(this.storage, this.storageKey)) as Session | null
++              if (latest?.refresh_token !== currentSession.refresh_token) return
++              await removeItemAsync(this.storage, this.storageKey + '-user')
++              await setItemAsync(this.storage, this.storageKey, currentSession)
++            })
+           } else {
+             currentSession.user = userNotAvailableProxy()
+           }
+@@ -5048,6 +5085,9 @@
+   }
+ 
+   private async _callRefreshToken(refreshToken: string): Promise<CallRefreshTokenResult> {
++    if (isBrowser() && !globalThis.navigator?.locks?.request) {
++      return { data: null, error: new AuthUnknownError('Session write coordination unavailable', null) }
++    }
+     if (!refreshToken) {
+       throw new AuthSessionMissingError()
+     }
+@@ -5107,7 +5147,7 @@
+       // snapshots*, not when the input token disagrees with what's stored.
+       const storedAtStart = (await getItemAsync(this.storage, this.storageKey)) as Session | null
+ 
+-      const { data, error } = await this._refreshAccessToken(refreshToken)
++      const { data, error } = await this._refreshAccessToken(refreshToken, storedAtStart)
+       if (error) throw error
+       if (!data.session) throw new AuthSessionMissingError()
+ 
+@@ -5135,27 +5175,11 @@
+         return discarded
+       }
+ 
+-      // Second leg of the commit guard: close the TOCTOU window between the
+-      // synchronous `storageChangedUnderUs` check and the actual storage
+-      // writes inside `_saveSession`. A concurrent `signOut → _removeSession`
+-      // can land inside `_saveSession`'s `await setItemAsync(...)` yields and
+-      // clear storage just before we overwrite it. Capture the epoch BEFORE
+-      // the save and re-check after; if it advanced, undo the write directly
+-      // (do NOT call `_removeSession` — that would emit a duplicate
+-      // SIGNED_OUT for the concurrent signOut that already fired one).
+-      const epochBeforeSave = this._sessionRemovalEpoch
+-
+-      await this._saveSession(data.session)
+-
+-      if (this._sessionRemovalEpoch !== epochBeforeSave) {
+-        this._debug(
+-          debugName,
+-          'commit guard (post-save): _removeSession ran during _saveSession, undoing write'
+-        )
+-        await removeItemAsync(this.storage, this.storageKey)
+-        if (this.userStorage) {
+-          await removeItemAsync(this.userStorage, this.storageKey + '-user')
+-        }
++      const saved = await this._saveSession(
++        data.session,
++        storedAtStart?.refresh_token ?? null
++      )
++      if (!saved) {
+         const discarded: CallRefreshTokenResult = {
+           data: null,
+           error: new AuthRefreshDiscardedError(),
+@@ -5180,6 +5204,13 @@
+ 
+       if (isAuthError(error)) {
+         const result = { data: null, error }
++
++        // Supersession is neither a server rejection nor a transient transport
++        // failure. Do not clean up or cache a failure against a newer session.
++        if (isAuthRefreshDiscardedError(error)) {
++          this.refreshingDeferred?.resolve(result)
++          return result
++        }
+ 
+         if (!isAuthRetryableFetchError(error)) {
+           // Proactive vs reactive distinction: a refresh fires whenever
+@@ -5203,7 +5234,13 @@
+               'proactive refresh failed, access token still valid — preserving session'
+             )
+           } else {
+-            await this._removeSession()
++            // Only this rejected refresh may authorize conditional removal.
++            // Keep the original server error even if local coordination fails.
++            try {
++              await this._removeSession(refreshToken)
++            } catch {
++              this._debug(debugName, 'conditional session cleanup not completed')
++            }
+           }
+         }
+ 
+@@ -5285,7 +5322,52 @@
+    * set currentSession and currentUser
+    * process to _startAutoRefreshToken if possible
+    */
+-  private async _saveSession(session: Session) {
++  // Separate from the legacy auth-operation lock. No HTTP or awaited
++  // subscribers are allowed inside this short storage-only critical section.
++  private async _withSessionWriteLock<R>(fn: () => Promise<R>): Promise<R> {
++    const name = `lock:session-write:${this.storageKey}`
++    if (isBrowser()) {
++      // No silent process-local fallback for shared browser storage.
++      if (!globalThis.navigator?.locks?.request) {
++        throw new Error('Session write coordination unavailable')
++      }
++      // Do not use navigatorLock here: its timeout recovery can steal a live
++      // lock. A storage transaction must never overlap the previous holder.
++      const controller = new AbortController()
++      const timer = setTimeout(() => controller.abort(), 5000)
++      try {
++        return await globalThis.navigator.locks.request(
++          name,
++          { mode: 'exclusive', signal: controller.signal },
++          async (lock) => {
++            clearTimeout(timer)
++            if (!lock) throw new Error('Session write lock unavailable')
++            return await fn()
++          }
++        )
++      } finally {
++        clearTimeout(timer)
++      }
++    }
++    // Only same-process storage is covered by this fallback; not distributed SSR.
++    return await processLock(name, 5000, fn)
++  }
++
++  private async _saveSession(
++    session: Session,
++    expectedRefreshToken?: string | null
++  ): Promise<boolean> {
++    return await this._withSessionWriteLock(async () => {
++      if (expectedRefreshToken !== undefined) {
++        const current = (await getItemAsync(this.storage, this.storageKey)) as Session | null
++        if ((current?.refresh_token ?? null) !== expectedRefreshToken) return false
++      }
++      await this._saveSessionUnderWriteLock(session)
++      return true
++    })
++  }
++
++  private async _saveSessionUnderWriteLock(session: Session) {
+     this._debug('#_saveSession()', session)
+     // _saveSession is always called whenever a new session has been acquired
+     // so we can safely suppress the warning returned by future getSession calls
+@@ -5324,29 +5406,40 @@
+     }
+   }
+ 
+-  private async _removeSession() {
+-    // Bump synchronously, BEFORE any `await`, so that `_callRefreshToken`'s
+-    // post-save check sees the increment whenever this method has started —
+-    // even if it hasn't finished. Pairs with the epoch check in
+-    // `_callRefreshToken`. See `_sessionRemovalEpoch` field doc.
+-    this._sessionRemovalEpoch += 1
+-    this._debug('#_removeSession()')
+-
+-    // The session is gone — no point holding on to a cached refresh failure
+-    // for a token that no longer exists. Synchronous, before any `await`.
+-    this.lastRefreshFailure = null
+-
+-    this.suppressGetSessionWarning = false
+-
+-    await removeItemAsync(this.storage, this.storageKey)
+-    await removeAllPKCEVerifiers(this.storage, this.storageKey)
+-    await removeItemAsync(this.storage, this.storageKey + '-user')
+-
+-    if (this.userStorage) {
+-      await removeItemAsync(this.userStorage, this.storageKey + '-user')
+-    }
+-
+-    await this._notifyAllSubscribers('SIGNED_OUT', null)
++  private async _removeSession(expectedRefreshToken?: string): Promise<boolean> {
++    let notification: Promise<void> | undefined
++    const remove = async () => {
++      if (expectedRefreshToken !== undefined) {
++        const current = (await getItemAsync(this.storage, this.storageKey)) as Session | null
++        if (!current || current.refresh_token !== expectedRefreshToken) return false
++        if (current.expires_at && current.expires_at * 1000 > Date.now()) return false
++      }
++
++      this._sessionRemovalEpoch += 1
++      this.lastRefreshFailure = null
++      this.suppressGetSessionWarning = false
++      await removeItemAsync(this.storage, this.storageKey)
++      // A failed refresh of A must not cancel an in-progress OAuth login B.
++      // Explicit logout retains its existing PKCE cleanup.
++      if (expectedRefreshToken === undefined) {
++        await removeAllPKCEVerifiers(this.storage, this.storageKey)
++      }
++      await removeItemAsync(this.storage, this.storageKey + '-user')
++      if (this.userStorage) {
++        await removeItemAsync(this.userStorage, this.storageKey + '-user')
++      }
++
++      // Dispatch starts while writers are serialized, but NEVER await a
++      // subscriber here: a subscriber is allowed to perform another login.
++      notification = this._notifyAllSubscribers('SIGNED_OUT', null)
++      notification.catch(() => {})
++      return true
++    }
++    const removed = expectedRefreshToken === undefined && isBrowser() && !globalThis.navigator?.locks?.request
++      ? await remove()
++      : await this._withSessionWriteLock(remove)
++    await notification
++    return removed
+   }
+ 
+   /**

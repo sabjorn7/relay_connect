@@ -1,0 +1,17 @@
+{"engine":"Chrome","status":400,"pauseRead":1,"successor":"B","pass":true}
+{"engine":"Chrome","status":400,"pauseRead":1,"successor":"A","pass":true}
+{"engine":"Chrome","status":400,"pauseRead":2,"successor":"B","pass":true}
+{"engine":"Chrome","status":400,"pauseRead":2,"successor":"A","pass":true}
+{"engine":"Chrome","status":401,"pauseRead":1,"successor":"B","pass":true}
+{"engine":"Chrome","status":401,"pauseRead":1,"successor":"A","pass":true}
+{"engine":"Chrome","status":401,"pauseRead":2,"successor":"B","pass":true}
+{"engine":"Chrome","status":401,"pauseRead":2,"successor":"A","pass":true}
+{"engine":"WebKit","status":400,"pauseRead":1,"successor":"B","pass":true}
+{"engine":"WebKit","status":400,"pauseRead":1,"successor":"A","pass":true}
+{"engine":"WebKit","status":400,"pauseRead":2,"successor":"B","pass":true}
+{"engine":"WebKit","status":400,"pauseRead":2,"successor":"A","pass":true}
+{"engine":"WebKit","status":401,"pauseRead":1,"successor":"B","pass":true}
+{"engine":"WebKit","status":401,"pauseRead":1,"successor":"A","pass":true}
+{"engine":"WebKit","status":401,"pauseRead":2,"successor":"B","pass":true}
+{"engine":"WebKit","status":401,"pauseRead":2,"successor":"A","pass":true}
+{"pass":16,"results":[{"engine":"Chrome","status":400,"pauseRead":1,"successor":"B","pass":true},{"engine":"Chrome","status":400,"pauseRead":1,"successor":"A","pass":true},{"engine":"Chrome","status":400,"pauseRead":2,"successor":"B","pass":true},{"engine":"Chrome","status":400,"pauseRead":2,"successor":"A","pass":true},{"engine":"Chrome","status":401,"pauseRead":1,"successor":"B","pass":true},{"engine":"Chrome","status":401,"pauseRead":1,"successor":"A","pass":true},{"engine":"Chrome","status":401,"pauseRead":2,"successor":"B","pass":true},{"engine":"Chrome","status":401,"pauseRead":2,"successor":"A","pass":true},{"engine":"WebKit","status":400,"pauseRead":1,"successor":"B","pass":true},{"engine":"WebKit","status":400,"pauseRead":1,"successor":"A","pass":true},{"engine":"WebKit","status":400,"pauseRead":2,"successor":"B","pass":true},{"engine":"WebKit","status":400,"pauseRead":2,"successor":"A","pass":true},{"engine":"WebKit","status":401,"pauseRead":1,"successor":"B","pass":true},{"engine":"WebKit","status":401,"pauseRead":1,"successor":"A","pass":true},{"engine":"WebKit","status":401,"pauseRead":2,"successor":"B","pass":true},{"engine":"WebKit","status":401,"pauseRead":2,"successor":"A","pass":true}],"scope":"real browsers/public SDK/two pages; async storage gates; synthetic HTTP only"}

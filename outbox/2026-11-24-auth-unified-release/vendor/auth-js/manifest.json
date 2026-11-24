@@ -1,0 +1,18 @@
+{
+  "upstream_version": "2.119.2",
+  "version": "2.119.2-meetguru.1",
+  "node": "v24.14.0",
+  "upstream_tar_sha256": "a1fd905cc87e454a7c278ac0a4c4924d3ca41ea6d991aa4b115b2198e6837163",
+  "source_before_sha256": "98ef20fe0d3dae873d1039a10c084bdfcd9203ea7dfe42c7316cf12ddb9807d0",
+  "source_after_sha256": "5124b7ce42938c73ac1f7955ad939a15ca86992efd1f7ce4de19e5d79c722a14",
+  "patch_sha256": "236e164479c8b21a3367e14bbcbc5e48ea476ca8b5643def4878454d802d5e9f",
+  "build_inputs_sha256": {
+    "config/tsconfig.module.json": "b7e9c8029880cfc635ee1fb32d6e741916ca7911400c7548cd4232092803a497",
+    "config/tsconfig.base.json": "685bbe0fb1b3d22532b174c57d6d4be0f6194ca92a4d89dbe31ab39d4358dcb8",
+    "config/tsconfig.json": "a3768c0044e64129e57df65fe86ed89d3fd2b029f54d4dd99dbf49dad90fec9d",
+    "toolchain/package-lock.json": "315428de565ebe19d164d3530dbc0035d4d854978271c8cfd96ce581fcae7f2e",
+    "toolchain/package.json": "e77682a01e42ca4f201189caf0972f01d9bb32a50cefcef42141a8a1e7d53087"
+  },
+  "tar_sha256": "8875d3ae22ea6eb3ab7426b66f60c0ed09d6e6da6774f43e9e790db3be5e2964",
+  "tar_integrity": "sha512-3em5qWaQZJihNOCdGnhqAvxHpL6HTIfGr80NFDYqYAYybVSFOUtgp3ABNFTG/Kq6B8gbdjReYj8QfGnrMHMtrg=="
+}
