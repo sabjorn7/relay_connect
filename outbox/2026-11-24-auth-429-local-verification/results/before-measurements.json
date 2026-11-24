@@ -1,0 +1,28 @@
+[
+  {
+    "engine": "Chrome",
+    "max_confirmation_ms": 25656,
+    "http_refresh": 2,
+    "statuses": [
+      [
+        429
+      ],
+      [
+        200
+      ]
+    ]
+  },
+  {
+    "engine": "WebKit",
+    "max_confirmation_ms": 25669,
+    "http_refresh": 2,
+    "statuses": [
+      [
+        429
+      ],
+      [
+        200
+      ]
+    ]
+  }
+]

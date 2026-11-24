@@ -1,0 +1,12 @@
+{
+  "version": "2.119.2-mg.retry-test.1",
+  "filename": "supabase-auth-js-2.119.2-mg.retry-test.1.tgz",
+  "integrity": "sha512-Ebpe19KrMvOso5hEHUzqwDEjgzF0Zb02fzNw0Is7Oq7jCP2JSp6j/3GDOYMytzcyUmC2t9OJTnHU1WQjhY4U3A==",
+  "sha256": {
+    "src/GoTrueClient.ts": "5124b7ce42938c73ac1f7955ad939a15ca86992efd1f7ce4de19e5d79c722a14",
+    "dist/main/GoTrueClient.js": "313294be0e73dce87bdfb811c5492272dc8942ceac0dcb5d6fbf5b9d95b2aa86",
+    "dist/module/GoTrueClient.js": "3a80915880672f8742f01a4235f19763dcae3aa6e4bbb3139f3f4ca4de6f3152",
+    "supabase-auth-js-2.119.2-mg.retry-test.1.tgz": "645bbfec0800e13ac5aaf07796b85ca270cb65cc663a392c0cb6338e4b1992a9"
+  },
+  "published_to_registry": false
+}

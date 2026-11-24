@@ -1,0 +1,12 @@
+{
+  "source_changes_from_ca9bb1f": [],
+  "lock_changes": [
+    "node_modules/@supabase/supabase-js/node_modules/@supabase/auth-js"
+  ],
+  "original_sdk_sha256": "90d5032b62c466b6931f126ee2a07d4f35ffa5f07263cddcbd5821b1f12dff45",
+  "new_sdk_sha256": "5124b7ce42938c73ac1f7955ad939a15ca86992efd1f7ce4de19e5d79c722a14",
+  "node": "24.14.0",
+  "sdk": "2.119.2-mg.retry-test.1",
+  "production_changed": false,
+  "ci_changed": false
+}

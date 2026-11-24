@@ -1,0 +1,31 @@
+{
+  "critical_429_repeats": {
+    "Chrome": 5,
+    "WebKit": 5,
+    "timeout_ms": 20000,
+    "status": "PASS",
+    "after_ms_range": [
+      432,
+      457
+    ],
+    "network_refresh_requests_per_run": 2
+  },
+  "browser_suites": {
+    "auth": 30,
+    "legacy_and_logout": 12,
+    "terminal_gap": 16,
+    "email_vk_chrome": 26,
+    "checkout_chrome": 12
+  },
+  "browser_total_including_repeats": 106,
+  "sdk_cjs_build": "PASS",
+  "sdk_esm_build": "PASS",
+  "vite_build": "PASS",
+  "vite_exit_code": 0,
+  "postbuild": "NOT RUN",
+  "source_changes": [],
+  "production_changed": false,
+  "ci_changed": false,
+  "ready_for_packaging": true,
+  "production_release_authorized": false
+}

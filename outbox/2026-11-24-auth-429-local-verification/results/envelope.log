@@ -1,0 +1,1 @@
+{"status":"PASS","checks":["unicode roundtrip","legacy scanner rejection","PKCE unchanged","user key unchanged","scoped removal","no plaintext migration","malformed/version rejection"]}
