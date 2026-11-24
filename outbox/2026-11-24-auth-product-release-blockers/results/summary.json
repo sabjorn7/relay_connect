@@ -1,0 +1,68 @@
+{
+  "results": [
+    {
+      "engine": "Chrome",
+      "mode": "mixed-400",
+      "before": "B",
+      "after": null,
+      "status": "FAIL",
+      "critical": true
+    },
+    {
+      "engine": "Chrome",
+      "mode": "mixed-401",
+      "before": "B",
+      "after": null,
+      "status": "FAIL",
+      "critical": true
+    },
+    {
+      "engine": "Chrome",
+      "mode": "no-locks",
+      "error": "Session write coordination unavailable",
+      "user": "A",
+      "status": "FAIL",
+      "critical": true
+    },
+    {
+      "engine": "Chrome",
+      "mode": "closed-holder",
+      "blocked": true,
+      "user": "B",
+      "status": "PASS"
+    },
+    {
+      "engine": "WebKit",
+      "mode": "mixed-400",
+      "before": "B",
+      "after": null,
+      "status": "FAIL",
+      "critical": true
+    },
+    {
+      "engine": "WebKit",
+      "mode": "mixed-401",
+      "before": "B",
+      "after": null,
+      "status": "FAIL",
+      "critical": true
+    },
+    {
+      "engine": "WebKit",
+      "mode": "no-locks",
+      "error": "Session write coordination unavailable",
+      "user": "A",
+      "status": "FAIL",
+      "critical": true
+    },
+    {
+      "engine": "WebKit",
+      "mode": "closed-holder",
+      "blocked": true,
+      "user": "B",
+      "status": "PASS"
+    }
+  ],
+  "releaseReady": false,
+  "runner_exit_note": "Runner finishes normally; release gate is releaseReady=false, not process exit status."
+}
