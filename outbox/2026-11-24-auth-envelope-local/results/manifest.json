@@ -1,0 +1,13 @@
+{
+  "base": "6c03085",
+  "node": "24.14.0",
+  "sdk": "2.119.2-mg.isolation-test.1 (unchanged)",
+  "production_changed": false,
+  "ci_changed": false,
+  "release_ready": false,
+  "product_sha256": {
+    "src/_front/chrome/authRecovery.js": "cdec7e9d47641277255df4891f02b5c131f770072a8062d03bbb7221189a890e",
+    "src/_front/chrome/headerAccount.js": "a0684828e803cba12724c6f8adc1d0264487ba81974747a9aea135e884862bc6",
+    "src/components/plugins/plugin-1fa0dd68-5069-436c-9a7d-3b54c340f1fa/src/wwPlugin.js": "0eec0cc5e6b34994206e600eff8571ece695602bce111b7e4bf04e9a70ca754c"
+  }
+}

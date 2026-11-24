@@ -1,0 +1,84 @@
+--- a/src/_front/chrome/authRecovery.js
++++ b/src/_front/chrome/authRecovery.js
+@@ -1,4 +1,22 @@
+ import { AuthRetryableFetchError } from '@supabase/supabase-js';
++
++// Compatibility envelope for the legacy scanner, NOT encryption. Only the
++// session record is transformed; PKCE and other SDK keys retain their contract.
++const PREFIX = 'mg-auth-v2:';
++function encodeSession(value) {
++    const bytes = new TextEncoder().encode(value);
++    let binary = '';
++    for (const byte of bytes) binary += String.fromCharCode(byte);
++    return PREFIX + btoa(binary);
++}
++function decodeSession(value) {
++    if (typeof value !== 'string' || !value.startsWith(PREFIX)) return null;
++    try {
++        const binary = atob(value.slice(PREFIX.length));
++        const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
++        return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
++    } catch { return null; }
++}
+ 
+ // One SDK owns refresh and its coordination. Never issue an independent preflight request.
+ // This adapter only fences SDK storage commits and classifies transport failures.
+@@ -16,12 +34,12 @@
+     const commits = new Map();
+     const retryable = () => new AuthRetryableFetchError('Temporary or superseded auth refresh', 0);
+     const read = () => {
+-        const raw = storage.getItem(storageKey);
++        const raw = decodeSession(storage.getItem(storageKey));
+         try { return JSON.parse(raw || 'null'); } catch { return null; }
+     };
+     const matches = token => read()?.refresh_token === token;
+     const adapter = {
+-        getItem: key => storage.getItem(key),
++        getItem: key => key === storageKey ? decodeSession(storage.getItem(key)) : storage.getItem(key),
+         setItem(key, value) {
+             if (key === storageKey) {
+                 let incoming;
+@@ -32,7 +50,7 @@
+                     if (!matches(expected)) throw retryable();
+                 }
+             }
+-            storage.setItem(key, value);
++            storage.setItem(key, key === storageKey ? encodeSession(value) : value);
+         },
+         // Terminal cleanup belongs to the pinned SDK; a persistent removal fence
+         // cannot distinguish a later explicit logout from refresh cleanup.
+--- a/src/_front/chrome/headerAccount.js
++++ b/src/_front/chrome/headerAccount.js
+@@ -127,7 +127,7 @@
+ // Safari) in case the auth plugin isn't reachable.
+ function clearAuthCookies() {
+     const host = window.location.hostname;
+-    for (const name of ['sb-access-token', 'sb-refresh-token']) {
++    for (const name of ['mg-auth-v2-access', 'mg-auth-v2-refresh']) {
+         for (const domain of [host, '.' + host, '']) {
+             const d = domain ? `; domain=${domain}` : '';
+             document.cookie = `${name}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0${d}`;
+--- a/src/components/plugins/plugin-1fa0dd68-5069-436c-9a7d-3b54c340f1fa/src/wwPlugin.js
++++ b/src/components/plugins/plugin-1fa0dd68-5069-436c-9a7d-3b54c340f1fa/src/wwPlugin.js
+@@ -20,8 +20,8 @@
+     }
+ }
+ function clearSessionCookies() {
+-    writeSessionCookie('sb-access-token', '', 0);
+-    writeSessionCookie('sb-refresh-token', '', 0);
++    writeSessionCookie('mg-auth-v2-access', '', 0);
++    writeSessionCookie('mg-auth-v2-refresh', '', 0);
+ }
+ 
+ const maskForLog = value => {
+@@ -435,8 +435,8 @@
+ 
+ 
+ const setCookies = session => {
+-    writeSessionCookie('sb-access-token', session.access_token, Math.max(0, Math.floor(Number(session.expires_at) - Date.now() / 1000)));
+-    writeSessionCookie('sb-refresh-token', session.refresh_token, 31536000);
++    writeSessionCookie('mg-auth-v2-access', session.access_token, Math.max(0, Math.floor(Number(session.expires_at) - Date.now() / 1000)));
++    writeSessionCookie('mg-auth-v2-refresh', session.refresh_token, 31536000);
+ };
+ 
+ const adminFunctions = {

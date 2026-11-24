@@ -1,0 +1,3 @@
+{"engine":"Chrome","mode":"legacy-scanner","oldUser":"A","newSessionSurvives":false,"status":"FAIL","note":"legacy scanner remains unchanged"}
+{"engine":"WebKit","mode":"legacy-scanner","oldUser":"B","newSessionSurvives":false,"status":"FAIL","note":"legacy scanner remains unchanged"}
+{"results":[{"engine":"Chrome","mode":"legacy-scanner","oldUser":"A","newSessionSurvives":false,"status":"FAIL","note":"legacy scanner remains unchanged"},{"engine":"WebKit","mode":"legacy-scanner","oldUser":"B","newSessionSurvives":false,"status":"FAIL","note":"legacy scanner remains unchanged"}],"ready":false}

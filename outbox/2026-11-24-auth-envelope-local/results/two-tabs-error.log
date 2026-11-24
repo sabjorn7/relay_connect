@@ -1,0 +1,12 @@
+{"engine":"Chrome","mode":"two-tabs-error","count":2,"states":[{"authenticated":true,"uid":"A","view":"A","guest":false,"ready":true,"stored":true},{"authenticated":false,"uid":null,"view":null,"guest":true,"ready":true,"stored":true}]}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+page.waitForFunction: Timeout 20000ms exceeded.
+    at /private/tmp/mg-auth-envelope-20261124/candidate/tests/auth-session-recovery.browser.mjs:44:156 {
+  log: [],
+  name: 'TimeoutError'
+}
+
+Node.js v24.14.0
