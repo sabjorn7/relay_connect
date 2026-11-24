@@ -1,0 +1,12 @@
+{
+  "release": "123cdab5222d42803adc310f53bdfccfde4cc9a9",
+  "html_status": 200,
+  "serviceworker_status": 200,
+  "badge_status": 200,
+  "badge_content_type": "image/png",
+  "badge_size": 1673,
+  "badge_sha256": "234cd75e1b704325a413a32c0dbec5b9870b9526db2ccdc9baf2404e6b3141a0",
+  "matches_tested_badge": true,
+  "color_icon_unchanged": true,
+  "physical_android": "NOT TESTED"
+}
