@@ -1,0 +1,8 @@
+{
+  "sdk": "@supabase/auth-js",
+  "version": "2.119.2",
+  "base_sha256": "98ef20fe0d3dae873d1039a10c084bdfcd9203ea7dfe42c7316cf12ddb9807d0",
+  "proposed_sha256": "ab243b13c15e871c30e4c1e9ec0e60d27b648d3d930cd9ec4887b8216d68365c",
+  "patch_sha256": "c831424e19b8648936fdb8a63a3fd6730466fd2c9f68b109659102e68989172a",
+  "status": "PROPOSAL_ONLY_NOT_APPLIED_NOT_RUNTIME_TESTED"
+}

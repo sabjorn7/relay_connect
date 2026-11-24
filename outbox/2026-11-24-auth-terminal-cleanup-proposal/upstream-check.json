@@ -1,0 +1,13 @@
+{
+  "checked_date": "2026-11-24",
+  "npm_latest": "2.119.2",
+  "tags": {
+    "next": "3.0.0-next.29",
+    "canary": "2.119.0-canary.6",
+    "beta": "2.112.0-beta.0",
+    "rc": "2.100.0-rc.0"
+  },
+  "source_url": "https://github.com/supabase/supabase-js/blob/master/packages/core/auth-js/src/GoTrueClient.ts",
+  "finding": "published stable and inspected upstream source retain read / expiry check / unconditional removal",
+  "prereleases_tested": false
+}

@@ -1,0 +1,13 @@
+{
+  "sdk_diff_applies_check_only": "PASS",
+  "proposed_ts_syntax_no_execution": "PASS",
+  "sdk_source_sha_unchanged": "PASS",
+  "latest_stable": "2.119.2",
+  "baseline_gap_400_401": "FAIL",
+  "unchanged_adapter_logout_400_401": "FAIL",
+  "patched_runtime_tests": "NOT TESTED: dependency changes require approval",
+  "patched_browser_regressions": "NOT TESTED: first gate not run",
+  "ci_changed": false,
+  "production_changed": false,
+  "negative_source_sha_rejected_without_output": "PASS"
+}
