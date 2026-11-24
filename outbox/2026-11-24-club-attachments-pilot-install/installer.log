@@ -1,0 +1,7 @@
+BACKUP=/private/tmp/mg-club-pg-hyx3owig/backups/20261124T170956Z-25355
+INSTALLED_DISABLED; attachments=false; push unchanged; no frontend deployment
+{"baseline_matches": false, "scoped_disabled_matches": true, "bucket_private": true, "push_triggers": "disabled"}
+DISABLED; existing objects/messages preserved; push unchanged
+ROLLED_BACK_DISABLED; data preserved; push unchanged
+{"baseline_matches": true, "scoped_disabled_matches": false, "bucket_private": true, "push_triggers": "disabled"}
+PASS: generated atomic install SQL; admin install/status/disable/rollback; corrupt payload denied; repeat install denied; enabled rollback denied; post-check failure rolls back; backups checksummed; data preserved. Docker transport mocked to local PostgreSQL; no production calls.

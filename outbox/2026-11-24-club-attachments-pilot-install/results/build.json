@@ -1,0 +1,11 @@
+{
+  "base": "5313871daba788d8e1f1d67b1c0b116d0560b083",
+  "command": "./node_modules/.bin/vite build -l warn",
+  "exit_code": 0,
+  "npm_postbuild": "NOT RUN: production SEO reads intentionally excluded",
+  "product_files": [
+    "src/_front/components/ClubChatAttachments.vue",
+    "src/_front/helpers/clubAttachments.js"
+  ],
+  "diff_check": "PASS"
+}

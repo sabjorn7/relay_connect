@@ -1,0 +1,78 @@
+НЕ ЗАПУСКАТЬ ДО ОТДЕЛЬНОГО РАЗРЕШЕНИЯ НА PRODUCTION.
+
+1. Проверить SHA256SUMS и SHA четырёх meetguru-club-scope-*-20261124.sh.
+   Перенести только согласованные wrappers в /home/mgdeploy/staging/.
+   Администратор сверяет файлы/код и добавляет их точные SHA и имена в
+   /etc/mg-deploy/approved.sha штатным механизмом. Скрипты не одобряют себя.
+   Не выполнять baseline.sql: это исключительно локальная тестовая схема.
+
+2. Штатная проверка (после разрешения):
+   /usr/local/sbin/mg-deploy meetguru-club-scope-status-20261124.sh
+   До установки: baseline_matches=true, bucket_private=true,
+   push_triggers=disabled. При несовпадении остановиться.
+
+3. Установка после согласования:
+   /usr/local/sbin/mg-deploy meetguru-club-scope-install-20261124.sh
+   Ожидается INSTALLED_DISABLED. Backup выводится ДО изменения:
+   /var/lib/mg-deploy/club-attachment-scope/<UTC>-<pid>
+   В нём before.json, invariants.json (включая ACL/owner), точные SQL,
+   SHA256.json. active-backup.txt указывает на этот backup для rollback.
+   Права ограничены только у создаваемых файлов пакета, существующие системные
+   каталоги/владельцы/права не меняются. Сервисы не перезапускаются.
+   Повторить status: scoped_disabled_matches=true.
+   При ошибке SQL транзакция откатится. Если после COMMIT пропал транспорт,
+   сначала status, не повторять install вслепую.
+
+4. Frontend, отдельное разрешение:
+   От актуального main, совпадающего с базой 5313871, применить frontend.diff.
+   При изменившейся базе сверить оба файла и остановиться при конфликтах.
+   Повторить Vite/browser checks, PR и Deploy App. Этот выпуск меняет только
+   два frontend-файла. Ни новый, ни старый frontend не включают capability.
+
+5. Выбор/включение ОДНОГО клуба, отдельное разрешение:
+   Зафиксировать UUID согласованного тестового клуба и существующий аккаунт.
+   Старую no-arg capability НЕ включать.
+   Через существующее административное подключение PostgreSQL исполнить:
+   psql -X -v ON_ERROR_STOP=1 -v pilot_club=APPROVED_UUID -f enable-one-club.sql
+   Нужны настроенные защищённые параметры подключения, не URL с паролем.
+   Файл требует валидный UUID существующего клуба и записывает единственный
+   literal UUID в scoped capability. Не принимает список/маску/global=true.
+   До этого действия scoped capability возвращает false для всех.
+   Для запуска через mg-deploy сначала упаковать выбранный UUID в отдельный
+   approve-by-SHA enable wrapper. В текущем пакете такого wrapper намеренно
+   нет: клуб не выбран и активация не разрешена.
+   После включения проверить участником true для выбранного клуба, false
+   для другого, anon=false, legacy RPC=false. Прямые upload/send вне пилота
+   должны отклоняться. Провести отправку/открытие фото/PDF/голоса, проверить
+   реальный микрофон Chrome/Safari, старые тексты/фото/удаление.
+   Не писать тестовые сообщения в чужие клубы; push не включать.
+
+6. Немедленное отключение (предварительно одобренный wrapper):
+   /usr/local/sbin/mg-deploy meetguru-club-scope-disable-20261124.sh
+   Проверить status: scoped_disabled_matches=true.
+   Новые загрузки/отправки запрещаются. Данные и существующие read policies
+   сохраняются; выданные signed URLs живут прежний срок. Уже начатая
+   транзакция может завершиться со своим snapshot; проверить результат.
+
+7. Полный откат после отдельного разрешения:
+   Сначала disable, затем:
+   /usr/local/sbin/mg-deploy meetguru-club-scope-rollback-20261124.sh
+   Берёт backup из защищённого active-backup.txt и проверяет контрольные суммы.
+   Восстанавливает ровно две исходные политики и send RPC, удаляет только
+   добавленную перегрузку capability(uuid). Legacy capability остаётся false.
+   Сообщения, объекты Storage, подписки не удаляются.
+   При несовпадении текущих определений/backup — STOP; не применять поверх
+   чужих изменений. Администратор проверяет сохранённые определения вручную.
+   При необходимости frontend откатывается отдельным revert/PR/Deploy App;
+   новый frontend при отсутствии перегрузки безопасно скрывает вложения.
+
+Повторение локальных тестов:
+node scoped.unit.mjs
+python3 scoped.postgres.py
+python3 build.py
+python3 installer.local.py
+Для браузеров скопировать tests в изолированный checkout базы, применить
+frontend.diff и использовать существующий Playwright через PLAYWRIGHT_MODULE.
+Vite: ./node_modules/.bin/vite build -l warn
+Файлы .sh генерируются build.py; не менять вручную. Production-контакт в
+локальных SQL/browser тестах отсутствует.
