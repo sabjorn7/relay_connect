@@ -1,0 +1,69 @@
+{
+  "expected": "78c74681f7e73ad0312932dbebf916aa4271d85e",
+  "results": [
+    {
+      "engine": "Chrome",
+      "route": "/my_courses/?course=synthetic-no-access",
+      "http": 200,
+      "release": "78c74681f7e73ad0312932dbebf916aa4271d85e",
+      "finalPath": "/login/",
+      "mounted": true,
+      "preloaderHidden": true,
+      "emailInputs": 1,
+      "passwordInputs": 1,
+      "pageErrors": [],
+      "assetErrors": [],
+      "failedAssets": [
+        {
+          "type": "stylesheet",
+          "host": "fonts.googleapis.com",
+          "path": "/css2",
+          "error": "net::ERR_SOCKET_NOT_CONNECTED"
+        },
+        {
+          "type": "script",
+          "host": "mc.yandex.ru",
+          "path": "/metrika/tag.js",
+          "error": "net::ERR_SOCKET_NOT_CONNECTED"
+        },
+        {
+          "type": "script",
+          "host": "mc.yandex.ru",
+          "path": "/metrika/tag.js",
+          "error": "net::ERR_SOCKET_NOT_CONNECTED"
+        }
+      ],
+      "automaticReports": 0,
+      "pass": true
+    },
+    {
+      "engine": "WebKit",
+      "route": "/my_courses/?course=synthetic-no-access",
+      "http": 200,
+      "release": "78c74681f7e73ad0312932dbebf916aa4271d85e",
+      "finalPath": "/login/",
+      "mounted": true,
+      "preloaderHidden": true,
+      "emailInputs": 1,
+      "passwordInputs": 1,
+      "pageErrors": [
+        "XMLHttpRequest cannot load https"
+      ],
+      "assetErrors": [],
+      "failedAssets": [
+        {
+          "type": "stylesheet",
+          "host": "fonts.googleapis.com",
+          "path": "/css2",
+          "error": "cancelled"
+        }
+      ],
+      "automaticReports": 0,
+      "pass": false,
+      "failure": "AssertionError",
+      "reason": "Expected values to be strictly deep-equal:\n+ actual - expected\n\n+ [\n+   'XMLHttpRequest cannot load https'\n+ ]\n- []\n"
+    }
+  ],
+  "realLogin": "NOT TESTED: no approved test credentials available",
+  "payments": "NOT PERFORMED"
+}
