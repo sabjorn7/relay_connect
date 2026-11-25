@@ -1,0 +1,7 @@
+BACKUP=/private/tmp/mg-club-pg-e110_eqr/backups/20261125T092335Z-28282
+ENABLED_ONE_CLUB=737b8824-88b8-4cee-b50b-3f4ed3b59683; PUSH_UNCHANGED=True; DATA_PRESERVED=True
+ALREADY_ENABLED; no changes
+BACKUP=/private/tmp/mg-club-pg-e110_eqr/backups/20261125T092336Z-28282
+DISABLED_ALL_CLUBS; PUSH_UNCHANGED=True; DATA_PRESERVED=True
+ALREADY_DISABLED; no changes
+PASS: actual enable/disable admin; zero/multiple-club rejection; checksum rejection; idempotency; exact club owner/member allow; outsider/anon/other club deny; direct storage deny outside club; image/document/audio send; disable preserves messages/objects/membership and original policies. Local synthetic DB only.

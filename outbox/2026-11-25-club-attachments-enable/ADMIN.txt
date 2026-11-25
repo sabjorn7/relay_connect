@@ -1,0 +1,50 @@
+ТОЛЬКО ПОСЛЕ ОТДЕЛЬНОГО РАЗРЕШЕНИЯ НА ВКЛЮЧЕНИЕ.
+Сейчас пакет не загружен на сервер и production не менялся.
+
+1. Администратор проверяет этот пакет и оба wrapper. Загрузить только:
+   meetguru-club-attachments-enable-20261125.sh
+   meetguru-club-attachments-disable-20261125.sh
+   в /home/mgdeploy/staging/. Не запускать SQL fixtures.
+
+2. На sb от root сверить:
+sha256sum /home/mgdeploy/staging/meetguru-club-attachments-enable-20261125.sh /home/mgdeploy/staging/meetguru-club-attachments-disable-20261125.sh
+
+Ожидаемые SHA — WRAPPER-SHA256.txt. После проверки одобрить:
+cat >> /etc/mg-deploy/approved.sha <<'MG_APPROVED'
+6c904c52865feb4e9bc73d0e011c3f756832d23bd72b118646e5b44b53191e72 meetguru-club-attachments-disable-20261125.sh
+3ee45e09033a4ac9bc259a1817dd1688252cd18142daf9cbc8e1e40fe6f471be meetguru-club-attachments-enable-20261125.sh
+MG_APPROVED
+
+3. После отдельного разрешения на production включение:
+/usr/local/sbin/mg-deploy meetguru-club-attachments-enable-20261125.sh
+Ожидаются BACKUP=... и
+ENABLED_ONE_CLUB=737b8824-88b8-4cee-b50b-3f4ed3b59683; PUSH_UNCHANGED=True; DATA_PRESERVED=True
+При mismatch/ошибке остановиться; не обходить проверки.
+Если потерялась SSH-связь, сначала read-only сверить определение capability,
+не считать отсутствие вывода ни успехом, ни доказательством rollback.
+
+4. После включения проверить существующим разрешённым аккаунтом участника:
+capability(этот UUID)=true; другой ID=false; гость=false; no-arg=false;
+push D. Гостевой false не означает, что включение не состоялось.
+На /club проверить фото, документ, запись/отправку/прослушивание голоса,
+открытие/скачивание, прежние тексты/фото/удаление. Не писать от чужого имени.
+Не объявлять физический Safari PASS без доступного устройства.
+
+5. Немедленное отключение при ошибке:
+/usr/local/sbin/mg-deploy meetguru-club-attachments-disable-20261125.sh
+Ожидается DISABLED_ALL_CLUBS; PUSH_UNCHANGED=True; DATA_PRESERVED=True.
+Скрипт не удаляет записи/объекты и не меняет read policies. Уже выданные
+signed URL сохраняют прежний срок, начатые транзакции могут завершиться
+со старым snapshot. Проверить прекращение новых загрузок/отправок.
+При schema drift скрипт останавливается; администратор использует сохранённое
+определение из BACKUP после проверки, без изменения чужих объектов.
+
+Откат этого включения = disable; серверный пакет/фронтенд не откатывать.
+Повторные enable/disable без изменений печатают ALREADY_ENABLED/DISABLED.
+Обычные групповые чаты, подписки и push не затрагиваются.
+
+Локальное воспроизведение:
+python3 build.py
+python3 enable.local.py
+Последнее требует локальный PostgreSQL, использует Unix socket без сети,
+создаёт только временную синтетическую БД и подменяет Docker-транспорт.

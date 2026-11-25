@@ -1,0 +1,63 @@
+MeetGuru — готовый enable/disable для единственного клуба, 25.11.2026
+PREPARED ONLY. Production не изменён; скрипты не загружены/не исполнены
+на сервере. Вложения и push остаются выключенными.
+
+Клуб: Клуб школы доктора Крутова.
+UUID: 737b8824-88b8-4cee-b50b-3f4ed3b59683.
+Read-only SELECT count(*) из public.clubs: 1; совпадает с существующей ссылкой
+https://app.meetgu.ru/club/?club=737b8824-88b8-4cee-b50b-3f4ed3b59683 (HTTP200).
+Опубликованный WeWeb JSON cacheVersion441 вызывает get_club_bundle с
+p_club=globalContext.browser.query.club (route-check.json).
+Таким образом этот UUID выбирает найденный клуб в текущем /club.
+
+Совместимость:
+Production capability(UUID)=false. Определения двух RPC/capability overloads
+и двух INSERT policies совпадают с expected-disabled.json пакета760c364
+в нормализованном public search_path. Оба push-триггера D.
+Согласованный frontend 93c6646 передаёт p_club, не менялся этой задачей.
+
+Мутация будущего enable:
+ТОЛЬКО CREATE OR REPLACE существующей club_chat_capabilities(uuid), заменить
+p_club=NULL::uuid на p_club='737b8824-88b8-4cee-b50b-3f4ed3b59683'::uuid.
+Существующая club_chat_has_access(p_club,auth.uid()) остаётся обязательной.
+No-arg capability остаётся false. Никаких RLS/Storage policy/членства/подписок/
+платежей/Auth/frontend/push изменений. Другие клубы, если появятся позже,
+не получают включение автоматически.
+
+Административные wrappers:
+- SHA встроенного payload проверяется до Docker/SQL;
+- административное подключение нормализует search_path=public;
+- точный preflight ожидаемого выключенного/включённого определения;
+- enable проверяет ровно один клуб с данным ID ДО и внутри транзакции;
+- повторный enable/disable идемпотентен;
+- резервная копия определения/ACL и invariant snapshot, transaction.sql и
+  disable SQL, SHA256.json в /var/lib/mg-deploy/club-attachment-enable/<UTC>-<pid>;
+- atomic SQL с lock_timeout и statement_timeout; итоговые определения и
+  все неизменяемые политики/ACL/bucket/access helpers/push проверяются до COMMIT;
+- disable возвращает точное установленное disabled определение;
+- при drift определений остановка без предположительной перезаписи.
+
+Локальные PASS:
+Синтаксис bash обоих wrapper и Python, сборка payload.
+Изолированный PostgreSQL, реальный admin-код с Docker-транспортом,
+перенаправленным только на локальную БД: отказ при 0/2 клубах и неверном SHA,
+повторный enable/disable, участник/владелец разрешены, anon/посторонний/другой
+club ID запрещены; прямой upload вне клуба запрещён даже с permissive legacy
+policy; изображения/документы/аудио upload+send; повтор request не дублирует
+сообщение; disable запрещает новые upload/send, сохраняет сообщения/объекты/
+подписки и политики. Все строки/пользователи синтетические, использован
+реальный публичный UUID только как значение параметра, не production данные.
+
+NOT TESTED в этой задаче:
+Реальная отправка, скачивание/signed URL, прослушивание, запись микрофона
+Chrome/Safari после production включения — включение не разрешено.
+Frontend не менялся. Предыдущие браузерные проверки опубликованного интерфейса
+в пакете4e25406 не заменяют реальные production-проверки файлов/голоса.
+Физический Safari недоступен; прежний WebKit synthetic capture отклонялся.
+Готовность означает возможность административного enable после отдельного
+разрешения, а не уже работающую production-отправку.
+
+Локальные baseline.sql, 01-functions-disabled.sql,
+02-storage-policy.REQUIRES-APPROVAL.sql — исключительно fixtures теста.
+НЕ ПРИМЕНЯТЬ их в production. Административные wrappers их не содержат.
+Новых функций/таблиц/сервисов пакет не устанавливает.

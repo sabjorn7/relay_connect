@@ -1,0 +1,11 @@
+{
+  "club_count": 1,
+  "club_id": "737b8824-88b8-4cee-b50b-3f4ed3b59683",
+  "title": "Клуб школы доктора Крутова",
+  "url": "https://app.meetgu.ru/club/?club=737b8824-88b8-4cee-b50b-3f4ed3b59683",
+  "attachments": false,
+  "push_triggers": {
+    "trg_push_web_club_message": "D",
+    "trg_push_web_club_post": "D"
+  }
+}

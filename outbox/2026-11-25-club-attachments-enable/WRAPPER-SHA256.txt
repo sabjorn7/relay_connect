@@ -1,0 +1,2 @@
+6c904c52865feb4e9bc73d0e011c3f756832d23bd72b118646e5b44b53191e72  meetguru-club-attachments-disable-20261125.sh
+3ee45e09033a4ac9bc259a1817dd1688252cd18142daf9cbc8e1e40fe6f471be  meetguru-club-attachments-enable-20261125.sh

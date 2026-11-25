@@ -1,0 +1,15 @@
+{
+  "url_status": 200,
+  "club_id": "737b8824-88b8-4cee-b50b-3f4ed3b59683",
+  "function": "get_club_bundle",
+  "p_club": [
+    {
+      "key": "p_club",
+      "value": {
+        "code": "globalContext.browser?.['query'] .club",
+        "__wwtype": "f"
+      }
+    }
+  ],
+  "cacheVersion": "441"
+}
