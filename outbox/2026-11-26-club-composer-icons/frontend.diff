@@ -1,0 +1,97 @@
+diff --git a/src/_front/components/ClubChatAttachments.vue b/src/_front/components/ClubChatAttachments.vue
+index 63d5b15..b0f38c9 100644
+--- a/src/_front/components/ClubChatAttachments.vue
++++ b/src/_front/components/ClubChatAttachments.vue
+@@ -4,8 +4,7 @@
+-        <button type="button" :disabled="busy || recording || requesting || !!pending" @click="picker.click()">Прикрепить файл</button>
+-        <button v-if="audioSupported && !recording" type="button" :disabled="busy || requesting || !!pending" @click="start">Записать голосовое</button>
+-        <template v-if="recording"><span role="status">Идёт запись</span><button type="button" @click="stop(false)">Стоп</button><button type="button" @click="stop(true)">Отмена</button></template>
+-        <div v-if="pending">
+-            <VoiceMessagePlayer v-if="preview" :src="preview" />
+-            <span v-else>{{ pending.file.name }} · {{ formatBytes(pending.file.size) }}</span>
+-            <button type="button" :disabled="busy" @click="send">{{ busy ? 'Отправка…' : 'Отправить вложение' }}</button>
+-            <button type="button" :disabled="busy" @click="clear">Убрать</button>
++        <div class="club-attachments__tools">
++            <button type="button" class="pd-attach-btn" aria-label="Прикрепить файл" title="Прикрепить файл" :disabled="busy || recording || requesting || !!pending" @click="picker.click()">
++                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.44 11.05l-9.19 9.19a5 5 0 0 1-7.07-7.07l9.19-9.19a3 3 0 0 1 4.24 4.24l-9.2 9.19a1 1 0 0 1-1.41-1.41l8.49-8.49" /></svg>
++            </button>
++            <button v-if="audioSupported && !recording" type="button" class="pd-attach-btn" aria-label="Записать голосовое" title="Записать голосовое" :disabled="busy || requesting || !!pending" @click="start">
++                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" /><path d="M5 10v1a7 7 0 0 0 14 0v-1M12 19v3" /></svg>
++            </button>
+@@ -13 +12,13 @@
+-        <p v-if="error" role="alert">{{ error }}</p>
++        <div v-if="recording" class="pd-recbar">
++            <span class="pd-recbar__dot" aria-hidden="true"></span><span class="pd-recbar__hint" role="status">Идёт запись</span>
++            <button type="button" class="pd-attach-btn" aria-label="Стоп" title="Остановить запись" @click="stop(false)"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" /></svg></button>
++            <button type="button" class="pd-attach-btn" aria-label="Отмена" title="Отменить запись" @click="stop(true)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6" /></svg></button>
++        </div>
++        <div v-if="pending" class="pd-attach" :aria-busy="busy">
++            <VoiceMessagePlayer v-if="preview" class="pd-attach__voice" :src="preview" />
++            <span v-else class="pd-attach__meta"><span class="pd-attach__name">{{ pending.file.name }}</span><span class="pd-attach__size">{{ formatBytes(pending.file.size) }}</span></span>
++            <span v-if="busy" class="pd-attach__size" role="status">Отправка…</span>
++            <button type="button" class="pd-attach-btn pd-attach-btn--send" aria-label="Отправить вложение" title="Отправить вложение" :disabled="busy" @click="send"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4 20-7ZM22 2 11 13" /></svg></button>
++            <button type="button" class="pd-attach-btn" aria-label="Убрать" title="Убрать файл" :disabled="busy" @click="clear"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6" /></svg></button>
++        </div>
++        <p v-if="error" class="pd-attach__err" role="alert">{{ error }}</p>
+@@ -44 +55,22 @@ watch(club,()=>{rev++;stop(true);clear();capability()});onMounted(capability);on
+-<style scoped>.club-attachments{padding:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:#fff;border-top:1px solid #e4e9f1;font-family:inherit}.club-attachments button{font:inherit;color:#1f5fc9;background:#f1f6fd;border:1px solid #e4e9f1;border-radius:12px;padding:9px 12px;cursor:pointer}.club-attachments button:disabled{opacity:.5;cursor:default}.club-attachments>div{width:100%;display:flex;gap:8px;align-items:center;flex-wrap:wrap}.club-attachments p{color:#a82b38;margin:0}</style>
++<style scoped>
++/* Same icon geometry and controls as ChatsPage, scoped to the existing club add-on. */
++.club-attachments { padding: 0 18px 12px; background: #fff; font-family: inherit; min-width: 0; }
++.club-attachments__tools { display: flex; align-items: center; gap: 8px; }
++.pd-attach-btn { width: 42px; height: 46px; flex: none; padding: 0; border: none; background: none; color: #6b7890; display: grid; place-items: center; cursor: pointer; border-radius: 12px; transition: color .14s, background .14s; }
++.pd-attach-btn svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
++.pd-attach-btn:disabled { opacity: .5; cursor: default; }
++.pd-attach-btn:focus-visible { outline: 2px solid #2e70dd; outline-offset: 2px; }
++.pd-attach-btn--send { background: #2e70dd; color: #fff; }
++.pd-attach { display: flex; align-items: center; gap: 10px; min-width: 0; margin: 12px 0 0; padding: 8px 10px; background: #f1f6fd; border: 1px solid #e4e9f1; border-radius: 12px; }
++.pd-attach__meta { display: flex; flex-direction: column; min-width: 0; flex: 1; }
++.pd-attach__name { font-size: .88rem; font-weight: 600; color: #1c2940; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
++.pd-attach__size { font-size: .75rem; color: #6b7890; }
++.pd-attach__voice { flex: 1; min-width: 0; }
++.pd-attach__err { margin: 8px 0 0; color: #a82b38; font-size: .82rem; }
++.pd-recbar { display: flex; align-items: center; gap: 12px; padding: 12px 0; }
++.pd-recbar__dot { width: 12px; height: 12px; border-radius: 50%; background: #a82b38; flex: none; }
++.pd-recbar__hint { color: #6b7890; font-size: .86rem; flex: 1; }
++@media (hover: hover) and (pointer: fine) { .pd-attach-btn:not(:disabled):hover { color: #2e70dd; background: #f1f6fd; } .pd-attach-btn--send:not(:disabled):hover { color: #fff; background: #245bb5; } }
++@media (prefers-reduced-motion: reduce) { .pd-attach-btn { transition: none; } }
++@media (max-width: 600px) { .club-attachments { padding: 0 10px 10px; } }
++</style>
+diff --git a/src/_front/components/clubChat.css b/src/_front/components/clubChat.css
+index 1b040cb..09bbe73 100644
+--- a/src/_front/components/clubChat.css
++++ b/src/_front/components/clubChat.css
+@@ -24,0 +25,33 @@
++
++/* Place the existing add-on beside the existing WeWeb input, only while enabled.
++   Keep legacy text/photo workflows intact; pending files span the composer width. */
++:is(.ww-element-e4cf1cdc-9cca-4169-8cad-5c25d93dda57, .ww-element-e04c7550-06a7-4bea-9108-c77a069a2f20):has(> .club-attachments) {
++    display: grid !important;
++    grid-template-columns: 110px minmax(0, 1fr);
++    grid-template-rows: minmax(160px, 1fr) auto auto auto;
++    background: #fff;
++}
++:is(.ww-element-e4cf1cdc-9cca-4169-8cad-5c25d93dda57, .ww-element-e04c7550-06a7-4bea-9108-c77a069a2f20):has(> .club-attachments) > :first-child {
++    grid-column: 1 / -1; grid-row: 1;
++}
++:is(.ww-element-6cd0c16b-3776-40d8-840e-4274d72ceccc, .ww-element-c94d00be-3578-4589-9b5c-b8165a92c0bf):has(+ .club-attachments) {
++    grid-column: 2; grid-row: 3; min-width: 0; padding-left: 8px !important;
++}
++:is(.ww-element-e4cf1cdc-9cca-4169-8cad-5c25d93dda57, .ww-element-e04c7550-06a7-4bea-9108-c77a069a2f20) > .club-attachments {
++    display: contents;
++}
++:is(.ww-element-e4cf1cdc-9cca-4169-8cad-5c25d93dda57, .ww-element-e04c7550-06a7-4bea-9108-c77a069a2f20) > .club-attachments > .club-attachments__tools {
++    grid-column: 1; grid-row: 3; align-self: stretch; align-items: flex-start;
++    padding: 12px 0 12px 18px; border-top: 1px solid #e4e9f1;
++}
++:is(.ww-element-e4cf1cdc-9cca-4169-8cad-5c25d93dda57, .ww-element-e04c7550-06a7-4bea-9108-c77a069a2f20) > .club-attachments > :is(.pd-attach, .pd-recbar) {
++    grid-column: 1 / -1; grid-row: 2; margin: 10px 18px;
++}
++:is(.ww-element-e4cf1cdc-9cca-4169-8cad-5c25d93dda57, .ww-element-e04c7550-06a7-4bea-9108-c77a069a2f20) > .club-attachments > .pd-attach__err {
++    grid-column: 1 / -1; grid-row: 4; margin: 0 18px 10px;
++}
++@media (max-width: 600px) {
++    .ww-element-e04c7550-06a7-4bea-9108-c77a069a2f20:has(> .club-attachments) { grid-template-columns: 102px minmax(0, 1fr); }
++    .ww-element-e04c7550-06a7-4bea-9108-c77a069a2f20 > .club-attachments > .club-attachments__tools { padding: 10px 0 10px 10px; }
++    .ww-element-e04c7550-06a7-4bea-9108-c77a069a2f20 > .club-attachments > :is(.pd-attach, .pd-recbar) { margin: 10px; }
++}

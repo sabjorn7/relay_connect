@@ -1,0 +1,13 @@
+{
+  "base": "6acdce1a5a17427f6fdbfbf866fff458aa30b258",
+  "files": {
+    "src/_front/components/ClubChatAttachments.vue": {
+      "before": "73dcfe302614c5512d174a23cb5cb06b1e7403392c6fbc757d831a15dbfd5ba0",
+      "after": "2d9b0c098894c6035c3ee70f0d09b27d06ec4fdaa08f6a0bdcc6bd2075ec543e"
+    },
+    "src/_front/components/clubChat.css": {
+      "before": "59fa2389f5ad9984c18bfdb2cec9fad466edfd9ea9d82231b021164579d72e7f",
+      "after": "6e08ab99f536e25bf578019c35692fb7187998889f5a0a34c1bb5485e7430859"
+    }
+  }
+}

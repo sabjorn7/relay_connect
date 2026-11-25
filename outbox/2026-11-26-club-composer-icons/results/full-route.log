@@ -1,0 +1,17 @@
+{"engine":"Chrome","width":390,"scrollState":{"height":700,"total":2033,"top":1333}}
+{"stage":"rendered","engine":"Chrome","width":390,"messageCount":16,"textareas":1,"buttons":["","ТУ","","","","","","","","","","","",""],"errors":[]}
+BOXES {"iconBox":{"x":21,"y":851,"width":42,"height":46},"inputBox":{"x":121,"y":851,"width":248,"height":50}}
+SCREENSHOT_DIR /var/folders/cw/swgj93gd6tb9gm_2cnmccf280000gn/T/mg-club-full-n39srp
+{"engine":"Chrome","width":1280,"scrollState":{"height":601,"total":1674,"top":1073}}
+{"stage":"rendered","engine":"Chrome","width":1280,"messageCount":16,"textareas":1,"buttons":["","ТУ","","","","","","","","","","","",""],"errors":[]}
+BOXES {"iconBox":{"x":59,"y":738,"width":42,"height":46},"inputBox":{"x":219,"y":738,"width":612,"height":82}}
+SCREENSHOT_DIR /var/folders/cw/swgj93gd6tb9gm_2cnmccf280000gn/T/mg-club-full-n39srp
+{"engine":"WebKit","width":390,"scrollState":{"height":700,"total":2033,"top":1333}}
+{"stage":"rendered","engine":"WebKit","width":390,"messageCount":16,"textareas":1,"buttons":["","ТУ","","","","","","","","","","","",""],"errors":[]}
+BOXES {"iconBox":{"x":21,"y":851,"width":42,"height":46},"inputBox":{"x":121,"y":851,"width":248,"height":50}}
+SCREENSHOT_DIR /var/folders/cw/swgj93gd6tb9gm_2cnmccf280000gn/T/mg-club-full-n39srp
+{"engine":"WebKit","width":1280,"scrollState":{"height":601,"total":1674,"top":1073}}
+{"stage":"rendered","engine":"WebKit","width":1280,"messageCount":16,"textareas":1,"buttons":["","ТУ","","","","","","","","","","","",""],"errors":[]}
+BOXES {"iconBox":{"x":59,"y":738,"width":42,"height":46},"inputBox":{"x":219,"y":738,"width":612,"height":82}}
+SCREENSHOT_DIR /var/folders/cw/swgj93gd6tb9gm_2cnmccf280000gn/T/mg-club-full-n39srp
+{"results":[{"engine":"Chrome","width":390,"history":true,"sent":true,"deleted":true,"photoOpened":true,"attachmentsEnabled":true,"privateFileSent":true,"privateImageSent":true,"profileLink":true,"errors":[]},{"engine":"Chrome","width":1280,"history":true,"sent":true,"deleted":true,"photoOpened":true,"attachmentsEnabled":true,"privateFileSent":true,"privateImageSent":true,"profileLink":true,"errors":[]},{"engine":"WebKit","width":390,"history":true,"sent":true,"deleted":true,"photoOpened":true,"attachmentsEnabled":true,"privateFileSent":true,"privateImageSent":true,"profileLink":true,"errors":[]},{"engine":"WebKit","width":1280,"history":true,"sent":true,"deleted":true,"photoOpened":true,"attachmentsEnabled":true,"privateFileSent":true,"privateImageSent":true,"profileLink":true,"errors":[]}],"out":"/var/folders/cw/swgj93gd6tb9gm_2cnmccf280000gn/T/mg-club-full-n39srp"}
