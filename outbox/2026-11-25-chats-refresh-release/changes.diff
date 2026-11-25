@@ -1,0 +1,54 @@
+diff --git a/src/_front/views/ChatsPage.vue b/src/_front/views/ChatsPage.vue
+index 70d4b02..3e30465 100644
+--- a/src/_front/views/ChatsPage.vue
++++ b/src/_front/views/ChatsPage.vue
+@@ -29,7 +29,13 @@
+             </div>
+         </header>
+ 
+-        <section class="pd-section">
++        <section v-if="!myId" class="pd-section">
++            <div class="pd-wrap">
++                <p>Для просмотра чатов необходимо войти в аккаунт. Если вы уже вошли, дождитесь восстановления сессии.</p>
++                <a href="/login">Войти</a>
++            </div>
++        </section>
++        <section v-else class="pd-section">
+             <div class="pd-wrap">
+                 <div class="pd-chat" data-reveal>
+                     <!-- ── LEFT: search + new group + my chats ─────────── -->
+@@ -308,7 +314,7 @@
+ </template>
+ 
+ <script setup>
+-import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue';
++import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
+ import { useRoute } from 'vue-router';
+ import { getSupabase, readStoredSession, authCookieUser } from '@/_front/chrome/headerAccount.js';
+ import { listBlockedUserIds, blockUser, unblockUser, reportContent } from '@/_front/moderation/moderationApi.js';
+@@ -893,8 +899,24 @@ function scrollBottom() {
+     });
+ }
+ 
+-onMounted(() => { ensureFonts(); load(); });
++let stopStartupAuthWatch;
++onMounted(() => {
++    ensureFonts();
++    // Public UI must not wait for Auth restoration or chat requests.
++    ready.value = true;
++    // The confirmed plugin snapshot may still be empty on a hard refresh.
++    // Observe only startup; stop once the first confirmed identity is available.
++    stopStartupAuthWatch = watch(() => readStoredSession()?.user?.id, (uid) => {
++        if (!uid) { loading.value = false; return; }
++        stopStartupAuthWatch?.();
++        loading.value = true;
++        load();
++    }, { immediate: true });
++    // An immediate callback runs before watch() returns its stop function.
++    if (myId.value) stopStartupAuthWatch();
++});
+ onBeforeUnmount(() => {
++    stopStartupAuthWatch?.();
+     try { if (msgChannel) sb.removeChannel(msgChannel); } catch (e) { /* noop */ }
+     try { if (chatsChannel) sb.removeChannel(chatsChannel); } catch (e) { /* noop */ }
+ });

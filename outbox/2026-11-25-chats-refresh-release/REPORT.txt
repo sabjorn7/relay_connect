@@ -1,0 +1,27 @@
+MeetGuru chats refresh release, 25.11.2026 — SUCCESS.
+Production/main: 6acdce1a5a17427f6fdbfbf866fff458aa30b258
+Release commit: 14efde0213d57397766891d05307e964ed5024a6
+PR https://github.com/sabjorn7/meetclone/pull/11
+Deploy App https://github.com/sabjorn7/meetclone/actions/runs/45607590965
+Run443 SUCCESS; completed 11:47:48 UTC / 14:47:48 MSK.
+Only ChatsPage.vue changed.
+
+Cause reproduced BEFORE: initial confirmed session null => early load return,
+ready stays false (opacity0); later restored session never retriggers load.
+AFTER: visible page independent of startup Auth, existing confirmed plugin
+snapshot watched until first identity, startup watcher stopped thereafter.
+Before confirmation, login/restoration message replaces chat controls.
+No Auth SDK/backend/access control changes. This is a startup-specific fix,
+not a rewrite of chat session switching or network error handling.
+
+PASS: Vite build; Chrome/WebKit BEFORE/AFTER; group regressions12;
+actual built app + real Auth plugin with mocked APIs, delayed session and
+reload with persisted synthetic session; published production resources with
+same real-plugin scenario at390/1280 in both engines PASS4. No pageerrors or
+JS/CSS HTTP errors observed. Real user messages and data not changed.
+No real account login or real message writes tested. No physical iPhone test.
+CI completed app, landing and HTML/assets deployment successfully.
+
+Rollback: with approval revert 6acdce1 through PR/Deploy App from current main.
+Previous production: 2a76a1138578b8d81aebf237b7d1d9f5db5511b9.
+Do not change SQL/Auth/RLS/Storage, feature flags or diagnostics for rollback.
