@@ -40,7 +40,7 @@ try{for(const engine of (process.env.ENGINES||'Chrome,WebKit').split(',')){
  await page.getByText('Тестовый клуб',{exact:true}).first().waitFor({timeout:45000});
  await page.evaluate(async(session)=>{const p=Object.values(window.wwLib.wwPlugins).find(p=>p?.refreshAuthUser&&p?.publicInstance);if(!p)throw Error('missing plugin');await p.publicInstance.auth.setSession(session);await p.refreshAuthUser(session)},session);
  await page.waitForTimeout(800);
- 
+
  await page.getByText('Чат клуба',{exact:true}).filter({visible:true}).first().click();
  await page.locator('.mg-club-msg:visible').first().waitFor({timeout:15000});
  await page.waitForTimeout(600);
