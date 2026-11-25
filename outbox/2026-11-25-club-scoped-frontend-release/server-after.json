@@ -1,0 +1,15 @@
+[
+  {
+    "push_triggers": {
+      "trg_push_web_club_post": "D",
+      "trg_push_web_club_message": "D"
+    },
+    "legacy_capability": {
+      "attachments": false
+    },
+    "scoped_capability": {
+      "attachments": false
+    },
+    "scoped_definition": "CREATE OR REPLACE FUNCTION public.club_chat_capabilities(p_club uuid)\n RETURNS jsonb\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n SELECT jsonb_build_object('attachments',COALESCE(\n p_club=NULL::uuid AND public.club_chat_has_access(p_club,auth.uid()),false))\n$function$\n"
+  }
+]

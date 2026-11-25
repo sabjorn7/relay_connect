@@ -1,0 +1,60 @@
+MeetGuru — scoped club attachment frontend release SUCCESS
+25.11.2026
+Approved package: relay_connect 760c364, frontend.diff only.
+Verified main/base: 5313871daba788d8e1f1d67b1c0b116d0560b083.
+Branch: release/club-scoped-frontend-20261125.
+Release commit: 3c6708d9d297f3238a400d96c489244bc0c9a44d.
+PR: https://github.com/sabjorn7/meetclone/pull/9
+Merged/main/production SHA: 93c664675385ae622b54fd2a59250a2cd7bf5d39.
+Deploy App SUCCESS, run 441:
+https://github.com/sabjorn7/meetclone/actions/runs/45583365355
+Completed 2026-11-25T09:14:23Z (12:14:23 MSK).
+
+Exactly two product files, 5 additions / 4 deletions:
+src/_front/helpers/clubAttachments.js
+src/_front/components/ClubChatAttachments.vue
+Existing context provides club.value; capability receives p_club; pre-upload
+check receives item.club. Invalid ID fails closed. No other product changes.
+
+PASS:
+- Agreed patch reverse-check, exact file set, staged diff check.
+- Local complete Vite application build; no local SEO postbuild (production
+  read calls intentionally avoided). CI full Build/landing/deployment SUCCESS.
+- Club Chrome/WebKit ×390/1280: 4 disabled + 4 enabled synthetic scenarios.
+  History, scroll, profile links, legacy photos/gallery, text send/delete,
+  file/image send/open with mocked APIs.
+- Existing ordinary group regression: PASS12, group code unchanged.
+- Published HTML/JS/CSS /, /club/, /chats/: HTTP200.
+- Production serviceworker version441 and WeWeb cacheVersion441 match the
+  successful workflow head SHA. This is deployment/resource evidence, not a
+  claim of independently hashing the entire remote source tree.
+- Published /club browser smoke Chrome/WebKit ×390/1280: PASS4.
+  Real production resources, synthetic Auth/data/API writes; no real messages
+  created or deleted. Explicit assertion that capability request contains the
+  current p_club, UI hidden when disabled. No pageerror or failed JS/CSS.
+
+Server read-only check AFTER deploy:
+legacy and scoped capability attachments=false; scoped function uses
+p_club=NULL::uuid and COALESCE(...,false), so no selected club and no enabled
+club irrespective of user. Both push triggers D. Definitions included in
+server-after.json. No SQL/RLS/Storage/Edge/admin scripts executed or changed.
+No paid operations, subscriptions, membership or Auth changes.
+
+Limitations / NOT TESTED:
+Physical Safari/iPhone and actual microphone capture not tested in this release.
+WebKit is local browser engine. Authenticated real production message writes,
+private upload/voice/playback intentionally not tested: capability disabled.
+Browser API interception preserves production data; mocks do not prove live
+backend write behavior. Actual DB flags verified separately read-only.
+
+FRONTEND-ONLY ROLLBACK:
+With approval, create a branch from current main and git revert
+93c664675385ae622b54fd2a59250a2cd7bf5d39. Check only the two frontend files,
+build and browser test, PR/merge through existing Deploy App.
+Rollback point is 5313871daba788d8e1f1d67b1c0b116d0560b083.
+Do not reset/force push or revert unrelated later changes. No server rollback:
+SQL, policies, private bucket, subscriptions, records remain untouched.
+Keep attachments=false and push disabled. Old frontend calls the no-arg
+capability, which also remains false.
+
+Stopped after publication and checks. Test-club activation is a separate stage.

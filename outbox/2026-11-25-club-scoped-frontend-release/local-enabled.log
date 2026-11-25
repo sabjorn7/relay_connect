@@ -1,0 +1,9 @@
+{"engine":"Chrome","width":390,"scrollState":{"height":591,"total":2033,"top":1442}}
+{"stage":"rendered","engine":"Chrome","width":390,"messageCount":16,"textareas":1,"buttons":["","ТУ","","","","","","","","","","","Прикрепить файл","Записать голосовое"],"errors":[]}
+{"engine":"Chrome","width":1280,"scrollState":{"height":538,"total":1674,"top":1136}}
+{"stage":"rendered","engine":"Chrome","width":1280,"messageCount":16,"textareas":1,"buttons":["","ТУ","","","","","","","","","","","Прикрепить файл","Записать голосовое"],"errors":[]}
+{"engine":"WebKit","width":390,"scrollState":{"height":591,"total":2033,"top":1442}}
+{"stage":"rendered","engine":"WebKit","width":390,"messageCount":16,"textareas":1,"buttons":["","ТУ","","","","","","","","","","","Прикрепить файл","Записать голосовое"],"errors":[]}
+{"engine":"WebKit","width":1280,"scrollState":{"height":538,"total":1674,"top":1136}}
+{"stage":"rendered","engine":"WebKit","width":1280,"messageCount":16,"textareas":1,"buttons":["","ТУ","","","","","","","","","","","Прикрепить файл","Записать голосовое"],"errors":[]}
+{"results":[{"engine":"Chrome","width":390,"history":true,"sent":true,"deleted":true,"photoOpened":true,"attachmentsEnabled":true,"privateFileSent":true,"privateImageSent":true,"profileLink":true,"errors":[]},{"engine":"Chrome","width":1280,"history":true,"sent":true,"deleted":true,"photoOpened":true,"attachmentsEnabled":true,"privateFileSent":true,"privateImageSent":true,"profileLink":true,"errors":[]},{"engine":"WebKit","width":390,"history":true,"sent":true,"deleted":true,"photoOpened":true,"attachmentsEnabled":true,"privateFileSent":true,"privateImageSent":true,"profileLink":true,"errors":[]},{"engine":"WebKit","width":1280,"history":true,"sent":true,"deleted":true,"photoOpened":true,"attachmentsEnabled":true,"privateFileSent":true,"privateImageSent":true,"profileLink":true,"errors":[]}],"out":"/var/folders/cw/swgj93gd6tb9gm_2cnmccf280000gn/T/mg-club-full-DiqQrP"}
