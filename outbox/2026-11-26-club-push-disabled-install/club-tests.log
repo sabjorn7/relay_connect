@@ -1,0 +1,12 @@
+PASS club payload validation and non-disclosing notifications
+PASS message: subscribed owner notified, sender excluded, only metadata queried
+PASS post: current members notified; no publisher notification
+PASS no send {"missing":true}
+PASS no send {"deleted":true}
+PASS no send {"scheduled":true,"event":"club_post"}
+PASS no send {"optOut":true}
+PASS no send {"allowAll":false}
+PASS no send {"sender":"33333333-3333-4333-8333-333333333333"}
+PASS DB failure never becomes broadcast
+PASS club extension is off by default and existing events preserved
+{"pass":11,"fail":0,"productionWrites":0}

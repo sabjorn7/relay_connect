@@ -1,0 +1,3 @@
+(node:33596) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS handler: 401, existing invalid-ID 400, both club events disabled, zero network/provider calls (Node TS stripping; Deno runtime NOT TESTED)

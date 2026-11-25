@@ -1,0 +1,1 @@
+PASS local installer orchestration: backup, exact install, exact rollback, baseline mismatch no-write, smoke failure auto-rollback, foreign drift refusal, no secret in output. Docker/HTTP/privileged filesystem mocked; production NOT TESTED.

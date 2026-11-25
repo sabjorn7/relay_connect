@@ -1,0 +1,21 @@
+{
+  "web_push_anonymous_http": 401,
+  "web_push_anonymous_body": {
+    "error": "unauthorized"
+  },
+  "triggers": {
+    "trg_push_web_club_message": "D",
+    "trg_push_web_club_post": "D",
+    "on_club_chat_notify": "O",
+    "on_club_post_notify": "O"
+  },
+  "club": "737b8824-88b8-4cee-b50b-3f4ed3b59683",
+  "active_members": 36,
+  "send_notif_eligible": 36,
+  "eligible_users_with_pwa": 3,
+  "eligible_live_pwa_subscriptions": 5,
+  "counts_before_sender_exclusion_and_global_allowlist": true,
+  "source_verified": false,
+  "installed": false,
+  "reason": "mg-deploy status SHA not approved"
+}
