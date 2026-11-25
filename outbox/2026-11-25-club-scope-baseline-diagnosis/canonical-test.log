@@ -1,0 +1,8 @@
+BEFORE: auth-visible search_path reproduces baseline_matches=false
+BACKUP=/private/tmp/mg-club-pg-w8bo7kd4/backups/20261125T090037Z-27146
+INSTALLED_DISABLED; attachments=false; push unchanged; no frontend deployment
+{"baseline_matches": false, "scoped_disabled_matches": true, "bucket_private": true, "push_triggers": "disabled"}
+DISABLED; existing objects/messages preserved; push unchanged
+ROLLED_BACK_DISABLED; data preserved; push unchanged
+{"baseline_matches": true, "scoped_disabled_matches": false, "bucket_private": true, "push_triggers": "disabled"}
+PASS: generated atomic install SQL; admin install/status/disable/rollback; corrupt payload denied; repeat install denied; enabled rollback denied; post-check failure rolls back; backups checksummed; data preserved. Docker transport mocked to local PostgreSQL; no production calls.

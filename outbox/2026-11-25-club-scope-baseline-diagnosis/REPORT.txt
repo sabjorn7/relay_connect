@@ -1,0 +1,56 @@
+MeetGuru — baseline mismatch diagnosis, 25.11.2026
+
+CONFIRMED:
+Only two RPC names and two INSERT policies were inspected.
+Via read-only API with search_path=public,public, the full queried JSON equals
+expected-before.json byte-for-value: both function definitions and all policy
+fields. There is no capability(uuid) overload. This matches the previous
+installed, disabled server package, not a partial scoped-pilot installation.
+
+Original mg-deploy status reproduced exit 0 with baseline_matches=false,
+scoped_disabled_matches=false, bucket_private=true, push_triggers=disabled.
+The package compares pg_policies deparsed expressions as exact strings without
+pinning the administrative connection's search_path.
+
+Concrete mismatch reproduced on existing production definitions using a
+transaction-local rendering context (no schema/data/policy changes):
+public path: auth.uid(); public,auth,extensions path: uid().
+Exactly two fields differ: with_check of club_private_upload and
+club_private_upload_guard. Each contains two references to the same auth.uid.
+Roles, INSERT command, permissive/restrictive kind, qual, other expressions
+and RPC definitions match. See policies-rendering.diff and comparison.json.
+The supabase_admin role has auth in its configured search_path; service_role
+API context does not. The Docker container POSTGRES_USER value was not read
+through an unapproved root mechanism, so exact effective production psql role
+and corrected status remain to be confirmed by an approved r2 status run.
+This is a confirmed false-negative mechanism in the package, not evidence of
+changed access rules. No justification for altering production policies to
+make their display match.
+
+Minimal correction: ONE LINE in admin.py sql(): prepend SET search_path TO public
+for each short-lived psql connection. This is session-only; no ALTER ROLE,
+ALTER DATABASE, SQL function search_path, RLS or data changes. The connection
+closes after each call. Same normalization applies to status, preflight,
+backup, transactional checks and rollback. All original install/rollback SQL,
+expected JSON and SHA/backup protections remain identical. No fuzzy string
+replacement or relaxed object comparison is used.
+
+LOCAL PASS:
+Reproduced baseline false in isolated PostgreSQL with auth-visible default
+search_path. Corrected admin then passes install-disabled/status/disable/
+rollback; post-rollback baseline true. Wrong checksum, repeated installation,
+rollback before disable and transactional failure protections remain tested.
+Production corrected status: NOT RUN (new script SHA requires approval).
+Production installation: NOT RUN. No BACKUP created in production by this task.
+The BACKUP in canonical-test.log is strictly a local temporary test directory.
+
+Read-only production actions only: existing approved status and scoped catalog
+queries. Temporary per-transaction search_path affected only query rendering
+and ended with that read request. No production file uploads, schema/data/
+Storage modifications, activation, frontend deployment or service restart.
+
+NEXT: separately approve r2 status SHA, run only status and expect
+baseline_matches=true / scoped_disabled_matches=false. If false, stop and
+collect the effective administrative rendering context before any installation.
+Do not run install merely on the basis of this report. New install/rollback/
+disable wrappers are supplied for the corrected package, not authorized here.

@@ -1,0 +1,11 @@
+--- a/admin.py
++++ b/admin.py
+@@ -13,7 +13,7 @@
+ assert len(dbs)==1,'Unexpected database container count'
+ c=dbs[0];env=dict(x.split('=',1) for x in c['Config'].get('Env',[]) if '=' in x)
+ def sql(s):
+- return run(['/usr/bin/docker','exec','-i',c['Id'],'psql','-X','--no-password','-qAt','-v','ON_ERROR_STOP=1','-U',env.get('POSTGRES_USER','postgres'),'-d',env.get('POSTGRES_DB','postgres')],s.encode()).decode().strip()
++ return run(['/usr/bin/docker','exec','-i',c['Id'],'psql','-X','--no-password','-qAt','-v','ON_ERROR_STOP=1','-U',env.get('POSTGRES_USER','postgres'),'-d',env.get('POSTGRES_DB','postgres')],('SET search_path TO public;\n'+s).encode()).decode().strip()
+ def state():return json.loads(sql(files['state-query.sql'].decode()))
+ def invariants():return json.loads(sql(files['invariants-query.sql'].decode()))
+ def verify_guard(v):

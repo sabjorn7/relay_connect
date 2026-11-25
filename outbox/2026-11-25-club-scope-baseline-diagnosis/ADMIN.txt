@@ -1,0 +1,19 @@
+Current task is READ ONLY. No installation or activation authorized.
+Package is a delta against 760c364/outbox/2026-11-24-club-attachments-pilot-install.
+admin.diff changes only per-connection rendering context. Rebuild by applying
+admin.diff in a fresh copy of that package and running python3 build.py.
+Provided r2 wrappers have distinct names to preserve old approved scripts.
+All embedded SQL and expected object definitions are unchanged.
+
+Next administrative operation after SHA review/approval:
+1. Download meetguru-club-scope-status-20261125-r2.sh, verify SHA256SUMS.
+2. Stage through the existing administrative process and approve its SHA.
+3. Run ONLY:
+/usr/local/sbin/mg-deploy meetguru-club-scope-status-20261125-r2.sh
+Expected: baseline_matches=true, scoped_disabled_matches=false,
+bucket_private=true, push_triggers=disabled.
+Return the result. On mismatch stop, do not install or change live schema.
+
+Other r2 wrappers are prepared but must not be run under this read-only task.
+Previous server state is unchanged, so no rollback is required now.
+Do not reuse old SHA approvals for modified scripts.

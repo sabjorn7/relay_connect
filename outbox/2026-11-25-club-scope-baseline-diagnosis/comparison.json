@@ -1,0 +1,18 @@
+{
+  "rpc_definitions_equal": true,
+  "policies_equal_with_public_path": true,
+  "policies_equal_with_auth_path": false,
+  "different_fields": [
+    "club_private_upload.with_check",
+    "club_private_upload_guard.with_check"
+  ],
+  "only_difference": "auth.uid() vs uid()",
+  "original_sql_and_expected_json_unchanged": true,
+  "original_production_status": {
+    "baseline_matches": false,
+    "scoped_disabled_matches": false,
+    "bucket_private": true,
+    "push_triggers": "disabled"
+  },
+  "corrected_status_on_production": "NOT RUN: new SHA approval required"
+}

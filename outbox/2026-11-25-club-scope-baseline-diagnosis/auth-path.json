@@ -1,0 +1,26 @@
+{
+  "path": "public, auth, extensions",
+  "policies": [
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "authenticated"
+      ],
+      "permissive": "PERMISSIVE",
+      "policyname": "club_private_upload",
+      "with_check": "((bucket_id = 'club-chat-private'::text) AND ((club_chat_capabilities() ->> 'attachments'::text))::boolean AND (split_part(name, '/'::text, 2) = (uid())::text) AND club_chat_has_access(club_chat_path_club(name), uid()))"
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "anon",
+        "authenticated"
+      ],
+      "permissive": "RESTRICTIVE",
+      "policyname": "club_private_upload_guard",
+      "with_check": "((bucket_id <> 'club-chat-private'::text) OR (((club_chat_capabilities() ->> 'attachments'::text))::boolean AND (split_part(name, '/'::text, 2) = (uid())::text) AND club_chat_has_access(club_chat_path_club(name), uid())))"
+    }
+  ]
+}
