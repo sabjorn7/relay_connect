@@ -1,0 +1,1 @@
+PASS: existing serviceworker displays both generic club events with existing icon/badge and routes clicks to /club; synthetic push event only, no provider delivery

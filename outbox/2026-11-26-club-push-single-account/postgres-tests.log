@@ -1,0 +1,1 @@
+PASS local PostgreSQL: exact club WHEN, message INSERT, publish/edit/no duplicate, disable; isolated Unix socket, no network or provider calls.

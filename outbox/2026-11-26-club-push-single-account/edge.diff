@@ -1,0 +1,41 @@
+--- a/supabase/functions/web-push-send/club.mjs
++++ b/supabase/functions/web-push-send/club.mjs
+@@ -1,5 +1,15 @@
+ // Club extension of the existing web-push sender. Never put club content in lock-screen payloads.
+ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
++// Server-controlled pilot scope. Empty list denies all club deliveries.
++export const CLUB_PILOT = Object.freeze({
++    clubId: '737b8824-88b8-4cee-b50b-3f4ed3b59683',
++    userIds: Object.freeze(['caa712f8-f5e8-484d-b46d-c56205f52ed1']), // Explicitly approved account; never from request JSON.
++});
++function pilotConfigured() {
++    return UUID.test(CLUB_PILOT.clubId) && CLUB_PILOT.userIds.length > 0 && CLUB_PILOT.userIds.length <= 10
++        && CLUB_PILOT.userIds.every(id => UUID.test(id))
++        && new Set(CLUB_PILOT.userIds).size === CLUB_PILOT.userIds.length;
++}
+ export function validateClubPayload(p) {
+     if (p?.event !== 'club_message' && p?.event !== 'club_post') return null;
+     const id = String((p.event === 'club_message' ? p.message_id : p.post_id) || '');
+@@ -14,10 +24,12 @@
+ export async function handleClubEvent(event, id, zero, deps) {
+     const { dbGet, fetchSubs, deliver, json, pickDmRecipients, allowAll, allowlist } = deps;
+     const skip = reason => json({ ok: true, event, skipped: reason, counts: zero });
++    if (!pilotConfigured()) return skip('pilot_not_configured');
+     const table = event === 'club_message' ? 'club_chat' : 'club_posts';
+     const cols = event === 'club_message' ? 'id,club,owner,deleted' : 'id,club,date_send';
+     const [record] = await dbGet(`${table}?id=eq.${id}&select=${cols}`, table);
+     if (!record || !UUID.test(record.club || '') || record.deleted === true || (event === 'club_post' && record.date_send !== null)) return skip('not_published');
++    if (record.club !== CLUB_PILOT.clubId) return skip('outside_pilot_club');
+     const [club] = await dbGet(`clubs?id=eq.${record.club}&select=id,owner`, 'club');
+     if (!club || !UUID.test(club.owner || '')) return skip('club_not_found');
+     // Preserve the existing push_targets_club_chat / push_targets_club_post recipient predicate.
+@@ -40,7 +52,8 @@
+         for (const uid of part) if (!present.has(uid)) optedOut.add(uid);
+         for (const row of rows) if (row.send_notif === false) optedOut.add(row.id);
+     }
+-    const recipients = [...pickDmRecipients({ users, senderId: sender, optedOut, allowAll, allowlist })];
++    const recipients = [...pickDmRecipients({ users, senderId: sender, optedOut, allowAll, allowlist })]
++        .filter(uid => CLUB_PILOT.userIds.includes(uid));
+     if (!recipients.length) return json({ ok: true, event, counts: zero });
+     const subs = await fetchSubs(recipients);
+     const result = subs.length ? await deliver(subs, JSON.stringify(clubNotification(event, record.club)), 'normal') : { sent: 0, failed: 0, pruned: 0, codes: {} };

@@ -1,0 +1,10 @@
+{
+  "club_id": "737b8824-88b8-4cee-b50b-3f4ed3b59683",
+  "approved_user_ids": [
+    "caa712f8-f5e8-484d-b46d-c56205f52ed1"
+  ],
+  "active_pwa_subscriptions_at_last_check": 3,
+  "send_notif_at_last_check": true,
+  "installation_approved": false,
+  "real_send_approved": false
+}

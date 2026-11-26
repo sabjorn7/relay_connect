@@ -1,0 +1,2 @@
+PASS local admin orchestration: unapproved enable refuses before side effects; helper-only disabled install; backup; club-only disable independent of env; idempotent disable; foreign source not overwritten; global allowlist unchanged. Privileged filesystem/Docker/SQL/HTTP mocked.
+PASS approved-account enable gates and secret-free environment-path evidence (synthetic config).

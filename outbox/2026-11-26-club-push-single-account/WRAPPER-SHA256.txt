@@ -1,0 +1,4 @@
+5fa5a19422d1d0562ce82bc14becb719a509bcafe1f0cd213cfca23319f08743  meetguru-club-push-pilot-status-20261126-r2.sh
+249bad4a6225c582d2b06d91def83068e936f35873dc86eb7a8e05e3921aa7e1  meetguru-club-push-pilot-install-20261126-r2.sh
+427822fd6e6c08867ab70ef778ef03262f9a8f285bda3e9e5bccab9cb4b10104  meetguru-club-push-pilot-enable-20261126-r2.sh
+3d899d3377ee3b8876fa6e4c1beb8a15db8d1e27c2199f47a7b51a4f4d892d14  meetguru-club-push-pilot-disable-20261126-r2.sh
