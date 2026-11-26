@@ -1,0 +1,1 @@
+PASS local PostgreSQL: disabled baseline, exact club WHEN, message INSERT only, first publish, edits/reset/republish no repeat, no historical backfill, disable, minimal queue payload. No network/provider requests.

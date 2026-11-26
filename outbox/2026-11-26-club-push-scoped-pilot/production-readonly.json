@@ -1,0 +1,24 @@
+{
+  "verified": {
+    "candidate_matches": true,
+    "helper_exists": true,
+    "container_running": true,
+    "index_sha256": "91d06ee193a2f9fd38d9d5fec6dac626e92af54fbe135655e3e67a002d3d1d11",
+    "club_env_enabled": false,
+    "global_push_enabled": true,
+    "allowlist_mode": "all",
+    "triggers": {
+      "trg_push_web_club_message": "D",
+      "trg_push_web_club_post": "D"
+    },
+    "function_md5": "ec8ba5df4b6f60ebe49751ec56e987a9",
+    "message_insert_only": true,
+    "preserves_marker_on_update": true,
+    "post_edit_no_repeat": true,
+    "duplicate_marker_guard": true
+  },
+  "new_package_installed": false,
+  "recipient_approval_received": false,
+  "real_notifications_sent": false,
+  "configuration_source_readable_to_mgdeploy": false
+}

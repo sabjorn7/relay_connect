@@ -1,0 +1,21 @@
+--- a/supabase/functions/web-push-send/club.mjs
++++ b/supabase/functions/web-push-send/club.mjs
+@@ -2,0 +3,10 @@
++// Server-controlled pilot scope. Empty list denies all club deliveries.
++export const CLUB_PILOT = Object.freeze({
++    clubId: '737b8824-88b8-4cee-b50b-3f4ed3b59683',
++    userIds: Object.freeze([]), // Filled only after explicit recipient approval; never from request JSON.
++});
++function pilotConfigured() {
++    return UUID.test(CLUB_PILOT.clubId) && CLUB_PILOT.userIds.length > 0 && CLUB_PILOT.userIds.length <= 10
++        && CLUB_PILOT.userIds.every(id => UUID.test(id))
++        && new Set(CLUB_PILOT.userIds).size === CLUB_PILOT.userIds.length;
++}
+@@ -16,0 +27 @@
++    if (!pilotConfigured()) return skip('pilot_not_configured');
+@@ -20,0 +32 @@
++    if (record.club !== CLUB_PILOT.clubId) return skip('outside_pilot_club');
+@@ -43 +55,2 @@
+-    const recipients = [...pickDmRecipients({ users, senderId: sender, optedOut, allowAll, allowlist })];
++    const recipients = [...pickDmRecipients({ users, senderId: sender, optedOut, allowAll, allowlist })]
++        .filter(uid => CLUB_PILOT.userIds.includes(uid));

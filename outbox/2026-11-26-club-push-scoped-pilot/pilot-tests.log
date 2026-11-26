@@ -1,0 +1,1 @@
+PASS 19 pilot cases: exact club/accounts, global allowlist intersected, member/send_notif/sender checks, missing/invalid scope fail-closed, no content disclosure, no production requests

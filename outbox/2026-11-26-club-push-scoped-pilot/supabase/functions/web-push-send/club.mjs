@@ -1,0 +1,61 @@
+// Club extension of the existing web-push sender. Never put club content in lock-screen payloads.
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// Server-controlled pilot scope. Empty list denies all club deliveries.
+export const CLUB_PILOT = Object.freeze({
+    clubId: '737b8824-88b8-4cee-b50b-3f4ed3b59683',
+    userIds: Object.freeze([]), // Filled only after explicit recipient approval; never from request JSON.
+});
+function pilotConfigured() {
+    return UUID.test(CLUB_PILOT.clubId) && CLUB_PILOT.userIds.length > 0 && CLUB_PILOT.userIds.length <= 10
+        && CLUB_PILOT.userIds.every(id => UUID.test(id))
+        && new Set(CLUB_PILOT.userIds).size === CLUB_PILOT.userIds.length;
+}
+export function validateClubPayload(p) {
+    if (p?.event !== 'club_message' && p?.event !== 'club_post') return null;
+    const id = String((p.event === 'club_message' ? p.message_id : p.post_id) || '');
+    return UUID.test(id) ? { event: p.event, clubEventId: id } : { error: 'bad_club_event_id' };
+}
+export function clubNotification(event, clubId) {
+    if (!UUID.test(clubId) || !['club_message', 'club_post'].includes(event)) throw new Error('invalid_club_event');
+    return { title: 'МитГуру', body: event === 'club_message' ? 'Новое сообщение в клубе' : 'Новый пост в клубе', event,
+        // Existing /club route. Do not claim automatic tab selection: legacy page ignores such a query.
+        data: { url: `/club/?club=${clubId}` } };
+}
+export async function handleClubEvent(event, id, zero, deps) {
+    const { dbGet, fetchSubs, deliver, json, pickDmRecipients, allowAll, allowlist } = deps;
+    const skip = reason => json({ ok: true, event, skipped: reason, counts: zero });
+    if (!pilotConfigured()) return skip('pilot_not_configured');
+    const table = event === 'club_message' ? 'club_chat' : 'club_posts';
+    const cols = event === 'club_message' ? 'id,club,owner,deleted' : 'id,club,date_send';
+    const [record] = await dbGet(`${table}?id=eq.${id}&select=${cols}`, table);
+    if (!record || !UUID.test(record.club || '') || record.deleted === true || (event === 'club_post' && record.date_send !== null)) return skip('not_published');
+    if (record.club !== CLUB_PILOT.clubId) return skip('outside_pilot_club');
+    const [club] = await dbGet(`clubs?id=eq.${record.club}&select=id,owner`, 'club');
+    if (!club || !UUID.test(club.owner || '')) return skip('club_not_found');
+    // Preserve the existing push_targets_club_chat / push_targets_club_post recipient predicate.
+    // No subscription rows are written or reinterpreted by this feature.
+    const ids = new Set();
+    let complete = false;
+    for (let page = 0; page < 10; page++) {
+        const rows = await dbGet(`club_subs?club=eq.${record.club}&active=eq.true&or=(end_date.is.null,end_date.gte.today)&select=id,suber&order=id.asc&limit=1000&offset=${page * 1000}`, 'club_members');
+        for (const row of rows) if (UUID.test(row.suber || '')) ids.add(row.suber);
+        if (rows.length < 1000) { complete = true; break; }
+    }
+    if (!complete) return skip('membership_limit');
+    const sender = event === 'club_message' ? record.owner : club.owner;
+    if (sender !== club.owner && !ids.has(sender)) return skip('sender_not_member');
+    const optedOut = new Set(), users = [...ids];
+    for (let i = 0; i < users.length; i += 100) {
+        const part = users.slice(i, i + 100);
+        const rows = await dbGet(`users?id=in.(${part.join(',')})&select=id,send_notif`, 'club_opt_out');
+        const present = new Set(rows.map(r => r.id));
+        for (const uid of part) if (!present.has(uid)) optedOut.add(uid);
+        for (const row of rows) if (row.send_notif === false) optedOut.add(row.id);
+    }
+    const recipients = [...pickDmRecipients({ users, senderId: sender, optedOut, allowAll, allowlist })]
+        .filter(uid => CLUB_PILOT.userIds.includes(uid));
+    if (!recipients.length) return json({ ok: true, event, counts: zero });
+    const subs = await fetchSubs(recipients);
+    const result = subs.length ? await deliver(subs, JSON.stringify(clubNotification(event, record.club)), 'normal') : { sent: 0, failed: 0, pruned: 0, codes: {} };
+    return json({ ok: true, event, counts: { ...zero, recipients: recipients.length, subs: subs.length, ...result } });
+}
