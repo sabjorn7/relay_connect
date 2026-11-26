@@ -1,0 +1,5 @@
+PASS bash -n
+PASS embedded Python compile
+PASS mutation entry points absent
+PASS main only root check and status
+NOT TESTED production preflight; administrative SHA approval required
