@@ -1,0 +1,9 @@
+VOICE_REASON WebKit {
+  name: 'NotAllowedError',
+  message: 'The request is not allowed by the user agent or the platform in the current context, possibly because the user denied permission.'
+}
+VOICE_REASON WebKit {
+  name: 'NotAllowedError',
+  message: 'The request is not allowed by the user agent or the platform in the current context, possibly because the user denied permission.'
+}
+{"pass":4,"results":[{"engine":"Chrome","width":390,"disabledGate":true,"privateBucket":true,"retrySameRequest":true,"nativeSyntheticVoice":"PASS","logoutClears":true},{"engine":"Chrome","width":1280,"disabledGate":true,"privateBucket":true,"retrySameRequest":true,"nativeSyntheticVoice":"PASS","logoutClears":true},{"engine":"WebKit","width":390,"disabledGate":true,"privateBucket":true,"retrySameRequest":true,"nativeSyntheticVoice":"NOT TESTED: synthetic capture rejected","logoutClears":true},{"engine":"WebKit","width":1280,"disabledGate":true,"privateBucket":true,"retrySameRequest":true,"nativeSyntheticVoice":"NOT TESTED: synthetic capture rejected","logoutClears":true}]}

@@ -1,0 +1,21 @@
+{
+  "base": "792626888b8088df1040f465d214d149adb8afbb",
+  "files": {
+    "src/_front/components/ClubChatAttachments.vue": {
+      "before": "2d9b0c098894c6035c3ee70f0d09b27d06ec4fdaa08f6a0bdcc6bd2075ec543e",
+      "after": "5114ae2bd004d25e8e72e2e1e97e22f295c9dc426d33ed41e5ac6f570bcf1c7e"
+    },
+    "src/_front/components/clubChat.css": {
+      "before": "6e08ab99f536e25bf578019c35692fb7187998889f5a0a34c1bb5485e7430859",
+      "after": "be560392b9c8e75e62cd5d2f075354af2f68ef0e0a7598043046cf43f17b28aa"
+    },
+    "src/_front/components/wwElementComponent.vue": {
+      "before": "1e5366bbf2283d982b985728fe253181aa332b2b9e5f158b01b11091be672e45",
+      "after": "16a4a1d88b3b658a629f2d3f546e468805c39f12074d4c0ab1dd25680d616b96"
+    },
+    "public/data/98342e46-3cd3-48bc-bf0a-f1b60bf63535.json": {
+      "before": "84cb7de35533ae6b3d6a8b391b99bd3b8ad18282ec970d1db5a944c8311beb09",
+      "after": "94e77875ae7479bf23fcaad0b918f27be2b1e79ab44a0777e30e6fa5b73889c7"
+    }
+  }
+}

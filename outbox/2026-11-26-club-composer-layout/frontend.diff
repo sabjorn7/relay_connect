@@ -1,0 +1,100 @@
+diff --git a/src/_front/components/ClubChatAttachments.vue b/src/_front/components/ClubChatAttachments.vue
+index b0f38c9..e1b503d 100644
+--- a/src/_front/components/ClubChatAttachments.vue
++++ b/src/_front/components/ClubChatAttachments.vue
+@@ -11,0 +12,3 @@
++        <button v-if="composerUid" type="button" class="club-attachments__send" aria-label="Отправить сообщение" title="Отправить сообщение" :disabled="!hasText" @click="submitText">
++            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12l16-8-6 16-3-6-7-2z" /></svg>
++        </button>
+@@ -35,0 +39,11 @@ const ctx=inject('_wwLibraryComponentContext',null);
++const props=defineProps({composerUid:{type:String,default:''}});
++const composerIds=computed(()=>props.composerUid==='6cd0c16b-3776-40d8-840e-4274d72ceccc'
++    ? {input:'74e334e1-62d0-4e61-afdc-4da3aa011fcf',send:'7a962394-cf77-43b1-8606-bd8ddf2a8e03'}
++    : {input:'2a3dbfa4-eddc-4a3c-9ec4-02a217620d70',send:'5cd08dd6-fdfc-463d-95dd-12c41ac3c8fe'});
++const hasText=computed(()=>Boolean(String(ctx?.component?.variables?.[composerIds.value.input+'-value']||'').trim()));
++function submitText(event){
++    if(!hasText.value)return;
++    // Delegate to the original WeWeb click workflow; do not duplicate database writes.
++    event.currentTarget.parentElement.parentElement.querySelector('.ww-element-'+composerIds.value.send)?.click();
++}
++
+@@ -72,0 +87,4 @@ watch(club,()=>{rev++;stop(true);clear();capability()});onMounted(capability);on
++.club-attachments__send { width: 46px; height: 46px; padding: 0; border: 0; border-radius: 50%; background: #2e70dd; color: #fff; display: grid; place-items: center; cursor: pointer; }
++.club-attachments__send svg { width: 22px; height: 22px; fill: currentColor; }
++.club-attachments__send:disabled { opacity: .5; cursor: default; }
++.club-attachments__send:focus-visible { outline: 2px solid #2e70dd; outline-offset: 3px; }
+diff --git a/src/_front/components/clubChat.css b/src/_front/components/clubChat.css
+index 09bbe73..cbcb94a 100644
+--- a/src/_front/components/clubChat.css
++++ b/src/_front/components/clubChat.css
+@@ -26,2 +26,2 @@
+-/* Place the existing add-on beside the existing WeWeb input, only while enabled.
+-   Keep legacy text/photo workflows intact; pending files span the composer width. */
++/* Enabled club composer: same single-row controls as ChatsPage.
++   Retain the mounted legacy input and hidden send workflow; only their layout changes. */
+@@ -29,2 +29,2 @@
+-    display: grid !important;
+-    grid-template-columns: 110px minmax(0, 1fr);
++    display: grid !important; background: #fff !important;
++    grid-template-columns: 110px minmax(0, 1fr) 72px;
+@@ -32,20 +31,0 @@
+-    background: #fff;
+-}
+-:is(.ww-element-e4cf1cdc-9cca-4169-8cad-5c25d93dda57, .ww-element-e04c7550-06a7-4bea-9108-c77a069a2f20):has(> .club-attachments) > :first-child {
+-    grid-column: 1 / -1; grid-row: 1;
+-}
+-:is(.ww-element-6cd0c16b-3776-40d8-840e-4274d72ceccc, .ww-element-c94d00be-3578-4589-9b5c-b8165a92c0bf):has(+ .club-attachments) {
+-    grid-column: 2; grid-row: 3; min-width: 0; padding-left: 8px !important;
+-}
+-:is(.ww-element-e4cf1cdc-9cca-4169-8cad-5c25d93dda57, .ww-element-e04c7550-06a7-4bea-9108-c77a069a2f20) > .club-attachments {
+-    display: contents;
+-}
+-:is(.ww-element-e4cf1cdc-9cca-4169-8cad-5c25d93dda57, .ww-element-e04c7550-06a7-4bea-9108-c77a069a2f20) > .club-attachments > .club-attachments__tools {
+-    grid-column: 1; grid-row: 3; align-self: stretch; align-items: flex-start;
+-    padding: 12px 0 12px 18px; border-top: 1px solid #e4e9f1;
+-}
+-:is(.ww-element-e4cf1cdc-9cca-4169-8cad-5c25d93dda57, .ww-element-e04c7550-06a7-4bea-9108-c77a069a2f20) > .club-attachments > :is(.pd-attach, .pd-recbar) {
+-    grid-column: 1 / -1; grid-row: 2; margin: 10px 18px;
+-}
+-:is(.ww-element-e4cf1cdc-9cca-4169-8cad-5c25d93dda57, .ww-element-e04c7550-06a7-4bea-9108-c77a069a2f20) > .club-attachments > .pd-attach__err {
+-    grid-column: 1 / -1; grid-row: 4; margin: 0 18px 10px;
+@@ -52,0 +33,23 @@
++:is(.ww-element-e4cf1cdc-9cca-4169-8cad-5c25d93dda57, .ww-element-e04c7550-06a7-4bea-9108-c77a069a2f20):has(> .club-attachments) > :first-child { grid-column: 1 / -1; grid-row: 1; }
++:is(.ww-element-e4cf1cdc-9cca-4169-8cad-5c25d93dda57, .ww-element-e04c7550-06a7-4bea-9108-c77a069a2f20):has(> .club-attachments) > .club-attachments,
++:is(.ww-element-e4cf1cdc-9cca-4169-8cad-5c25d93dda57, .ww-element-e04c7550-06a7-4bea-9108-c77a069a2f20):has(> .club-attachments) > :is(.ww-element-6cd0c16b-3776-40d8-840e-4274d72ceccc, .ww-element-c94d00be-3578-4589-9b5c-b8165a92c0bf),
++:is(.ww-element-e4cf1cdc-9cca-4169-8cad-5c25d93dda57, .ww-element-e04c7550-06a7-4bea-9108-c77a069a2f20):has(> .club-attachments) > :is(.ww-element-6cd0c16b-3776-40d8-840e-4274d72ceccc, .ww-element-c94d00be-3578-4589-9b5c-b8165a92c0bf) .ww-layout { display: contents !important; }
++/* Legacy avatar and photo/send row remain mounted, preserving their workflows. */
++:is(.ww-element-e4cf1cdc-9cca-4169-8cad-5c25d93dda57, .ww-element-e04c7550-06a7-4bea-9108-c77a069a2f20):has(> .club-attachments) > :is(.ww-element-6cd0c16b-3776-40d8-840e-4274d72ceccc, .ww-element-c94d00be-3578-4589-9b5c-b8165a92c0bf) :is(.ww-element-22a45dc4-82c2-45ad-ae78-b4895472e7a2, .ww-element-7813ca34-6a8a-4662-93fc-efc9e9a7669b, .ww-element-507009f5-2cd3-43aa-97c5-4757d835d2e0) { display: none !important; }
++:is(.ww-element-e4cf1cdc-9cca-4169-8cad-5c25d93dda57, .ww-element-e04c7550-06a7-4bea-9108-c77a069a2f20):has(> .club-attachments) > :is(.ww-element-6cd0c16b-3776-40d8-840e-4274d72ceccc, .ww-element-c94d00be-3578-4589-9b5c-b8165a92c0bf) textarea {
++    grid-column: 2; grid-row: 3; align-self: center;
++    width: 100% !important; min-width: 0; height: 46px !important; min-height: 46px; max-height: 132px;
++    margin: 12px 0 !important; padding: 11px 18px !important; box-sizing: border-box;
++    border: 1px solid #e4e9f1 !important; border-radius: 20px !important;
++    background: #f1f6fd !important; color: #1c2940 !important;
++    font: inherit; font-size: 15px !important; line-height: 22px; resize: none; overflow-y: auto;
++}
++:is(.ww-element-e4cf1cdc-9cca-4169-8cad-5c25d93dda57, .ww-element-e04c7550-06a7-4bea-9108-c77a069a2f20):has(> .club-attachments) > :is(.ww-element-6cd0c16b-3776-40d8-840e-4274d72ceccc, .ww-element-c94d00be-3578-4589-9b5c-b8165a92c0bf) textarea:focus { outline: none; border-color: #8eb6f5 !important; background: #fff !important; }
++:is(.ww-element-e4cf1cdc-9cca-4169-8cad-5c25d93dda57, .ww-element-e04c7550-06a7-4bea-9108-c77a069a2f20):has(> .club-attachments) > .club-attachments > .club-attachments__tools {
++    grid-column: 1; grid-row: 3; align-self: center; padding: 12px 0 12px 18px;
++}
++:is(.ww-element-e4cf1cdc-9cca-4169-8cad-5c25d93dda57, .ww-element-e04c7550-06a7-4bea-9108-c77a069a2f20):has(> .club-attachments) > .club-attachments > .club-attachments__send {
++    grid-column: 3; grid-row: 3; align-self: center; margin: 12px 18px 12px 8px;
++}
++:is(.ww-element-e4cf1cdc-9cca-4169-8cad-5c25d93dda57, .ww-element-e04c7550-06a7-4bea-9108-c77a069a2f20):has(> .club-attachments) > .club-attachments > :is(.pd-attach, .pd-recbar) { grid-column: 1 / -1; grid-row: 2; margin: 10px 18px; }
++:is(.ww-element-e4cf1cdc-9cca-4169-8cad-5c25d93dda57, .ww-element-e04c7550-06a7-4bea-9108-c77a069a2f20):has(> .club-attachments) > .club-attachments > .pd-attach__err { grid-column: 1 / -1; grid-row: 4; margin: 0 18px 10px; }
+@@ -54,3 +57,5 @@
+-    .ww-element-e04c7550-06a7-4bea-9108-c77a069a2f20:has(> .club-attachments) { grid-template-columns: 102px minmax(0, 1fr); }
+-    .ww-element-e04c7550-06a7-4bea-9108-c77a069a2f20 > .club-attachments > .club-attachments__tools { padding: 10px 0 10px 10px; }
+-    .ww-element-e04c7550-06a7-4bea-9108-c77a069a2f20 > .club-attachments > :is(.pd-attach, .pd-recbar) { margin: 10px; }
++    :is(.ww-element-e4cf1cdc-9cca-4169-8cad-5c25d93dda57, .ww-element-e04c7550-06a7-4bea-9108-c77a069a2f20):has(> .club-attachments) { grid-template-columns: 102px minmax(0, 1fr) 64px; }
++    :is(.ww-element-e4cf1cdc-9cca-4169-8cad-5c25d93dda57, .ww-element-e04c7550-06a7-4bea-9108-c77a069a2f20):has(> .club-attachments) > .club-attachments > .club-attachments__tools { padding: 10px 0 10px 10px; }
++    :is(.ww-element-e4cf1cdc-9cca-4169-8cad-5c25d93dda57, .ww-element-e04c7550-06a7-4bea-9108-c77a069a2f20):has(> .club-attachments) > .club-attachments > .club-attachments__send { margin: 10px 10px 10px 8px; }
++    :is(.ww-element-e4cf1cdc-9cca-4169-8cad-5c25d93dda57, .ww-element-e04c7550-06a7-4bea-9108-c77a069a2f20):has(> .club-attachments) > :is(.ww-element-6cd0c16b-3776-40d8-840e-4274d72ceccc, .ww-element-c94d00be-3578-4589-9b5c-b8165a92c0bf) textarea { margin: 10px 0 !important; }
++    :is(.ww-element-e4cf1cdc-9cca-4169-8cad-5c25d93dda57, .ww-element-e04c7550-06a7-4bea-9108-c77a069a2f20):has(> .club-attachments) > .club-attachments > :is(.pd-attach, .pd-recbar) { margin: 10px; }
+diff --git a/src/_front/components/wwElementComponent.vue b/src/_front/components/wwElementComponent.vue
+index 917e4c2..1efaa88 100644
+--- a/src/_front/components/wwElementComponent.vue
++++ b/src/_front/components/wwElementComponent.vue
+@@ -26 +26 @@
+-    <ClubChatAttachments v-if="isRendering && ['6cd0c16b-3776-40d8-840e-4274d72ceccc', 'c94d00be-3578-4589-9b5c-b8165a92c0bf'].includes(uid)" />
++    <ClubChatAttachments :composer-uid="uid" v-if="isRendering && ['6cd0c16b-3776-40d8-840e-4274d72ceccc', 'c94d00be-3578-4589-9b5c-b8165a92c0bf'].includes(uid)" />

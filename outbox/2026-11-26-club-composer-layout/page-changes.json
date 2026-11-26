@@ -1,0 +1,51 @@
+{
+  "file": "public/data/98342e46-3cd3-48bc-bf0a-f1b60bf63535.json",
+  "changes": [
+    {
+      "path": [
+        "wwObjects",
+        "74e334e1-62d0-4e61-afdc-4da3aa011fcf",
+        "content",
+        "default",
+        "rows"
+      ],
+      "before": 4,
+      "after": 1
+    },
+    {
+      "path": [
+        "wwObjects",
+        "74e334e1-62d0-4e61-afdc-4da3aa011fcf",
+        "content",
+        "default",
+        "placeholder",
+        "en"
+      ],
+      "before": "Начните печатать...",
+      "after": "Написать сообщение..."
+    },
+    {
+      "path": [
+        "wwObjects",
+        "2a3dbfa4-eddc-4a3c-9ec4-02a217620d70",
+        "content",
+        "default",
+        "rows"
+      ],
+      "before": 2,
+      "after": 1
+    },
+    {
+      "path": [
+        "wwObjects",
+        "2a3dbfa4-eddc-4a3c-9ec4-02a217620d70",
+        "content",
+        "default",
+        "placeholder",
+        "en"
+      ],
+      "before": "Начните печатать...",
+      "after": "Написать сообщение..."
+    }
+  ]
+}
