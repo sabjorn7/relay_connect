@@ -1,0 +1,5 @@
+PASS: workflow evidence contains only whitelisted metadata and callback field names, no node parameters/credentials/payload values.
+PASS: no email addresses or JWT/private-key patterns in published files.
+PASS: Git diff whitespace check (see publication step).
+NOT RUN: payments, withdrawals, callbacks, load tests and all production mutations.
+Limitations: see REPORT.md and SOURCES.md.
